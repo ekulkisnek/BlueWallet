@@ -8,10 +8,16 @@ if [ "$HEAD" = "master" ]
 then
     TAG=`git tag | sort | tail -n 1`
 else
-    CURRENTTAG=`git describe --tags`
-    TAG=`git describe --abbrev=0 --tags $CURRENTTAG^`
+    CURRENTTAG=`git describe --tags 2>/dev/null`
+    if [ -n "$CURRENTTAG" ]; then
+        TAG=`git describe --abbrev=0 --tags $CURRENTTAG^ 2>/dev/null`
+    fi
 fi
-HASH=`git show-ref -s $TAG`
+if [ -n "$TAG" ]; then
+    HASH=`git show-ref -s $TAG`
+else
+    HASH=`git rev-list --max-parents=0 HEAD`
+fi
 
 # Define a function to apply the filter based on the parameter
 apply_filter() {
