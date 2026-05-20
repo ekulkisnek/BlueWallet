@@ -7,11 +7,24 @@ import com.facebook.react.module.annotations.ReactModule
 import org.json.JSONObject
 import java.io.File
 import java.net.URI
+import java.security.KeyStore
+import java.security.SecureRandom
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
+import android.util.Base64
 
 @ReactModule(name = BitAssetsWalletModule.NAME)
 class BitAssetsWalletModule(private val reactContext: ReactApplicationContext) : NativeBitAssetsWalletSpec(reactContext) {
     companion object {
         const val NAME = "BitAssetsWallet"
+        private const val KEY_ALIAS = "bluewallet_bitassets_seed_v1"
+        private const val KEYSTORE = "AndroidKeyStore"
+        private const val SEED_PREF = "bitassetsSeedCiphertext"
+        private const val GCM_TAG_BITS = 128
 
         init {
             try {
@@ -88,18 +101,81 @@ class BitAssetsWalletModule(private val reactContext: ReactApplicationContext) :
 
         val walletDir = File(reactContext.noBackupFilesDir, "bitassets")
         walletDir.mkdirs()
+        val walletFile = File(walletDir, "wallet.json")
         val sharedPref = reactContext.getSharedPreferences("group.com.layertwolabs.bluewallet", android.content.Context.MODE_PRIVATE)
         val rpcUrl = sharedPref.getString("bitassetsRpcUrl", null)
             ?: throw IllegalStateException("BitAssets RPC URL is not configured")
+        val seedHex = getOrCreateSeedHex(walletFile, sharedPref)
         val config = JSONObject()
-            .put("path", File(walletDir, "wallet.json").absolutePath)
+            .put("path", walletFile.absolutePath)
             .put("rpc_url", rpcUrl)
+            .put("seed_hex", seedHex)
             .put("create", true)
+            .put("persist_seed", false)
             .toString()
 
         val result = unwrap(nativeOpen(config))
         walletHandle = result.toLong()
         return walletHandle
+    }
+
+    private fun getOrCreateSeedHex(walletFile: File, sharedPref: android.content.SharedPreferences): String {
+        sharedPref.getString(SEED_PREF, null)?.let { return decryptSeedHex(it) }
+        readPersistedSeedHex(walletFile)?.let { seedHex ->
+            sharedPref.edit().putString(SEED_PREF, encryptSeedHex(seedHex)).apply()
+            return seedHex
+        }
+        val seed = ByteArray(64)
+        SecureRandom().nextBytes(seed)
+        val seedHex = seed.joinToString("") { "%02x".format(it.toInt() and 0xff) }
+        sharedPref.edit().putString(SEED_PREF, encryptSeedHex(seedHex)).apply()
+        return seedHex
+    }
+
+    private fun readPersistedSeedHex(walletFile: File): String? {
+        if (!walletFile.exists()) return null
+        return try {
+            JSONObject(walletFile.readText()).optString("seed_hex").takeIf { isSeedHex(it) }
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    private fun encryptSeedHex(seedHex: String): String {
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, getOrCreateSecretKey())
+        val iv = cipher.iv
+        val ciphertext = cipher.doFinal(seedHex.toByteArray(Charsets.UTF_8))
+        return Base64.encodeToString(iv + ciphertext, Base64.NO_WRAP)
+    }
+
+    private fun decryptSeedHex(encoded: String): String {
+        val payload = Base64.decode(encoded, Base64.NO_WRAP)
+        require(payload.size > 12) { "BitAssets seed payload is invalid" }
+        val iv = payload.copyOfRange(0, 12)
+        val ciphertext = payload.copyOfRange(12, payload.size)
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.DECRYPT_MODE, getOrCreateSecretKey(), GCMParameterSpec(GCM_TAG_BITS, iv))
+        val seedHex = String(cipher.doFinal(ciphertext), Charsets.UTF_8)
+        require(isSeedHex(seedHex)) { "BitAssets seed has invalid format" }
+        return seedHex
+    }
+
+    private fun isSeedHex(seedHex: String): Boolean {
+        return seedHex.length == 128 && seedHex.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }
+    }
+
+    private fun getOrCreateSecretKey(): SecretKey {
+        val keyStore = KeyStore.getInstance(KEYSTORE).apply { load(null) }
+        (keyStore.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
+        val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, KEYSTORE)
+        val spec = KeyGenParameterSpec.Builder(KEY_ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+            .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+            .setRandomizedEncryptionRequired(true)
+            .build()
+        generator.init(spec)
+        return generator.generateKey()
     }
 
     private fun validateRpcUrl(rpcUrl: String) {

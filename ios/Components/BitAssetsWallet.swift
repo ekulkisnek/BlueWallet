@@ -1,4 +1,5 @@
 import Foundation
+import Security
 
 struct FlorestaBitAssetsFfiResult {
     let ok: Bool
@@ -43,6 +44,8 @@ func floresta_bitassets_wallet_dutch_auction_collect(_ handle: UInt, _ paramsJso
 @objc(BitAssetsWalletModule)
 class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
     private var handle: UInt = 0
+    private let seedService = "com.layertwolabs.bluewallet.bitassets"
+    private let seedAccount = "native-wallet-seed-v1"
 
     static func moduleName() -> String! { "BitAssetsWallet" }
     static func requiresMainQueueSetup() -> Bool { false }
@@ -135,13 +138,17 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
         let walletDirectory = directory.appendingPathComponent("bitassets", isDirectory: true)
         try FileManager.default.createDirectory(at: walletDirectory, withIntermediateDirectories: true)
         try? FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication], ofItemAtPath: walletDirectory.path)
+        let walletFile = walletDirectory.appendingPathComponent("wallet.json")
         guard let rpcUrl = UserDefaults.standard.string(forKey: "bitassetsRpcUrl"), !rpcUrl.isEmpty else {
             throw NSError(domain: "BitAssetsWallet", code: 3, userInfo: [NSLocalizedDescriptionKey: "BitAssets RPC URL is not configured"])
         }
+        let seedHex = try getOrCreateSeedHex(walletFile: walletFile)
         let config: [String: Any] = [
-            "path": walletDirectory.appendingPathComponent("wallet.json").path,
+            "path": walletFile.path,
             "rpc_url": rpcUrl,
+            "seed_hex": seedHex,
             "create": true,
+            "persist_seed": false,
         ]
         let configData = try JSONSerialization.data(withJSONObject: config)
         let configJson = String(data: configData, encoding: .utf8)!
@@ -151,6 +158,77 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
         }
         handle = parsed
         return parsed
+    }
+
+    private func getOrCreateSeedHex(walletFile: URL) throws -> String {
+        if let seed = try readKeychainSeedHex() {
+            return seed
+        }
+        if let migrated = readPersistedSeedHex(walletFile: walletFile) {
+            try writeKeychainSeedHex(migrated)
+            return migrated
+        }
+        var seed = [UInt8](repeating: 0, count: 64)
+        let status = SecRandomCopyBytes(kSecRandomDefault, seed.count, &seed)
+        guard status == errSecSuccess else {
+            throw NSError(domain: "BitAssetsWallet", code: 7, userInfo: [NSLocalizedDescriptionKey: "Could not generate BitAssets wallet seed"])
+        }
+        let seedHex = seed.map { String(format: "%02x", Int($0)) }.joined()
+        try writeKeychainSeedHex(seedHex)
+        return seedHex
+    }
+
+    private func readPersistedSeedHex(walletFile: URL) -> String? {
+        guard let data = try? Data(contentsOf: walletFile),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let seedHex = json["seed_hex"] as? String,
+              isSeedHex(seedHex) else {
+            return nil
+        }
+        return seedHex
+    }
+
+    private func readKeychainSeedHex() throws -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: seedService,
+            kSecAttrAccount as String: seedAccount,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        if status == errSecItemNotFound {
+            return nil
+        }
+        guard status == errSecSuccess, let data = item as? Data, let seedHex = String(data: data, encoding: .utf8), isSeedHex(seedHex) else {
+            throw NSError(domain: "BitAssetsWallet", code: 8, userInfo: [NSLocalizedDescriptionKey: "Could not read BitAssets wallet seed from Keychain"])
+        }
+        return seedHex
+    }
+
+    private func writeKeychainSeedHex(_ seedHex: String) throws {
+        guard isSeedHex(seedHex), let data = seedHex.data(using: .utf8) else {
+            throw NSError(domain: "BitAssetsWallet", code: 9, userInfo: [NSLocalizedDescriptionKey: "BitAssets wallet seed is invalid"])
+        }
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: seedService,
+            kSecAttrAccount as String: seedAccount,
+        ]
+        SecItemDelete(query as CFDictionary)
+        var attributes = query
+        attributes[kSecValueData as String] = data
+        attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        let status = SecItemAdd(attributes as CFDictionary, nil)
+        guard status == errSecSuccess else {
+            throw NSError(domain: "BitAssetsWallet", code: 10, userInfo: [NSLocalizedDescriptionKey: "Could not save BitAssets wallet seed to Keychain"])
+        }
+    }
+
+    private func isSeedHex(_ seedHex: String) -> Bool {
+        guard seedHex.count == 128 else { return false }
+        return seedHex.unicodeScalars.allSatisfy { CharacterSet(charactersIn: "0123456789abcdefABCDEF").contains($0) }
     }
 
     private func validateRpcUrl(_ rpcUrl: String) throws {
