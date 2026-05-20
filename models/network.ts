@@ -2,7 +2,7 @@ import * as bitcoin from 'bitcoinjs-lib';
 
 export type NetworkType = 'mainnet' | 'testnet' | 'signet';
 
-let _networkType: NetworkType = 'mainnet';
+let _networkType: NetworkType = 'signet';
 
 /**
  * Sets the current network type. This should be called early during app initialization,

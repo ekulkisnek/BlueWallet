@@ -161,6 +161,26 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
     }
 
     private func getOrCreateSeedHex(walletFile: URL) throws -> String {
+        #if targetEnvironment(simulator)
+        let simulatorSeedFile = walletFile.deletingLastPathComponent().appendingPathComponent("seed.simulator")
+        if let seed = try? String(contentsOf: simulatorSeedFile, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines),
+           isSeedHex(seed) {
+            return seed
+        }
+        if let migrated = readPersistedSeedHex(walletFile: walletFile) {
+            try migrated.write(to: simulatorSeedFile, atomically: true, encoding: .utf8)
+            return migrated
+        }
+        var simulatorSeed = [UInt8](repeating: 0, count: 64)
+        let simulatorStatus = SecRandomCopyBytes(kSecRandomDefault, simulatorSeed.count, &simulatorSeed)
+        guard simulatorStatus == errSecSuccess else {
+            throw NSError(domain: "BitAssetsWallet", code: 7, userInfo: [NSLocalizedDescriptionKey: "Could not generate BitAssets wallet seed"])
+        }
+        let simulatorSeedHex = simulatorSeed.map { String(format: "%02x", Int($0)) }.joined()
+        try simulatorSeedHex.write(to: simulatorSeedFile, atomically: true, encoding: .utf8)
+        return simulatorSeedHex
+        #endif
+
         if let seed = try readKeychainSeedHex() {
             return seed
         }
@@ -201,8 +221,18 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
         if status == errSecItemNotFound {
             return nil
         }
-        guard status == errSecSuccess, let data = item as? Data, let seedHex = String(data: data, encoding: .utf8), isSeedHex(seedHex) else {
-            throw NSError(domain: "BitAssetsWallet", code: 8, userInfo: [NSLocalizedDescriptionKey: "Could not read BitAssets wallet seed from Keychain"])
+        guard status == errSecSuccess else {
+            throw NSError(domain: "BitAssetsWallet", code: 8, userInfo: [NSLocalizedDescriptionKey: "Could not read BitAssets wallet seed from Keychain (status \(status))"])
+        }
+        guard let data = item as? Data,
+              let seedHex = String(data: data, encoding: .utf8),
+              isSeedHex(seedHex) else {
+            SecItemDelete([
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: seedService,
+                kSecAttrAccount as String: seedAccount,
+            ] as CFDictionary)
+            return nil
         }
         return seedHex
     }

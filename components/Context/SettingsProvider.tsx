@@ -133,7 +133,7 @@ const defaultSettingsContext: SettingsContextType = {
   setBlockExplorerStorage: async () => false,
   isElectrumDisabled: false,
   setIsElectrumDisabled: () => {},
-  networkType: 'mainnet' as NetworkType,
+  networkType: 'signet' as NetworkType,
   setNetworkTypeStorage: async () => {},
 };
 

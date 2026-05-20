@@ -592,6 +592,7 @@ const WalletsAdd: React.FC = () => {
               <BlueFormLabel>BitAssets RPC URL</BlueFormLabel>
               <View style={[styles.lndUri, stylesHook.lndUri]}>
                 <TextInput
+                  testID="BitAssetsRpcUrlInput"
                   value={bitAssetsRpcUrl}
                   onChangeText={setBitAssetsRpcUrl}
                   onSubmitEditing={Keyboard.dismiss}

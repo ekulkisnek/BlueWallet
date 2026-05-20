@@ -186,16 +186,23 @@ const BitAssetsWallet: React.FC = () => {
       </BlueCard>
 
       <View style={styles.buttons}>
-        <Button title="Sync" onPress={sync} disabled={isLoading} />
+        <Button testID="BitAssetsSyncButton" title="Sync" onPress={sync} disabled={isLoading} />
       </View>
 
       <View style={styles.operationGrid}>
         {operations.map(item => (
-          <Button key={item} title={item} onPress={() => selectOperation(item)} disabled={isLoading || item === operation} />
+          <Button
+            key={item}
+            testID={`BitAssetsOperation-${item}`}
+            title={item}
+            onPress={() => selectOperation(item)}
+            disabled={isLoading || item === operation}
+          />
         ))}
       </View>
 
       <TextInput
+        testID="BitAssetsOperationPayload"
         value={payload}
         onChangeText={setPayload}
         autoCapitalize="none"
@@ -205,11 +212,11 @@ const BitAssetsWallet: React.FC = () => {
       />
 
       <View style={styles.buttons}>
-        <Button title="Broadcast" onPress={submit} disabled={isLoading} />
+        <Button testID="BitAssetsBroadcastButton" title="Broadcast" onPress={submit} disabled={isLoading} />
       </View>
 
       {result ? (
-        <BlueCard>
+        <BlueCard testID="BitAssetsResult">
           <BlueText selectable>{result}</BlueText>
         </BlueCard>
       ) : null}

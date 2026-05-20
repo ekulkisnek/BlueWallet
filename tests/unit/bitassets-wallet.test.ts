@@ -1,0 +1,271 @@
+const mockNativeModule = {
+  configure: jest.fn(),
+  getNewAddress: jest.fn(),
+  walletInfo: jest.fn(),
+  sync: jest.fn(),
+  listUtxos: jest.fn(),
+  getBalance: jest.fn(),
+  transfer: jest.fn(),
+  reserve: jest.fn(),
+  register: jest.fn(),
+  ammMint: jest.fn(),
+  ammSwap: jest.fn(),
+  ammBurn: jest.fn(),
+  dutchAuctionCreate: jest.fn(),
+  dutchAuctionBid: jest.fn(),
+  dutchAuctionCollect: jest.fn(),
+};
+
+jest.mock('../../codegen/NativeBitAssetsWallet', () => mockNativeModule);
+jest.mock('../../blue_modules/BlueElectrum', () => ({
+  connectMain: jest.fn(),
+}));
+jest.mock('../../class/wallets/legacy-wallet', () => ({
+  LegacyWallet: class {
+    secret = '';
+    balance = 0;
+    unconfirmed_balance = 0;
+    _lastBalanceFetch = 0;
+    _lastTxFetch = 0;
+    private label = '';
+
+    setLabel(label: string) {
+      this.label = label;
+    }
+
+    getLabel() {
+      return this.label;
+    }
+
+    getBalance() {
+      return this.balance;
+    }
+  },
+}));
+
+const { BitAssetsWallet } = require('../../class/wallets/bitassets-wallet');
+const { EmbeddedBitAssetsWalletClient, JsonRpcBitAssetsWalletClient } = require('../../blue_modules/BitAssetsWallet');
+
+describe('BitAssets mobile wallet bridge', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockNativeModule.configure.mockResolvedValue('{"configured":true}');
+    mockNativeModule.getNewAddress.mockResolvedValue('bitassets-address-1');
+    mockNativeModule.walletInfo.mockResolvedValue(
+      JSON.stringify({
+        enabled: true,
+        address_count: 1,
+        confirmed_utxo_count: 2,
+        mempool_utxo_count: 0,
+        balances: { asset_a: 40, asset_b: 2 },
+        last_tip_hash: 'tip',
+        last_tip_height: 7,
+      }),
+    );
+    mockNativeModule.sync.mockResolvedValue(
+      JSON.stringify({
+        enabled: true,
+        address_count: 1,
+        confirmed_utxo_count: 1,
+        mempool_utxo_count: 0,
+        balances: { asset_a: 25 },
+      }),
+    );
+    mockNativeModule.listUtxos.mockResolvedValue(
+      JSON.stringify({
+        confirmed: [
+          {
+            txid: 'a',
+            vout: 0,
+            asset_id: 'asset_a',
+            amount: 25,
+            confirmed: true,
+          },
+        ],
+        mempool: [
+          {
+            txid: 'b',
+            vout: 1,
+            asset_id: 'asset_b',
+            amount: 3,
+            confirmed: false,
+          },
+        ],
+      }),
+    );
+    mockNativeModule.getBalance.mockResolvedValue(JSON.stringify({ asset_a: 25 }));
+  });
+
+  it('creates a native wallet, stores its address, and sums balances', async () => {
+    const wallet = new BitAssetsWallet();
+    wallet.setLabel('Mobile BitAssets');
+
+    await wallet.generate('http://127.0.0.1:6004');
+    await wallet.fetchBalance();
+
+    expect(mockNativeModule.configure).toHaveBeenCalledWith(JSON.stringify({ rpcUrl: 'http://127.0.0.1:6004' }));
+    expect(mockNativeModule.getNewAddress).toHaveBeenCalledTimes(1);
+    expect(wallet.getAddress()).toBe('bitassets-address-1');
+    expect(wallet.secret).toBe('bitassets://bitassets-address-1');
+    expect(wallet.getBalance()).toBe(42);
+  });
+
+  it('syncs and flattens confirmed and mempool UTXOs', async () => {
+    const wallet = new BitAssetsWallet();
+
+    const info = await wallet.syncBitAssets();
+    await wallet.fetchTransactions();
+
+    expect(info.balances.asset_a).toBe(25);
+    expect(wallet.getBalance()).toBe(25);
+    expect(wallet.bitassetsUtxos.map((utxo: { txid?: string }) => utxo.txid)).toEqual(['a', 'b']);
+  });
+
+  it('serializes every native constructor payload and parses txids', async () => {
+    const client = new EmbeddedBitAssetsWalletClient();
+    mockNativeModule.transfer.mockResolvedValue(JSON.stringify({ txid: 'tx-transfer' }));
+    mockNativeModule.reserve.mockResolvedValue('tx-reserve');
+    mockNativeModule.register.mockResolvedValue(JSON.stringify({ txid: 'tx-register' }));
+    mockNativeModule.ammMint.mockResolvedValue(JSON.stringify({ txid: 'tx-mint' }));
+    mockNativeModule.ammSwap.mockResolvedValue(JSON.stringify({ txid: 'tx-swap' }));
+    mockNativeModule.ammBurn.mockResolvedValue(JSON.stringify({ txid: 'tx-burn' }));
+    mockNativeModule.dutchAuctionCreate.mockResolvedValue(JSON.stringify({ txid: 'tx-create' }));
+    mockNativeModule.dutchAuctionBid.mockResolvedValue(JSON.stringify({ txid: 'tx-bid' }));
+    mockNativeModule.dutchAuctionCollect.mockResolvedValue(JSON.stringify({ txid: 'tx-collect' }));
+
+    await expect(
+      client.transfer({
+        destinationAddress: 'dest',
+        assetId: 'asset',
+        amount: 1,
+        feeSats: 0,
+        memo: 'm',
+      }),
+    ).resolves.toBe('tx-transfer');
+    await expect(client.reserve({ name: 'ASSET', feeSats: 0 })).resolves.toBe('tx-reserve');
+    await expect(
+      client.register({
+        name: 'ASSET',
+        initialSupply: 100,
+        bitassetData: { ticker: 'ASSET' },
+        feeSats: 0,
+      }),
+    ).resolves.toBe('tx-register');
+    await expect(
+      client.ammMint({
+        asset0: 'a',
+        asset1: 'b',
+        amount0: 1,
+        amount1: 2,
+        lpTokenMint: 3,
+        feeSats: 0,
+      }),
+    ).resolves.toBe('tx-mint');
+    await expect(
+      client.ammSwap({
+        assetSpend: 'a',
+        assetReceive: 'b',
+        amountSpend: 1,
+        amountReceive: 2,
+        feeSats: 0,
+      }),
+    ).resolves.toBe('tx-swap');
+    await expect(
+      client.ammBurn({
+        asset0: 'a',
+        asset1: 'b',
+        amount0: 1,
+        amount1: 2,
+        lpTokenBurn: 3,
+        feeSats: 0,
+      }),
+    ).resolves.toBe('tx-burn');
+    await expect(
+      client.dutchAuctionCreate({
+        baseAsset: 'a',
+        quoteAsset: 'b',
+        baseAmount: 1,
+        startPrice: 2,
+        endPrice: 1,
+        duration: 10,
+        feeSats: 0,
+      }),
+    ).resolves.toBe('tx-create');
+    await expect(
+      client.dutchAuctionBid({
+        auctionId: 'auction',
+        baseAsset: 'a',
+        quoteAsset: 'b',
+        bidSize: 1,
+        receiveQuantity: 2,
+        feeSats: 0,
+      }),
+    ).resolves.toBe('tx-bid');
+    await expect(
+      client.dutchAuctionCollect({
+        auctionId: 'auction',
+        baseAsset: 'a',
+        quoteAsset: 'b',
+        amountBase: 1,
+        amountQuote: 2,
+        feeSats: 0,
+      }),
+    ).resolves.toBe('tx-collect');
+
+    expect(JSON.parse(mockNativeModule.ammMint.mock.calls[0][0])).toEqual({
+      asset0: 'a',
+      asset1: 'b',
+      amount0: 1,
+      amount1: 2,
+      lpTokenMint: 3,
+      feeSats: 0,
+    });
+  });
+
+  it('maps JSON-RPC fallback methods to the Floresta API', async () => {
+    const calls: any[] = [];
+    const fetchMock = jest.fn(async (_url, init: any) => {
+      const body = JSON.parse(init.body);
+      calls.push(body);
+      return {
+        ok: true,
+        json: async () => ({
+          result: body.method === 'bitassets_listutxos' ? { confirmed: [{ txid: 'x' }], mempool: [] } : 'txid',
+        }),
+      };
+    });
+    global.fetch = fetchMock as any;
+
+    const client = new JsonRpcBitAssetsWalletClient('http://127.0.0.1:18443');
+    await expect(client.getNewAddress()).resolves.toBe('txid');
+    await expect(client.listUtxos()).resolves.toEqual([{ txid: 'x' }]);
+    await expect(
+      client.transfer({
+        destinationAddress: 'dest',
+        assetId: 'asset',
+        amount: 5,
+        feeSats: 0,
+      }),
+    ).resolves.toBe('txid');
+    await expect(client.reserve({ name: 'NAME', feeSats: 0 })).resolves.toBe('txid');
+    await expect(
+      client.dutchAuctionCollect({
+        auctionId: 'a',
+        baseAsset: 'b',
+        quoteAsset: 'q',
+        amountBase: 1,
+        amountQuote: 2,
+      }),
+    ).resolves.toBe('txid');
+
+    expect(calls.map(call => call.method)).toEqual([
+      'bitassets_getnewaddress',
+      'bitassets_listutxos',
+      'bitassets_transfer',
+      'bitassets_reserve',
+      'bitassets_dutch_auction_collect',
+    ]);
+    expect(calls[2].params).toEqual(['dest', 'asset', 5, 0, null]);
+    expect(calls[4].params).toEqual(['a', 'b', 'q', 1, 2, 0]);
+  });
+});
