@@ -42,6 +42,7 @@ enum ButtonSelected {
 interface State {
   isLoading: boolean;
   walletBaseURI: string;
+  bitAssetsRpcUrl: string;
   selectedIndex: number;
   label: string;
   selectedWalletType: ButtonSelected;
@@ -50,6 +51,7 @@ interface State {
 const ActionTypes = {
   SET_LOADING: 'SET_LOADING',
   SET_WALLET_BASE_URI: 'SET_WALLET_BASE_URI',
+  SET_BITASSETS_RPC_URL: 'SET_BITASSETS_RPC_URL',
   SET_SELECTED_INDEX: 'SET_SELECTED_INDEX',
   SET_LABEL: 'SET_LABEL',
   SET_SELECTED_WALLET_TYPE: 'SET_SELECTED_WALLET_TYPE',
@@ -76,6 +78,7 @@ const index2walletType: Record<number, { text: string; subtitle: string; walletT
 const initialState: State = {
   isLoading: true,
   walletBaseURI: '',
+  bitAssetsRpcUrl: '',
   selectedIndex: 0,
   label: '',
   selectedWalletType: ButtonSelected.ONCHAIN,
@@ -87,6 +90,8 @@ const walletReducer = (state: State, action: TAction): State => {
       return { ...state, isLoading: action.payload };
     case ActionTypes.SET_WALLET_BASE_URI:
       return { ...state, walletBaseURI: action.payload };
+    case ActionTypes.SET_BITASSETS_RPC_URL:
+      return { ...state, bitAssetsRpcUrl: action.payload };
     case ActionTypes.SET_SELECTED_INDEX:
       return { ...state, selectedIndex: action.payload, selectedWalletType: ButtonSelected.ONCHAIN };
     case ActionTypes.SET_LABEL:
@@ -111,6 +116,7 @@ const WalletsAdd: React.FC = () => {
   const [backdoorPressed, setBackdoorPressed] = useState(0);
   const isLoading = state.isLoading;
   const walletBaseURI = state.walletBaseURI;
+  const bitAssetsRpcUrl = state.bitAssetsRpcUrl;
   const selectedIndex = state.selectedIndex;
   const label = state.label;
   const selectedWalletType = state.selectedWalletType;
@@ -299,6 +305,10 @@ const WalletsAdd: React.FC = () => {
     dispatch({ type: 'SET_WALLET_BASE_URI', payload: value });
   };
 
+  const setBitAssetsRpcUrl = (value: string) => {
+    dispatch({ type: 'SET_BITASSETS_RPC_URL', payload: value });
+  };
+
   const setSelectedIndex = (value: number) => {
     dispatch({ type: 'SET_SELECTED_INDEX', payload: value });
   };
@@ -436,7 +446,7 @@ const WalletsAdd: React.FC = () => {
     const wallet = new BitAssetsWallet();
     wallet.setLabel(label || 'BitAssets');
     try {
-      await wallet.generate();
+      await wallet.generate(bitAssetsRpcUrl.trim());
       await wallet.fetchBalance();
     } catch (Err: any) {
       setIsLoading(false);
@@ -576,6 +586,29 @@ const WalletsAdd: React.FC = () => {
             </>
           )}
 
+          {selectedWalletType === ButtonSelected.BITASSETS && (
+            <>
+              <BlueSpacing20 />
+              <BlueFormLabel>BitAssets RPC URL</BlueFormLabel>
+              <View style={[styles.lndUri, stylesHook.lndUri]}>
+                <TextInput
+                  value={bitAssetsRpcUrl}
+                  onChangeText={setBitAssetsRpcUrl}
+                  onSubmitEditing={Keyboard.dismiss}
+                  placeholder="https://bitassets.example.com"
+                  clearButtonMode="while-editing"
+                  autoCapitalize="none"
+                  textContentType="URL"
+                  autoCorrect={false}
+                  placeholderTextColor="#81868e"
+                  style={styles.textInputCommon}
+                  editable={!isLoading}
+                  underlineColorAndroid="transparent"
+                />
+              </View>
+            </>
+          )}
+
           <BlueSpacing20 />
           {!isLoading ? (
             <>
@@ -583,7 +616,9 @@ const WalletsAdd: React.FC = () => {
                 testID="Create"
                 title={loc.wallets.add_create}
                 disabled={
-                  !selectedWalletType || (selectedWalletType === ButtonSelected.OFFCHAIN && (walletBaseURI ?? '').trim().length === 0)
+                  !selectedWalletType ||
+                  (selectedWalletType === ButtonSelected.OFFCHAIN && (walletBaseURI ?? '').trim().length === 0) ||
+                  (selectedWalletType === ButtonSelected.BITASSETS && bitAssetsRpcUrl.trim().length === 0)
                 }
                 onPress={createWallet}
               />

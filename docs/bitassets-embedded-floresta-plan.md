@@ -16,14 +16,15 @@ Package RedWallet with a Floresta-owned BitAssets wallet instead of asking the p
 ## Runtime Flow
 
 1. The user creates a BitAssets wallet from RedWallet's Add Wallet screen on test networks.
-2. The native module opens or creates a wallet file in the app's private data directory.
-3. `getNewAddress` returns a Floresta-owned BitAssets address and RedWallet stores it as the wallet identity.
+2. The user provides a reachable BitAssets RPC URL. RedWallet passes it to the native module through `configure`.
+3. The native module validates and stores the RPC URL in platform preferences, then opens or creates a wallet file in the app's private data directory.
+4. `getNewAddress` returns a Floresta-owned BitAssets address and RedWallet stores it as the wallet identity.
 4. Balance, UTXO, transfer, reserve/register, AMM, and Dutch auction calls go through the same JSON-shaped method surface as Floresta JSON-RPC, but execute inside the embedded Rust library.
 5. The embedded wallet syncs against the configured `plain-bitassets` RPC URL and keeps the JSON-RPC client as a development fallback.
 
 ## Current Configuration
 
-The native modules read `bitassetsRpcUrl` from platform preferences and intentionally fail closed when it is missing. On a physical phone this must point at a reachable signet/plain-bitassets endpoint or a bundled/mobile-side relay strategy.
+The native modules read `bitassetsRpcUrl` from platform preferences and intentionally fail closed when it is missing. RedWallet's BitAssets wallet creation flow sets it through the native module before the wallet is opened. On a physical phone this must point at a reachable signet/plain-bitassets endpoint or a bundled/mobile-side relay strategy.
 
 The Rust mobile library currently handles wallet persistence and explicit sync/broadcast calls. A background QUIC subscription loop is still better owned by the Rust mobile crate before a production UI exposes live updates.
 

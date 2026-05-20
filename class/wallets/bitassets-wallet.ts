@@ -20,6 +20,7 @@ export class BitAssetsWallet extends LegacyWallet {
   preferredBalanceUnit = BitcoinUnit.SATS;
   chain = Chain.OFFCHAIN;
   _address: string | false = false;
+  bitassetsRpcUrl = '';
   bitassetsInfo?: BitAssetsWalletInfo;
   bitassetsUtxos: BitAssetsUtxo[] = [];
 
@@ -29,8 +30,15 @@ export class BitAssetsWallet extends LegacyWallet {
     }
   }
 
-  async generate(): Promise<void> {
-    const address = await this.getClient().getNewAddress();
+  async generate(rpcUrl?: string): Promise<void> {
+    if (rpcUrl) {
+      this.bitassetsRpcUrl = rpcUrl;
+    }
+    const client = this.getClient();
+    if (client.configure && this.bitassetsRpcUrl) {
+      await client.configure({ rpcUrl: this.bitassetsRpcUrl });
+    }
+    const address = await client.getNewAddress();
     this._address = address;
     this.secret = `bitassets://${address}`;
   }

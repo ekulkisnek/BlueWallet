@@ -1,6 +1,7 @@
 #import <React/RCTBridgeModule.h>
 
 @protocol NativeBitAssetsWalletSpec <RCTBridgeModule>
+- (void)configure:(NSString *)configJson resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject;
 - (void)getNewAddress:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject;
 - (void)walletInfo:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject;
 - (void)sync:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject;

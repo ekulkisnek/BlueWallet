@@ -2,6 +2,7 @@ import { TurboModuleRegistry } from 'react-native';
 import type { TurboModule } from 'react-native';
 
 export interface Spec extends TurboModule {
+  configure(configJson: string): Promise<string>;
   getNewAddress(): Promise<string>;
   walletInfo(): Promise<string>;
   sync(): Promise<string>;

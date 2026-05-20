@@ -109,6 +109,7 @@ export interface DutchAuctionCollectParams {
 }
 
 export interface BitAssetsWalletClient {
+  configure?(params: { rpcUrl: string }): Promise<void>;
   getNewAddress(): Promise<string>;
   walletInfo(): Promise<BitAssetsWalletInfo>;
   sync(): Promise<BitAssetsWalletInfo>;
@@ -126,6 +127,10 @@ export interface BitAssetsWalletClient {
 }
 
 export class EmbeddedBitAssetsWalletClient implements BitAssetsWalletClient {
+  async configure(params: { rpcUrl: string }): Promise<void> {
+    await requireNative().configure(JSON.stringify(params));
+  }
+
   async getNewAddress(): Promise<string> {
     return requireNative().getNewAddress();
   }
@@ -193,6 +198,10 @@ export class JsonRpcBitAssetsWalletClient implements BitAssetsWalletClient {
   constructor(url: string, timeoutMs = 10000) {
     this.url = url;
     this.timeoutMs = timeoutMs;
+  }
+
+  configure(): Promise<void> {
+    return Promise.resolve();
   }
 
   getNewAddress(): Promise<string> {

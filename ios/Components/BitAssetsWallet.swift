@@ -47,6 +47,26 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
     static func moduleName() -> String! { "BitAssetsWallet" }
     static func requiresMainQueueSetup() -> Bool { false }
 
+    @objc func configure(_ configJson: String, resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
+        do {
+            guard let data = configJson.data(using: .utf8),
+                  let config = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                throw NSError(domain: "BitAssetsWallet", code: 4, userInfo: [NSLocalizedDescriptionKey: "Invalid BitAssets wallet config"])
+            }
+            let rpcUrl = ((config["rpcUrl"] ?? config["rpc_url"]) as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            try validateRpcUrl(rpcUrl)
+            UserDefaults.standard.set(rpcUrl, forKey: "bitassetsRpcUrl")
+            UserDefaults.standard.synchronize()
+            if handle != 0 {
+                floresta_bitassets_wallet_free(handle)
+                handle = 0
+            }
+            resolve("{\"configured\":true,\"rpcUrl\":\"\(rpcUrl)\"}")
+        } catch {
+            reject("BITASSETS_WALLET_CONFIG_ERROR", error.localizedDescription, error)
+        }
+    }
+
     @objc func getNewAddress(_ resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
         call(resolve, reject) { floresta_bitassets_wallet_get_new_address(try self.openWallet()) }
     }
@@ -68,7 +88,8 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
             if assetId.isEmpty {
                 return floresta_bitassets_wallet_get_balance(try self.openWallet(), nil)
             }
-            return assetId.withCString { floresta_bitassets_wallet_get_balance(try! self.openWallet(), $0) }
+            let wallet = try self.openWallet()
+            return assetId.withCString { floresta_bitassets_wallet_get_balance(wallet, $0) }
         }
     }
 
@@ -130,6 +151,15 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
         }
         handle = parsed
         return parsed
+    }
+
+    private func validateRpcUrl(_ rpcUrl: String) throws {
+        guard !rpcUrl.isEmpty else {
+            throw NSError(domain: "BitAssetsWallet", code: 5, userInfo: [NSLocalizedDescriptionKey: "BitAssets RPC URL is required"])
+        }
+        guard let url = URL(string: rpcUrl), let scheme = url.scheme, ["http", "https"].contains(scheme), url.host != nil else {
+            throw NSError(domain: "BitAssetsWallet", code: 6, userInfo: [NSLocalizedDescriptionKey: "BitAssets RPC URL must be an http(s) URL with a host"])
+        }
     }
 
     private func callJson(

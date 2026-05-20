@@ -2,6 +2,7 @@
 #import "NativeBitAssetsWalletSpec.h"
 
 @interface RCT_EXTERN_REMAP_MODULE(BitAssetsWallet, BitAssetsWalletModule, NSObject<NativeBitAssetsWalletSpec>)
+RCT_EXTERN_METHOD(configure:(NSString *)configJson resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(getNewAddress:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(walletInfo:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(sync:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)

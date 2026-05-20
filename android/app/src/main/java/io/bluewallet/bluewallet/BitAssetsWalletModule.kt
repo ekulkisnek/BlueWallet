@@ -6,6 +6,7 @@ import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.module.annotations.ReactModule
 import org.json.JSONObject
 import java.io.File
+import java.net.URI
 
 @ReactModule(name = BitAssetsWalletModule.NAME)
 class BitAssetsWalletModule(private val reactContext: ReactApplicationContext) : NativeBitAssetsWalletSpec(reactContext) {
@@ -21,6 +22,24 @@ class BitAssetsWalletModule(private val reactContext: ReactApplicationContext) :
     }
 
     private var walletHandle: Long = 0
+
+    @ReactMethod
+    override fun configure(configJson: String, promise: Promise) {
+        try {
+            val config = JSONObject(configJson)
+            val rpcUrl = config.optString("rpcUrl", config.optString("rpc_url", "")).trim()
+            validateRpcUrl(rpcUrl)
+            val sharedPref = reactContext.getSharedPreferences("group.com.layertwolabs.bluewallet", android.content.Context.MODE_PRIVATE)
+            sharedPref.edit().putString("bitassetsRpcUrl", rpcUrl).apply()
+            if (walletHandle != 0L) {
+                nativeFree(walletHandle)
+                walletHandle = 0
+            }
+            promise.resolve(JSONObject().put("configured", true).put("rpcUrl", rpcUrl).toString())
+        } catch (error: Throwable) {
+            promise.reject("BITASSETS_WALLET_CONFIG_ERROR", error.message, error)
+        }
+    }
 
     @ReactMethod
     override fun getNewAddress(promise: Promise) = resolve(promise) { nativeGetNewAddress(openWallet()) }
@@ -81,6 +100,19 @@ class BitAssetsWalletModule(private val reactContext: ReactApplicationContext) :
         val result = unwrap(nativeOpen(config))
         walletHandle = result.toLong()
         return walletHandle
+    }
+
+    private fun validateRpcUrl(rpcUrl: String) {
+        if (rpcUrl.isBlank()) {
+            throw IllegalArgumentException("BitAssets RPC URL is required")
+        }
+        val uri = URI(rpcUrl)
+        if (uri.scheme != "http" && uri.scheme != "https") {
+            throw IllegalArgumentException("BitAssets RPC URL must use http or https")
+        }
+        if (uri.host.isNullOrBlank()) {
+            throw IllegalArgumentException("BitAssets RPC URL must include a host")
+        }
     }
 
     private fun resolve(promise: Promise, call: () -> String) {
