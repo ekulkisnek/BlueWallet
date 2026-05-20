@@ -24,6 +24,7 @@ import { useSettings } from '../../hooks/context/useSettings';
 import useMenuElements from '../../hooks/useMenuElements';
 import SafeAreaSectionList from '../../components/SafeAreaSectionList';
 import { scanQrHelper } from '../../helpers/scan-qr.ts';
+import { walletOpenRouteFor } from './walletOpenRoute';
 
 const WalletsListSections = { CAROUSEL: 'CAROUSEL', TRANSACTIONS: 'TRANSACTIONS' };
 
@@ -220,11 +221,7 @@ const WalletsList: React.FC = () => {
   const handleClick = useCallback(
     (item?: TWallet) => {
       if (item?.getID) {
-        const walletID = item.getID();
-        navigation.navigate('WalletTransactions', {
-          walletID,
-          walletType: item.type,
-        });
+        navigation.navigate(...walletOpenRouteFor(item));
       } else {
         navigation.navigate('AddWalletRoot');
       }

@@ -115,7 +115,7 @@ class BitAssetsWalletModule(private val reactContext: ReactApplicationContext) :
             .toString()
 
         val result = unwrap(nativeOpen(config))
-        walletHandle = result.toLong()
+        walletHandle = java.lang.Long.parseUnsignedLong(result)
         return walletHandle
     }
 

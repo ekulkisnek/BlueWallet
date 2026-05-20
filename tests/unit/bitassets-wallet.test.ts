@@ -45,6 +45,7 @@ jest.mock('../../class/wallets/legacy-wallet', () => ({
 
 const { BitAssetsWallet } = require('../../class/wallets/bitassets-wallet');
 const { EmbeddedBitAssetsWalletClient, JsonRpcBitAssetsWalletClient } = require('../../blue_modules/BitAssetsWallet');
+const { walletOpenRouteFor } = require('../../screen/wallets/walletOpenRoute');
 
 describe('BitAssets mobile wallet bridge', () => {
   beforeEach(() => {
@@ -267,5 +268,20 @@ describe('BitAssets mobile wallet bridge', () => {
     ]);
     expect(calls[2].params).toEqual(['dest', 'asset', 5, 0, null]);
     expect(calls[4].params).toEqual(['a', 'b', 'q', 1, 2, 0]);
+  });
+
+  it('opens BitAssets wallets on the dedicated native wallet screen', () => {
+    expect(
+      walletOpenRouteFor({
+        type: BitAssetsWallet.type,
+        getID: () => 'bitassets-wallet-id',
+      }),
+    ).toEqual(['BitAssetsWallet', { walletID: 'bitassets-wallet-id' }]);
+    expect(
+      walletOpenRouteFor({
+        type: 'HDsegwitBech32',
+        getID: () => 'bitcoin-wallet-id',
+      }),
+    ).toEqual(['WalletTransactions', { walletID: 'bitcoin-wallet-id', walletType: 'HDsegwitBech32' }]);
   });
 });
