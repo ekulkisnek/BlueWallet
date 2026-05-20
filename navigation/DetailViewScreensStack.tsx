@@ -21,6 +21,7 @@ import RBFCancel from '../screen/transactions/RBFCancel';
 import TransactionStatus from '../screen/transactions/TransactionStatus';
 import WalletAddresses from '../screen/wallets/WalletAddresses';
 import WalletDetails from '../screen/wallets/WalletDetails';
+import BitAssetsWallet from '../screen/wallets/BitAssetsWallet';
 import GenerateWord from '../screen/wallets/generateWord';
 import SelectWallet from '../screen/wallets/SelectWallet';
 import WalletsList from '../screen/wallets/WalletsList';
@@ -141,6 +142,13 @@ const DetailViewStackScreensStack = () => {
         component={WalletDetails}
         options={navigationStyle({
           headerTitle: loc.wallets.details_title,
+        })(theme)}
+      />
+      <DetailViewStack.Screen
+        name="BitAssetsWallet"
+        component={BitAssetsWallet}
+        options={navigationStyle({
+          headerTitle: 'BitAssets',
         })(theme)}
       />
       <DetailViewStack.Screen

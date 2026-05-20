@@ -20,6 +20,7 @@ import { isDesktop } from '../../blue_modules/environment';
 import * as fs from '../../blue_modules/fs';
 import triggerHapticFeedback, { HapticFeedbackTypes } from '../../blue_modules/hapticFeedback';
 import { LightningArkWallet, LightningCustodianWallet, MultisigHDWallet, WatchOnlyWallet } from '../../class';
+import { BitAssetsWallet } from '../../class/wallets/bitassets-wallet';
 import presentAlert, { AlertType } from '../../components/Alert';
 import { FButton, FContainer } from '../../components/FloatButtons';
 import { useTheme } from '../../components/themes';
@@ -343,6 +344,10 @@ const WalletTransactions: React.FC<WalletTransactionsProps> = ({ route }: { rout
   };
 
   const sendButtonPress = () => {
+    if (wallet.type === BitAssetsWallet.type) {
+      return navigate('BitAssetsWallet', { walletID });
+    }
+
     if (wallet.chain === Chain.OFFCHAIN) {
       return navigate('ScanLNDInvoiceRoot', { screen: 'ScanLNDInvoice', params: { walletID } });
     }
@@ -627,7 +632,9 @@ const WalletTransactions: React.FC<WalletTransactionsProps> = ({ route }: { rout
             testID="ReceiveButton"
             text={loc.receive.header}
             onPress={() => {
-              if (wallet.chain === Chain.OFFCHAIN) {
+              if (wallet.type === BitAssetsWallet.type) {
+                navigate('BitAssetsWallet', { walletID });
+              } else if (wallet.chain === Chain.OFFCHAIN) {
                 navigate('LNDCreateInvoiceRoot', { screen: 'LNDCreateInvoice', params: { walletID } });
               } else {
                 navigate('ReceiveDetails', { walletID });
