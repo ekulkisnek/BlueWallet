@@ -23,7 +23,7 @@ Package RedWallet with a Floresta-owned BitAssets wallet instead of asking the p
 
 ## Current Configuration
 
-The native modules read `bitassetsRpcUrl` from platform preferences and default to `http://127.0.0.1:6004`. On a physical phone this must point at a reachable signet/plain-bitassets endpoint or a bundled/mobile-side relay strategy.
+The native modules read `bitassetsRpcUrl` from platform preferences and intentionally fail closed when it is missing. On a physical phone this must point at a reachable signet/plain-bitassets endpoint or a bundled/mobile-side relay strategy.
 
 The Rust mobile library currently handles wallet persistence and explicit sync/broadcast calls. A background QUIC subscription loop is still better owned by the Rust mobile crate before a production UI exposes live updates.
 
@@ -36,9 +36,23 @@ cd /path/to/Floresta
 ./scripts/build-bitassets-wallet-mobile.sh aarch64-apple-ios-sim
 ```
 
-For Android, install Android Rust targets and use the same script with targets such as `aarch64-linux-android` once the NDK linker environment is configured. Copy the resulting `libfloresta_bitassets_wallet.so` files into RedWallet's `android/app/src/main/jniLibs/<abi>/`.
+From RedWallet, the wrapper script copies built mobile artifacts into the app tree:
 
-For iOS device/simulator distribution, package the Rust static libraries and `include/floresta_bitassets_wallet.h` as an XCFramework and link it into the BlueWallet app target.
+```sh
+FLORESTA_DIR=/path/to/Floresta ./scripts/build-bitassets-mobile-libs.sh aarch64-apple-ios aarch64-apple-ios-sim
+```
+
+or through npm:
+
+```sh
+FLORESTA_DIR=/path/to/Floresta npm run bitassets:mobile-libs -- aarch64-apple-ios aarch64-apple-ios-sim
+```
+
+For Android, install Android Rust targets and configure the NDK linker environment, then pass Android targets such as `aarch64-linux-android`. The script copies `.so` files into `android/app/src/main/jniLibs/<abi>/`.
+
+For iOS device/simulator distribution, the Floresta build script packages the Rust static libraries and `include/floresta_bitassets_wallet.h` as `floresta_bitassets_wallet.xcframework`; the RedWallet wrapper copies it to `ios/Frameworks/`.
+
+Generated mobile libraries are ignored by git. Production CI must run the wrapper script before native app builds.
 
 ## Pre-PR Checklist
 

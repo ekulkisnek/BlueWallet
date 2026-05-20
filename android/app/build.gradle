@@ -137,6 +137,17 @@ task copyFiatUnits(type: Copy) {
 
 preBuild.dependsOn(copyFiatUnits)
 
+tasks.register('verifyBitAssetsNativeLibs') {
+    doLast {
+        def required = file('src/main/jniLibs/arm64-v8a/libfloresta_bitassets_wallet.so')
+        if (!required.exists()) {
+            throw new GradleException("Missing ${required}. Run `npm run bitassets:mobile-libs -- aarch64-linux-android` after configuring the Android NDK linker.")
+        }
+    }
+}
+
+preBuild.dependsOn(verifyBitAssetsNativeLibs)
+
 // Ensure fiat units are available before codegen scans JS sources
 tasks.configureEach { task ->
     if (task.name == 'generateCodegenSchemaFromJavaScript') {

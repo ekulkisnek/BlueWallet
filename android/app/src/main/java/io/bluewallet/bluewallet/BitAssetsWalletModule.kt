@@ -67,10 +67,11 @@ class BitAssetsWalletModule(private val reactContext: ReactApplicationContext) :
     private fun openWallet(): Long {
         if (walletHandle != 0L) return walletHandle
 
-        val walletDir = File(reactContext.filesDir, "bitassets")
+        val walletDir = File(reactContext.noBackupFilesDir, "bitassets")
         walletDir.mkdirs()
         val sharedPref = reactContext.getSharedPreferences("group.com.layertwolabs.bluewallet", android.content.Context.MODE_PRIVATE)
-        val rpcUrl = sharedPref.getString("bitassetsRpcUrl", "http://127.0.0.1:6004") ?: "http://127.0.0.1:6004"
+        val rpcUrl = sharedPref.getString("bitassetsRpcUrl", null)
+            ?: throw IllegalStateException("BitAssets RPC URL is not configured")
         val config = JSONObject()
             .put("path", File(walletDir, "wallet.json").absolutePath)
             .put("rpc_url", rpcUrl)

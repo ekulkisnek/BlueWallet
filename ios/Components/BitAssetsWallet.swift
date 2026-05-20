@@ -110,12 +110,16 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
 
     private func openWallet() throws -> UInt {
         if handle != 0 { return handle }
-        let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let walletDirectory = directory.appendingPathComponent("bitassets", isDirectory: true)
         try FileManager.default.createDirectory(at: walletDirectory, withIntermediateDirectories: true)
+        try? FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication], ofItemAtPath: walletDirectory.path)
+        guard let rpcUrl = UserDefaults.standard.string(forKey: "bitassetsRpcUrl"), !rpcUrl.isEmpty else {
+            throw NSError(domain: "BitAssetsWallet", code: 3, userInfo: [NSLocalizedDescriptionKey: "BitAssets RPC URL is not configured"])
+        }
         let config: [String: Any] = [
             "path": walletDirectory.appendingPathComponent("wallet.json").path,
-            "rpc_url": UserDefaults.standard.string(forKey: "bitassetsRpcUrl") ?? "http://127.0.0.1:6004",
+            "rpc_url": rpcUrl,
             "create": true,
         ]
         let configData = try JSONSerialization.data(withJSONObject: config)
