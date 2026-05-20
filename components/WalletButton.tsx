@@ -48,6 +48,12 @@ const buttonDetails: Record<string, ButtonDetails> = {
     explain: loc.wallets.add_lightning_explain + '\nPowered by Arkade',
     borderColorActive: 'lnborderColor',
   },
+  BitAssets: {
+    image: require('../img/addWallet/bitcoin.png'),
+    title: 'BitAssets',
+    explain: 'Drivechain assets with embedded Floresta',
+    borderColorActive: 'newBlue',
+  },
 };
 
 const WalletButton: React.FC<WalletButtonProps> = ({ buttonType, testID, onPress, size, active }) => {

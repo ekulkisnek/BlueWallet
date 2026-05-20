@@ -52,6 +52,8 @@
 		B49A28C52CD1A894006B08E4 /* MarketData.swift in Sources */ = {isa = PBXBuildFile; fileRef = B44033E82BCC371A00162242 /* MarketData.swift */; };
 		B4AA75242DAA339E00CF5CBE /* MenuElementsEmitter.m in Sources */ = {isa = PBXBuildFile; fileRef = B4AA75232DAA339E00CF5CBE /* MenuElementsEmitter.m */; };
 		B4B1A4622BFA73110072E3BB /* WidgetHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4B1A4612BFA73110072E3BB /* WidgetHelper.swift */; };
+		B4BA50012FA1BD0000AAAA10 /* BitAssetsWallet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4BA50002FA1BD0000AAAA10 /* BitAssetsWallet.swift */; };
+		B4BA50032FA1BD0000AAAA12 /* BitAssetsWallet.mm in Sources */ = {isa = PBXBuildFile; fileRef = B4BA50022FA1BD0000AAAA11 /* BitAssetsWallet.mm */; };
 		B4B3EC222D69FF6C00327F3D /* CustomSegmentedControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4B3EC202D69FF6C00327F3D /* CustomSegmentedControl.swift */; };
 		B4B3EC252D69FF8700327F3D /* EventEmitter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4B3EC232D69FF8700327F3D /* EventEmitter.swift */; };
 		B4D899942DCAE67700B959AA /* CustomSegmentedControl.m in Sources */ = {isa = PBXBuildFile; fileRef = B4D899932DCAE67700B959AA /* CustomSegmentedControl.m */; };
@@ -228,6 +230,9 @@
 		B49A28BA2CD18999006B08E4 /* CompactPriceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompactPriceView.swift; sourceTree = "<group>"; };
 		B49A28BD2CD189B0006B08E4 /* FiatUnitEnum.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FiatUnitEnum.swift; sourceTree = "<group>"; };
 		B49D99932EFE2F3500A718AC /* NativeWidgetHelperSpec.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NativeWidgetHelperSpec.h; sourceTree = "<group>"; };
+		B4BA50002FA1BD0000AAAA10 /* BitAssetsWallet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitAssetsWallet.swift; sourceTree = "<group>"; };
+		B4BA50022FA1BD0000AAAA11 /* BitAssetsWallet.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = BitAssetsWallet.mm; sourceTree = "<group>"; };
+		B4BA50042FA1BD0000AAAA13 /* NativeBitAssetsWalletSpec.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NativeBitAssetsWalletSpec.h; sourceTree = "<group>"; };
 		B4AA75232DAA339E00CF5CBE /* MenuElementsEmitter.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MenuElementsEmitter.m; sourceTree = "<group>"; };
 		B4AB225C2B02AD12001F4328 /* XMLParserDelegate.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = XMLParserDelegate.swift; sourceTree = "<group>"; };
 		B4B1A4612BFA73110072E3BB /* WidgetHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetHelper.swift; sourceTree = "<group>"; };
@@ -437,6 +442,7 @@
 				B49D99932EFE2F3500A718AC /* NativeWidgetHelperSpec.h */,
 				B4F0A4A52FA1BC0000AAAA05 /* NativeEventEmitterSpec.h */,
 				B4F0A4A62FA1BC0000AAAA06 /* NativeMenuElementsEmitterSpec.h */,
+				B4BA50042FA1BD0000AAAA13 /* NativeBitAssetsWalletSpec.h */,
 				B45010A12C1504E900619044 /* Components */,
 				B44033C82BCC34AC00162242 /* Shared */,
 				B41C2E552BB3DCB8000FE097 /* PrivacyInfo.xcprivacy */,
@@ -588,6 +594,8 @@
 				B4B3EC202D69FF6C00327F3D /* CustomSegmentedControl.swift */,
 				B4B1A4612BFA73110072E3BB /* WidgetHelper.swift */,
 				B4F0A4A12FA1BC0000AAAA00 /* WidgetHelper.mm */,
+				B4BA50002FA1BD0000AAAA10 /* BitAssetsWallet.swift */,
+				B4BA50022FA1BD0000AAAA11 /* BitAssetsWallet.mm */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -888,6 +896,8 @@
 				B4B3EC222D69FF6C00327F3D /* CustomSegmentedControl.swift in Sources */,
 				B4B1A4622BFA73110072E3BB /* WidgetHelper.swift in Sources */,
 				B4F0A4A22FA1BC0000AAAA01 /* WidgetHelper.mm in Sources */,
+				B4BA50012FA1BD0000AAAA10 /* BitAssetsWallet.swift in Sources */,
+				B4BA50032FA1BD0000AAAA12 /* BitAssetsWallet.mm in Sources */,
 				B48630E12CCEE7C800A8425C /* PriceWidgetEntryView.swift in Sources */,
 				B44033DA2BCC369A00162242 /* Colors.swift in Sources */,
 				B44033D32BCC368800162242 /* UserDefaultsGroupKey.swift in Sources */,

@@ -71,6 +71,7 @@ class MainApplication : Application(), ReactApplication {
                     // add(MyReactNativePackage())
                     add(CustomSegmentedControlPackage())
                     add(SettingsPackage())
+                    add(BitAssetsWalletPackage())
                 }
 
             override fun getUseDeveloperSupport() = BuildConfig.DEBUG

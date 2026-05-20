@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-use-before-define */
 import NativeBitAssetsWallet from '../codegen/NativeBitAssetsWallet';
 
 export type Txid = string;
@@ -138,7 +139,9 @@ export class EmbeddedBitAssetsWalletClient implements BitAssetsWalletClient {
   }
 
   async listUtxos(): Promise<BitAssetsUtxo[]> {
-    const value = parseJson<BitAssetsUtxo[] | { confirmed?: BitAssetsUtxo[]; mempool?: BitAssetsUtxo[] }>(await requireNative().listUtxos());
+    const value = parseJson<BitAssetsUtxo[] | { confirmed?: BitAssetsUtxo[]; mempool?: BitAssetsUtxo[] }>(
+      await requireNative().listUtxos(),
+    );
     return Array.isArray(value) ? value : [...(value.confirmed ?? []), ...(value.mempool ?? [])];
   }
 
@@ -184,10 +187,13 @@ export class EmbeddedBitAssetsWalletClient implements BitAssetsWalletClient {
 }
 
 export class JsonRpcBitAssetsWalletClient implements BitAssetsWalletClient {
-  constructor(
-    private readonly url: string,
-    private readonly timeoutMs = 10000,
-  ) {}
+  private readonly url: string;
+  private readonly timeoutMs: number;
+
+  constructor(url: string, timeoutMs = 10000) {
+    this.url = url;
+    this.timeoutMs = timeoutMs;
+  }
 
   getNewAddress(): Promise<string> {
     return this.rpc('bitassets_getnewaddress').then(result => requireString(result));
@@ -204,7 +210,10 @@ export class JsonRpcBitAssetsWalletClient implements BitAssetsWalletClient {
   async listUtxos(): Promise<BitAssetsUtxo[]> {
     const value = await this.rpc('bitassets_listutxos');
     if (Array.isArray(value)) return value as BitAssetsUtxo[];
-    const record = value as { confirmed?: BitAssetsUtxo[]; mempool?: BitAssetsUtxo[] };
+    const record = value as {
+      confirmed?: BitAssetsUtxo[];
+      mempool?: BitAssetsUtxo[];
+    };
     return [...(record.confirmed ?? []), ...(record.mempool ?? [])];
   }
 
@@ -265,17 +274,7 @@ export class JsonRpcBitAssetsWalletClient implements BitAssetsWalletClient {
   }
 
   dutchAuctionCreate(params: DutchAuctionCreateParams): Promise<Txid> {
-    return this.rpc('bitassets_dutch_auction_create', [
-      {
-        base_asset: params.baseAsset,
-        quote_asset: params.quoteAsset,
-        base_amount: params.baseAmount,
-        start_price: params.startPrice,
-        end_price: params.endPrice,
-        duration: params.duration,
-      },
-      params.feeSats ?? 0,
-    ]).then(result => requireString(result));
+    return this.rpc('bitassets_dutch_auction_create', [params, params.feeSats ?? 0]).then(result => requireString(result));
   }
 
   dutchAuctionBid(params: DutchAuctionBidParams): Promise<Txid> {
@@ -306,8 +305,16 @@ export class JsonRpcBitAssetsWalletClient implements BitAssetsWalletClient {
     try {
       const response = await fetch(this.url, {
         method: 'POST',
-        headers: { accept: 'application/json', 'content-type': 'application/json' },
-        body: JSON.stringify({ jsonrpc: '2.0', id: 'redwallet-bitassets', method, params }),
+        headers: {
+          accept: 'application/json',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 'redwallet-bitassets',
+          method,
+          params,
+        }),
         signal: controller.signal,
       });
       const envelope = await response.json();

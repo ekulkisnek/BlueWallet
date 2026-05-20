@@ -19,6 +19,7 @@ import { HDSegwitP2SHWallet } from './wallets/hd-segwit-p2sh-wallet';
 import { LegacyWallet } from './wallets/legacy-wallet';
 import { LightningCustodianWallet } from './wallets/lightning-custodian-wallet';
 import { MultisigHDWallet } from './wallets/multisig-hd-wallet';
+import { BitAssetsWallet } from './wallets/bitassets-wallet';
 import { SegwitBech32Wallet } from './wallets/segwit-bech32-wallet';
 import { SegwitP2SHWallet } from './wallets/segwit-p2sh-wallet';
 import { SLIP39LegacyP2PKHWallet, SLIP39SegwitBech32Wallet, SLIP39SegwitP2SHWallet } from './wallets/slip39-wallets';
@@ -444,6 +445,10 @@ export class BlueApp {
             break;
           case LightningArkWallet.type:
             unserializedWallet = LightningArkWallet.fromJson(key) as unknown as LightningArkWallet;
+            break;
+          case BitAssetsWallet.type:
+            unserializedWallet = BitAssetsWallet.fromJson(key) as unknown as BitAssetsWallet;
+            unserializedWallet.init();
             break;
           case LightningCustodianWallet.type: {
             unserializedWallet = LightningCustodianWallet.fromJson(key) as unknown as LightningCustodianWallet;

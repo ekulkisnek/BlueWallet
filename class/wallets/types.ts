@@ -12,6 +12,7 @@ import { HDSegwitP2SHWallet } from './hd-segwit-p2sh-wallet';
 import { LegacyWallet } from './legacy-wallet';
 import { LightningCustodianWallet } from './lightning-custodian-wallet';
 import { MultisigHDWallet } from './multisig-hd-wallet';
+import { BitAssetsWallet } from './bitassets-wallet';
 import { SegwitBech32Wallet } from './segwit-bech32-wallet';
 import { SegwitP2SHWallet } from './segwit-p2sh-wallet';
 import { SLIP39LegacyP2PKHWallet, SLIP39SegwitBech32Wallet, SLIP39SegwitP2SHWallet } from './slip39-wallets';
@@ -155,6 +156,7 @@ export type TWallet =
   | HDSegwitP2SHWallet
   | HDTaprootWallet
   | LegacyWallet
+  | BitAssetsWallet
   | LightningArkWallet
   | LightningCustodianWallet
   | MultisigHDWallet

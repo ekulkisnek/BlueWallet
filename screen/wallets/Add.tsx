@@ -27,6 +27,7 @@ import { BlueSpacing20, BlueSpacing40 } from '../../components/BlueSpacing';
 import { hexToUint8Array, uint8ArrayToHex } from '../../blue_modules/uint8array-extras';
 import { LightningArkWallet } from '../../class/wallets/lightning-ark-wallet.ts';
 import { resetScanWasBBQR } from '../../helpers/scan-qr.ts';
+import { BitAssetsWallet } from '../../class/wallets/bitassets-wallet';
 
 enum ButtonSelected {
   // @ts-ignore: Return later to update
@@ -35,6 +36,7 @@ enum ButtonSelected {
   OFFCHAIN = Chain.OFFCHAIN,
   VAULT = 'VAULT',
   ARK = 'ARK',
+  BITASSETS = 'BITASSETS',
 }
 
 interface State {
@@ -316,6 +318,8 @@ const WalletsAdd: React.FC = () => {
       createLightningWallet();
     } else if (selectedWalletType === ButtonSelected.ARK) {
       createLightningArkWallet();
+    } else if (selectedWalletType === ButtonSelected.BITASSETS) {
+      createBitAssetsWallet();
     } else if (selectedWalletType === ButtonSelected.ONCHAIN) {
       let w: HDSegwitBech32Wallet | HDLegacyP2PKHWallet | HDTaprootWallet;
 
@@ -428,6 +432,25 @@ const WalletsAdd: React.FC = () => {
     });
   };
 
+  const createBitAssetsWallet = async () => {
+    const wallet = new BitAssetsWallet();
+    wallet.setLabel(label || 'BitAssets');
+    try {
+      await wallet.generate();
+      await wallet.fetchBalance();
+    } catch (Err: any) {
+      setIsLoading(false);
+      console.warn('bitassets create failure', Err);
+      return presentAlert({ message: Err.message ?? 'Could not create BitAssets wallet' });
+    }
+
+    addWallet(wallet);
+    await saveToDisk();
+
+    triggerHapticFeedback(HapticFeedbackTypes.NotificationSuccess);
+    goBack();
+  };
+
   const navigateToImportWallet = () => {
     navigate('ImportWallet');
   };
@@ -435,6 +458,11 @@ const WalletsAdd: React.FC = () => {
   const handleOnVaultButtonPressed = () => {
     Keyboard.dismiss();
     confirmResetEntropy(ButtonSelected.VAULT);
+  };
+
+  const handleOnBitAssetsButtonPressed = () => {
+    Keyboard.dismiss();
+    confirmResetEntropy(ButtonSelected.BITASSETS);
   };
 
   const handleOnBitcoinButtonPressed = () => {
@@ -500,6 +528,15 @@ const WalletsAdd: React.FC = () => {
             onPress={handleOnVaultButtonPressed}
             size={styles.button}
           />
+          {isTestnet ? (
+            <WalletButton
+              buttonType="BitAssets"
+              testID="ActivateBitAssetsButton"
+              active={selectedWalletType === ButtonSelected.BITASSETS}
+              onPress={handleOnBitAssetsButtonPressed}
+              size={styles.button}
+            />
+          ) : null}
           {!isTestnet && backdoorPressed >= 20 ? (
             <WalletButton
               buttonType="LightningArk"
