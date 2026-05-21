@@ -272,6 +272,7 @@ export const WalletCarouselItem: React.FC<WalletCarouselItemProps> = React.memo(
     sizeVariant = 'default',
   }: WalletCarouselItemProps) => {
     const walletLabel = item.getLabel ? item.getLabel() : '';
+    const walletCardTestID = `WalletCard-${walletLabel}`;
     const pressScale = useSharedValue(1.0);
     const dragScale = useSharedValue(isDraggingActive ? dragActiveScale : 1.0);
     const opacityValue = useSharedValue(isSelectedWallet === false ? 0.5 : 1.0);
@@ -402,6 +403,7 @@ export const WalletCarouselItem: React.FC<WalletCarouselItemProps> = React.memo(
       >
         <Pressable
           accessibilityRole="button"
+          accessibilityLabel={walletLabel}
           testID={walletLabel}
           onPressIn={onPressedIn}
           onPressOut={onPressedOut}
@@ -413,6 +415,7 @@ export const WalletCarouselItem: React.FC<WalletCarouselItemProps> = React.memo(
           delayHoverOut={0}
         >
           <View
+            testID={walletCardTestID}
             style={[
               iStyles.shadowContainer,
               isCompact && iStyles.shadowContainerCompact,

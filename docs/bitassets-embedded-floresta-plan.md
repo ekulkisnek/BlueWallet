@@ -96,3 +96,16 @@ Generated mobile libraries are ignored by git. Production CI must run the wrappe
 - RedWallet typecheck/lint passes.
 - A simulator smoke creates a BitAssets wallet, syncs, and displays the persisted address after app restart.
 - Release packaging still requires normal project signing credentials for iOS archive and Android release/AAB signing.
+
+## Current Closure Status
+
+- **Detox carousel reliability fix**: `components/WalletsCarousel.tsx` now exposes a stable `WalletCard-${label}` test ID and `accessibilityLabel` for each wallet card. `tests/e2e/bitassets.spec.js` now tries that card ID before falling back to the legacy label match or selected-card tap. This targets the iOS post-create failure where the BitAssets card exists but the clipped carousel label is not reliably matchable.
+
+- **Native BitAssets bridge status**: The TS contract, TurboModule boundary, native Rust bridge, wallet screen, typed constructor forms, simulator RPC defaults, and storage fallback are wired in RedWallet. Android basic BitAssets simulator smoke has previously passed against Docker signet. The next verification target is iOS Detox after the stable-card selector, followed by `BITASSETS_E2E_FULL=1` with funded constructor inputs.
+
+- **Safe verification executed in this pass**:
+  - `git apply --check --reverse redwallet-ios-detox-carousel-fix.patch` verified the handoff patch is already applied.
+  - `npx eslint components/WalletsCarousel.tsx tests/e2e/bitassets.spec.js` passed.
+  - `npx jest tests/unit/bitassets-wallet.test.ts --runInBand` passed.
+
+- **Remaining before closure**: run iOS Detox with the stable card selector, run the full funded constructor UI smoke where signet funds/assets are available, and commit/push this carousel/doc cleanup after a GUI E2E pass or after accepting the non-GUI validation boundary.

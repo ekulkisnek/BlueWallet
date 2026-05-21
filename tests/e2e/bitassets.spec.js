@@ -36,6 +36,7 @@ describeIfBitAssets('BitAssets native mobile wallet', () => {
     await device.disableSynchronization();
     await element(by.id('Create')).tap();
     await sleep(1000);
+    await device.disableSynchronization();
     await openCreatedWallet();
     await waitForId('BitAssetsWalletScreen');
     await element(by.id('BitAssetsSyncButton')).tap();
@@ -128,6 +129,15 @@ async function scrollToCreateButtonIfNeeded() {
 }
 
 async function openCreatedWallet() {
+  const walletCardId = `WalletCard-${walletLabel}`;
+  try {
+    await waitFor(element(by.id(walletCardId)))
+      .toBeVisible()
+      .withTimeout(90000);
+    await element(by.id(walletCardId)).tap();
+    return;
+  } catch (_) {}
+
   try {
     await waitFor(element(by.id(walletLabel)))
       .toBeVisible()
