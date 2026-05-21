@@ -1,8 +1,16 @@
-import React, { useMemo, useState } from 'react';
-import { Alert, Keyboard, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import { RouteProp, useRoute } from '@react-navigation/native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Alert, AppState, Keyboard, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { RouteProp, useFocusEffect, useRoute } from '@react-navigation/native';
 
-import { BlueCard, BlueText } from '../../BlueComponents';
+import { BlueCard, BlueFormLabel, BlueText } from '../../BlueComponents';
+import {
+  BITASSETS_OPERATION_DEFINITIONS,
+  BitAssetsOperation,
+  buildBitAssetsOperationParams,
+  initialBitAssetsFormState,
+  normalizeBitAssetsError,
+} from '../../blue_modules/BitAssetsWalletForms';
+import { BitAssetsUtxo, BitAssetsWalletInfo } from '../../blue_modules/BitAssetsWallet';
 import Button from '../../components/Button';
 import { useTheme } from '../../components/themes';
 import { useStorage } from '../../hooks/context/useStorage';
@@ -11,86 +19,18 @@ import { DetailViewStackParamList } from '../../navigation/DetailViewStackParamL
 
 type RouteProps = RouteProp<DetailViewStackParamList, 'BitAssetsWallet'>;
 
-const operationTemplates = {
-  transfer: {
-    destinationAddress: '',
-    assetId: '',
-    amount: 0,
-    feeSats: 0,
-    memo: '',
-  },
-  reserve: {
-    name: '',
-    feeSats: 0,
-  },
-  register: {
-    name: '',
-    initialSupply: 0,
-    bitassetData: {},
-    feeSats: 0,
-  },
-  ammMint: {
-    asset0: '',
-    asset1: '',
-    amount0: 0,
-    amount1: 0,
-    lpTokenMint: 0,
-    feeSats: 0,
-  },
-  ammSwap: {
-    assetSpend: '',
-    assetReceive: '',
-    amountSpend: 0,
-    amountReceive: 0,
-    feeSats: 0,
-  },
-  ammBurn: {
-    asset0: '',
-    asset1: '',
-    amount0: 0,
-    amount1: 0,
-    lpTokenBurn: 0,
-    feeSats: 0,
-  },
-  dutchAuctionCreate: {
-    baseAsset: '',
-    quoteAsset: '',
-    baseAmount: 0,
-    startPrice: 0,
-    endPrice: 0,
-    duration: 0,
-    feeSats: 0,
-  },
-  dutchAuctionBid: {
-    auctionId: '',
-    baseAsset: '',
-    quoteAsset: '',
-    bidSize: 0,
-    receiveQuantity: 0,
-    feeSats: 0,
-  },
-  dutchAuctionCollect: {
-    auctionId: '',
-    baseAsset: '',
-    quoteAsset: '',
-    amountBase: 0,
-    amountQuote: 0,
-    feeSats: 0,
-  },
-} as const;
-
-type Operation = keyof typeof operationTemplates;
-
-const operations = Object.keys(operationTemplates) as Operation[];
+const SYNC_INTERVAL_MS = 30000;
 
 const BitAssetsWallet: React.FC = () => {
   const { colors } = useTheme();
   const { wallets, saveToDisk } = useStorage();
   const { walletID } = useRoute<RouteProps>().params;
   const wallet = wallets.find(w => w.getID() === walletID) as BitAssetsWalletClass | undefined;
-  const [operation, setOperation] = useState<Operation>('transfer');
-  const [payload, setPayload] = useState(JSON.stringify(operationTemplates.transfer, null, 2));
+  const [operation, setOperation] = useState<BitAssetsOperation>('transfer');
+  const [forms, setForms] = useState(initialBitAssetsFormState);
   const [result, setResult] = useState('');
+  const [info, setInfo] = useState<BitAssetsWalletInfo | undefined>(wallet?.bitassetsInfo);
+  const [utxos, setUtxos] = useState<BitAssetsUtxo[]>(wallet?.bitassetsUtxos ?? []);
   const [isLoading, setIsLoading] = useState(false);
 
   const stylesHook = useMemo(
@@ -101,8 +41,45 @@ const BitAssetsWallet: React.FC = () => {
         backgroundColor: colors.inputBackgroundColor,
         color: colors.foregroundColor,
       },
+      segment: {
+        borderColor: colors.formBorder,
+      },
     }),
     [colors.elevated, colors.foregroundColor, colors.formBorder, colors.inputBackgroundColor],
+  );
+
+  const sync = useCallback(
+    async (quiet = false) => {
+      if (!wallet) return;
+      if (!quiet) setIsLoading(true);
+      try {
+        const nextInfo = await wallet.syncBitAssets();
+        await wallet.fetchTransactions();
+        await saveToDisk();
+        setInfo(nextInfo);
+        setUtxos([...wallet.bitassetsUtxos]);
+        if (!quiet) {
+          setResult(JSON.stringify({ synced: true, tip: nextInfo.last_tip_height ?? null }, null, 2));
+        }
+      } catch (error: any) {
+        if (!quiet) Alert.alert('BitAssets sync failed', normalizeBitAssetsError(error));
+      } finally {
+        if (!quiet) setIsLoading(false);
+      }
+    },
+    [saveToDisk, wallet],
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      sync(true);
+      const interval = setInterval(() => {
+        if (AppState.currentState === 'active') {
+          sync(true);
+        }
+      }, SYNC_INTERVAL_MS);
+      return () => clearInterval(interval);
+    }, [sync]),
   );
 
   if (!wallet) {
@@ -113,107 +90,156 @@ const BitAssetsWallet: React.FC = () => {
     );
   }
 
-  const selectOperation = (next: Operation) => {
-    setOperation(next);
-    setPayload(JSON.stringify(operationTemplates[next], null, 2));
-    setResult('');
-  };
+  const definition = BITASSETS_OPERATION_DEFINITIONS.find(item => item.key === operation) ?? BITASSETS_OPERATION_DEFINITIONS[0];
+  const balances = info?.balances ?? wallet.bitassetsInfo?.balances ?? {};
+  const confirmedCount =
+    info?.confirmed_utxo_count ?? wallet.bitassetsInfo?.confirmed_utxo_count ?? utxos.filter(utxo => utxo.confirmed).length;
+  const mempoolCount = info?.mempool_utxo_count ?? wallet.bitassetsInfo?.mempool_utxo_count ?? utxos.filter(utxo => !utxo.confirmed).length;
 
-  const sync = async () => {
-    setIsLoading(true);
-    try {
-      const info = await wallet.syncBitAssets();
-      await saveToDisk();
-      setResult(JSON.stringify(info, null, 2));
-    } catch (error: any) {
-      Alert.alert('BitAssets sync failed', error.message ?? String(error));
-    } finally {
-      setIsLoading(false);
-    }
+  const updateField = (key: string, value: string) => {
+    setForms(current => ({
+      ...current,
+      [operation]: {
+        ...current[operation],
+        [key]: value,
+      },
+    }));
   };
 
   const submit = async () => {
     setIsLoading(true);
     Keyboard.dismiss();
     try {
-      const params = JSON.parse(payload);
+      const params = buildBitAssetsOperationParams(operation, forms[operation]);
       let txid: string;
       switch (operation) {
         case 'transfer':
-          txid = await wallet.transferBitAssets(params);
+          txid = await wallet.transferBitAssets(params as any);
           break;
         case 'reserve':
-          txid = await wallet.reserveBitAsset(params);
+          txid = await wallet.reserveBitAsset(params as any);
           break;
         case 'register':
-          txid = await wallet.registerBitAsset(params);
+          txid = await wallet.registerBitAsset(params as any);
           break;
         case 'ammMint':
-          txid = await wallet.ammMint(params);
+          txid = await wallet.ammMint(params as any);
           break;
         case 'ammSwap':
-          txid = await wallet.ammSwap(params);
+          txid = await wallet.ammSwap(params as any);
           break;
         case 'ammBurn':
-          txid = await wallet.ammBurn(params);
+          txid = await wallet.ammBurn(params as any);
           break;
         case 'dutchAuctionCreate':
-          txid = await wallet.dutchAuctionCreate(params);
+          txid = await wallet.dutchAuctionCreate(params as any);
           break;
         case 'dutchAuctionBid':
-          txid = await wallet.dutchAuctionBid(params);
+          txid = await wallet.dutchAuctionBid(params as any);
           break;
         case 'dutchAuctionCollect':
-          txid = await wallet.dutchAuctionCollect(params);
+          txid = await wallet.dutchAuctionCollect(params as any);
           break;
       }
-      setResult(JSON.stringify({ txid }, null, 2));
+      setResult(JSON.stringify({ operation, txid }, null, 2));
+      await sync(true);
     } catch (error: any) {
-      Alert.alert('BitAssets transaction failed', error.message ?? String(error));
+      Alert.alert('BitAssets transaction failed', normalizeBitAssetsError(error));
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <ScrollView style={[styles.root, stylesHook.root]} keyboardShouldPersistTaps="handled">
+    <ScrollView style={[styles.root, stylesHook.root]} keyboardShouldPersistTaps="handled" testID="BitAssetsWalletScreen">
       <BlueCard>
         <BlueText h3>{wallet.getLabel()}</BlueText>
-        <BlueText selectable style={styles.address}>
+        <BlueText selectable style={styles.address} testID="BitAssetsAddress">
           {wallet.getAddress() || ''}
         </BlueText>
-        <BlueText selectable>{wallet.bitassetsRpcUrl}</BlueText>
+        <BlueText selectable testID="BitAssetsRpcUrl">
+          {wallet.bitassetsRpcUrl}
+        </BlueText>
+        <View style={styles.statusGrid}>
+          <StatusItem label="Tip" value={String(info?.last_tip_height ?? 'not synced')} />
+          <StatusItem label="Confirmed UTXOs" value={String(confirmedCount)} />
+          <StatusItem label="Mempool UTXOs" value={String(mempoolCount)} />
+        </View>
       </BlueCard>
 
       <View style={styles.buttons}>
-        <Button testID="BitAssetsSyncButton" title="Sync" onPress={sync} disabled={isLoading} />
+        <Button testID="BitAssetsSyncButton" title={isLoading ? 'Working...' : 'Sync'} onPress={() => sync(false)} disabled={isLoading} />
       </View>
 
-      <View style={styles.operationGrid}>
-        {operations.map(item => (
-          <Button
-            key={item}
-            testID={`BitAssetsOperation-${item}`}
-            title={item}
-            onPress={() => selectOperation(item)}
-            disabled={isLoading || item === operation}
-          />
+      <Section title="Balances">
+        {Object.keys(balances).length === 0 ? (
+          <BlueText testID="BitAssetsEmptyBalances">No confirmed balances yet.</BlueText>
+        ) : (
+          Object.entries(balances).map(([asset, amount]) => (
+            <View key={asset} style={styles.row} testID={`BitAssetsBalance-${asset}`}>
+              <BlueText selectable style={styles.rowLabel}>
+                {asset}
+              </BlueText>
+              <BlueText bold>{amount}</BlueText>
+            </View>
+          ))
+        )}
+      </Section>
+
+      <Section title="Operation">
+        <View style={styles.operationGrid}>
+          {BITASSETS_OPERATION_DEFINITIONS.map(item => (
+            <Button
+              key={item.key}
+              testID={`BitAssetsOperation-${item.key}`}
+              title={item.label}
+              onPress={() => {
+                setOperation(item.key);
+                setResult('');
+              }}
+              disabled={isLoading}
+            />
+          ))}
+        </View>
+
+        {definition.fields.map(field => (
+          <View key={field.key} style={styles.field}>
+            <BlueFormLabel>{field.label}</BlueFormLabel>
+            <TextInput
+              testID={`BitAssetsField-${field.key}`}
+              value={forms[operation][field.key] ?? ''}
+              onChangeText={value => updateField(field.key, value)}
+              autoCapitalize="none"
+              autoCorrect={false}
+              multiline={field.multiline}
+              keyboardType={field.type === 'number' ? 'number-pad' : 'default'}
+              style={[styles.input, field.multiline && styles.multilineInput, stylesHook.input]}
+            />
+          </View>
         ))}
-      </View>
 
-      <TextInput
-        testID="BitAssetsOperationPayload"
-        value={payload}
-        onChangeText={setPayload}
-        autoCapitalize="none"
-        autoCorrect={false}
-        multiline
-        style={[styles.payload, stylesHook.input]}
-      />
+        <View style={styles.buttons}>
+          <Button testID="BitAssetsBroadcastButton" title={definition.submitLabel} onPress={submit} disabled={isLoading} />
+        </View>
+      </Section>
 
-      <View style={styles.buttons}>
-        <Button testID="BitAssetsBroadcastButton" title="Broadcast" onPress={submit} disabled={isLoading} />
-      </View>
+      <Section title="UTXOs">
+        {utxos.length === 0 ? (
+          <BlueText testID="BitAssetsEmptyUtxos">No wallet UTXOs yet.</BlueText>
+        ) : (
+          utxos.slice(0, 20).map((utxo, index) => (
+            <View key={`${utxo.txid ?? utxo.outpoint?.txid ?? index}:${utxo.vout ?? utxo.outpoint?.vout ?? 0}`} style={styles.utxo}>
+              <BlueText selectable>{utxo.content_kind ?? utxo.asset_id ?? 'BitAssets UTXO'}</BlueText>
+              <BlueText>
+                {utxo.amount ?? 0} {utxo.confirmed === false ? 'mempool' : 'confirmed'}
+              </BlueText>
+              <BlueText selectable style={styles.txid}>
+                {utxo.txid ?? utxo.outpoint?.txid ?? ''}
+              </BlueText>
+            </View>
+          ))
+        )}
+      </Section>
 
       {result ? (
         <BlueCard testID="BitAssetsResult">
@@ -223,6 +249,22 @@ const BitAssetsWallet: React.FC = () => {
     </ScrollView>
   );
 };
+
+const Section: React.FC<React.PropsWithChildren<{ title: string }>> = ({ title, children }) => (
+  <BlueCard style={styles.section}>
+    <BlueText h4 style={styles.sectionTitle}>
+      {title}
+    </BlueText>
+    {children}
+  </BlueCard>
+);
+
+const StatusItem: React.FC<{ label: string; value: string }> = ({ label, value }) => (
+  <View style={styles.statusItem}>
+    <BlueText style={styles.statusLabel}>{label}</BlueText>
+    <BlueText bold>{value}</BlueText>
+  </View>
+);
 
 const styles = StyleSheet.create({
   root: {
@@ -235,21 +277,64 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   address: {
-    marginVertical: 12,
+    marginTop: 12,
   },
   buttons: {
     marginVertical: 12,
   },
+  section: {
+    marginTop: 8,
+  },
+  sectionTitle: {
+    marginBottom: 12,
+  },
+  statusGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 16,
+  },
+  statusItem: {
+    minWidth: 96,
+  },
+  statusLabel: {
+    opacity: 0.7,
+    fontSize: 12,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginVertical: 6,
+  },
+  rowLabel: {
+    flex: 1,
+  },
   operationGrid: {
     gap: 8,
-    marginVertical: 12,
+    marginBottom: 12,
   },
-  payload: {
-    minHeight: 220,
+  field: {
+    marginBottom: 12,
+  },
+  input: {
+    minHeight: 44,
     borderWidth: 1,
     borderRadius: 8,
-    padding: 12,
-    fontFamily: 'Menlo',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  multilineInput: {
+    minHeight: 96,
+    textAlignVertical: 'top',
+  },
+  utxo: {
+    marginVertical: 8,
+  },
+  txid: {
+    opacity: 0.7,
+    fontSize: 12,
   },
 });
 

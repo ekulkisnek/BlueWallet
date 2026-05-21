@@ -45,6 +45,12 @@ jest.mock('../../class/wallets/legacy-wallet', () => ({
 
 const { BitAssetsWallet } = require('../../class/wallets/bitassets-wallet');
 const { EmbeddedBitAssetsWalletClient, JsonRpcBitAssetsWalletClient } = require('../../blue_modules/BitAssetsWallet');
+const {
+  BITASSETS_OPERATION_DEFINITIONS,
+  buildBitAssetsOperationParams,
+  initialBitAssetsFormState,
+  normalizeBitAssetsError,
+} = require('../../blue_modules/BitAssetsWalletForms');
 const { walletOpenRouteFor } = require('../../screen/wallets/walletOpenRoute');
 
 describe('BitAssets mobile wallet bridge', () => {
@@ -283,5 +289,58 @@ describe('BitAssets mobile wallet bridge', () => {
         getID: () => 'bitcoin-wallet-id',
       }),
     ).toEqual(['WalletTransactions', { walletID: 'bitcoin-wallet-id', walletType: 'HDsegwitBech32' }]);
+  });
+
+  it('builds typed form payloads and rejects invalid constructor input', () => {
+    const forms = initialBitAssetsFormState();
+    forms.transfer.destinationAddress = 'dest';
+    forms.transfer.assetId = 'asset';
+    forms.transfer.amount = '5';
+    forms.transfer.memo = 'hello';
+    expect(buildBitAssetsOperationParams('transfer', forms.transfer)).toEqual({
+      destinationAddress: 'dest',
+      assetId: 'asset',
+      amount: 5,
+      memo: 'hello',
+      feeSats: 0,
+    });
+
+    forms.register.name = 'ASSET';
+    forms.register.initialSupply = '1000';
+    forms.register.bitassetData = '{"ticker":"ASSET"}';
+    expect(buildBitAssetsOperationParams('register', forms.register)).toEqual({
+      name: 'ASSET',
+      initialSupply: 1000,
+      bitassetData: { ticker: 'ASSET' },
+      feeSats: 0,
+    });
+
+    expect(() => buildBitAssetsOperationParams('reserve', forms.reserve)).toThrow('Name is required');
+    expect(() =>
+      buildBitAssetsOperationParams('ammSwap', { assetSpend: 'a', assetReceive: 'b', amountSpend: '1.2', amountReceive: '1' }),
+    ).toThrow('Amount to spend must be a whole number');
+    expect(() => buildBitAssetsOperationParams('register', { name: 'BAD', initialSupply: '1', bitassetData: '{' })).toThrow(
+      'Asset metadata JSON must be valid JSON',
+    );
+  });
+
+  it('defines a production form for every native constructor and normalizes common errors', () => {
+    expect(BITASSETS_OPERATION_DEFINITIONS.map((definition: { key: string }) => definition.key)).toEqual([
+      'transfer',
+      'reserve',
+      'register',
+      'ammMint',
+      'ammSwap',
+      'ammBurn',
+      'dutchAuctionCreate',
+      'dutchAuctionBid',
+      'dutchAuctionCollect',
+    ]);
+    expect(normalizeBitAssetsError(new Error('native constructors currently support fee_sats=0'))).toBe(
+      'BitAssets mobile constructors currently support fee_sats = 0 only.',
+    );
+    expect(normalizeBitAssetsError(new Error('Network request failed'))).toBe(
+      'Could not reach the BitAssets RPC endpoint. Check the RPC URL and local signet stack.',
+    );
   });
 });

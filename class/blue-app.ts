@@ -303,13 +303,19 @@ export class BlueApp {
     const cacheFolderPath = RNFS.CachesDirectoryPath; // Path to cache folder
     const service = 'realm_encryption_key';
     let password;
-    const credentials = await Keychain.getGenericPassword({ service });
-    if (credentials) {
-      password = credentials.password;
-    } else {
-      const buf = await randomBytes(64);
-      password = uint8ArrayToHex(buf);
-      await Keychain.setGenericPassword(service, password, { service });
+    try {
+      const credentials = await Keychain.getGenericPassword({ service });
+      if (credentials) {
+        password = credentials.password;
+      } else {
+        const buf = await randomBytes(64);
+        password = uint8ArrayToHex(buf);
+        await Keychain.setGenericPassword(service, password, { service });
+      }
+    } catch (error) {
+      console.warn('Keychain unavailable for Realm fallback; using local fallback key', error);
+      const fallbackPassword = this.hashIt('bluewallet-keyvalue-realm-fallback');
+      password = fallbackPassword + fallbackPassword;
     }
 
     const buf = hexToUint8Array(password);
@@ -725,14 +731,28 @@ export class BlueApp {
         data = newData;
       }
 
-      await this.setItem('data', JSON.stringify(data));
-      await this.setItem(BlueApp.FLAG_ENCRYPTED, this.cachedPassword ? '1' : '');
+      const serializedData = JSON.stringify(data);
+      const encryptedFlag = this.cachedPassword ? '1' : '';
+      let realmBackupSaved = false;
 
-      // now, backing up same data in realm:
+      // Keep the existing Realm fallback current even if SecureKeyStore is unavailable
+      // in unsigned simulator builds or temporarily refuses an update.
       const realmkeyValue = await this.openRealmKeyValue();
-      this.saveToRealmKeyValue(realmkeyValue, 'data', JSON.stringify(data));
-      this.saveToRealmKeyValue(realmkeyValue, BlueApp.FLAG_ENCRYPTED, this.cachedPassword ? '1' : '');
-      realmkeyValue.close();
+      try {
+        this.saveToRealmKeyValue(realmkeyValue, 'data', serializedData);
+        this.saveToRealmKeyValue(realmkeyValue, BlueApp.FLAG_ENCRYPTED, encryptedFlag);
+        realmBackupSaved = true;
+      } finally {
+        realmkeyValue.close();
+      }
+
+      try {
+        await this.setItem('data', serializedData);
+        await this.setItem(BlueApp.FLAG_ENCRYPTED, encryptedFlag);
+      } catch (error) {
+        if (!realmBackupSaved) throw error;
+        console.warn('SecureKeyStore save failed; data was saved to Realm fallback', error);
+      }
     } catch (error: any) {
       console.error('save to disk exception:', error.message);
       presentAlert({ message: 'save to disk exception: ' + error.message });

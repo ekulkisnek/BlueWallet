@@ -29,6 +29,11 @@ import { LightningArkWallet } from '../../class/wallets/lightning-ark-wallet.ts'
 import { resetScanWasBBQR } from '../../helpers/scan-qr.ts';
 import { BitAssetsWallet } from '../../class/wallets/bitassets-wallet';
 
+const DEFAULT_BITASSETS_RPC_URL = Platform.select({
+  android: 'http://10.0.2.2:6004',
+  default: 'http://127.0.0.1:6004',
+});
+
 enum ButtonSelected {
   // @ts-ignore: Return later to update
   ONCHAIN = Chain.ONCHAIN,
@@ -447,7 +452,7 @@ const WalletsAdd: React.FC = () => {
     wallet.setLabel(label || 'BitAssets');
     try {
       await wallet.generate(bitAssetsRpcUrl.trim());
-      await wallet.fetchBalance();
+      await wallet.syncBitAssets();
     } catch (Err: any) {
       setIsLoading(false);
       console.warn('bitassets create failure', Err);
@@ -472,6 +477,9 @@ const WalletsAdd: React.FC = () => {
 
   const handleOnBitAssetsButtonPressed = () => {
     Keyboard.dismiss();
+    if (!bitAssetsRpcUrl.trim() && DEFAULT_BITASSETS_RPC_URL) {
+      setBitAssetsRpcUrl(DEFAULT_BITASSETS_RPC_URL);
+    }
     confirmResetEntropy(ButtonSelected.BITASSETS);
   };
 
@@ -596,7 +604,7 @@ const WalletsAdd: React.FC = () => {
                   value={bitAssetsRpcUrl}
                   onChangeText={setBitAssetsRpcUrl}
                   onSubmitEditing={Keyboard.dismiss}
-                  placeholder="https://bitassets.example.com"
+                  placeholder={DEFAULT_BITASSETS_RPC_URL}
                   clearButtonMode="while-editing"
                   autoCapitalize="none"
                   textContentType="URL"
