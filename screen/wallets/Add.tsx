@@ -452,7 +452,6 @@ const WalletsAdd: React.FC = () => {
     wallet.setLabel(label || 'BitAssets');
     try {
       await wallet.generate(bitAssetsRpcUrl.trim());
-      await wallet.syncBitAssets();
     } catch (Err: any) {
       setIsLoading(false);
       console.warn('bitassets create failure', Err);

@@ -273,7 +273,26 @@ describe('BitAssets mobile wallet bridge', () => {
       return {
         ok: true,
         json: async () => ({
-          result: body.method === 'bitassets_listutxos' ? { confirmed: [{ txid: 'x' }], mempool: [] } : 'txid',
+          result:
+            body.method === 'bitassets_listutxos'
+              ? {
+                  confirmed: [
+                    {
+                      txid: 'x',
+                      utreexo_leaf_hash: 'leaf-x',
+                      proof_refs: [
+                        {
+                          block_hash: 'block-x',
+                          sidechain_block_height: 42,
+                          bmm_inclusions: ['bmm-x'],
+                          best_main_verification: 'verified',
+                        },
+                      ],
+                    },
+                  ],
+                  mempool: [],
+                }
+              : 'txid',
         }),
       };
     });
@@ -281,7 +300,20 @@ describe('BitAssets mobile wallet bridge', () => {
 
     const client = new JsonRpcBitAssetsWalletClient('http://127.0.0.1:18443');
     await expect(client.getNewAddress()).resolves.toBe('txid');
-    await expect(client.listUtxos()).resolves.toEqual([{ txid: 'x' }]);
+    await expect(client.listUtxos()).resolves.toEqual([
+      {
+        txid: 'x',
+        utreexo_leaf_hash: 'leaf-x',
+        proof_refs: [
+          {
+            block_hash: 'block-x',
+            sidechain_block_height: 42,
+            bmm_inclusions: ['bmm-x'],
+            best_main_verification: 'verified',
+          },
+        ],
+      },
+    ]);
     await expect(
       client.transfer({
         destinationAddress: 'dest',

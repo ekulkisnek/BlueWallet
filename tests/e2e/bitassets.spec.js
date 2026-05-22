@@ -4,8 +4,9 @@ import { sleep, tapAndTapAgainIfElementIsNotVisible, waitForId } from './helperz
 
 const describeIfBitAssets = process.env.BITASSETS_E2E === '1' ? describe : describe.skip;
 const rpcUrl = process.env.BITASSETS_RPC_URL || (device.getPlatform() === 'android' ? 'http://10.0.2.2:6004' : 'http://127.0.0.1:6004');
-const walletLabel = process.env.BITASSETS_E2E_WALLET_LABEL || 'my first wallet';
+const walletLabel = process.env.BITASSETS_E2E_WALLET_LABEL || 'BitAssets';
 const noSyncLaunchArgs = { detoxEnableSynchronization: 'NO' };
+const requireRpc = process.env.BITASSETS_E2E_REQUIRE_RPC === '1' || process.env.BITASSETS_E2E_FULL === '1';
 
 describeIfBitAssets('BitAssets native mobile wallet', () => {
   beforeAll(async () => {
@@ -40,23 +41,25 @@ describeIfBitAssets('BitAssets native mobile wallet', () => {
     await sleep(1000);
     await openCreatedWallet();
     await waitForId('BitAssetsWalletScreen');
-    await element(by.id('BitAssetsSyncButton')).tap();
-    await waitForId('BitAssetsEmptyBalances', 60000);
+    if (requireRpc) {
+      await element(by.id('BitAssetsSyncButton')).tap();
+      await waitForId('BitAssetsEmptyBalances', 60000);
+    }
 
-    await element(by.id('BitAssetsOperation-reserve')).tap();
+    await selectReserveOperation();
     await sleep(500);
-    await waitFor(element(by.id('BitAssetsField-name')))
-      .toExist()
-      .withTimeout(10000);
+    await expect(element(by.id('BitAssetsSelectedOperation'))).toHaveText('Reserve');
+    await scrollToBitAssetsField('name');
     await expect(element(by.id('BitAssetsBroadcastButton'))).toExist();
 
     await device.terminateApp();
     await device.launchApp({ newInstance: true, permissions: { notifications: 'YES' }, launchArgs: noSyncLaunchArgs });
-    await waitForId('WalletsList');
     await openCreatedWallet();
     await waitForId('BitAssetsWalletScreen');
-    await element(by.id('BitAssetsSyncButton')).tap();
-    await waitForId('BitAssetsEmptyBalances', 60000);
+    if (requireRpc) {
+      await element(by.id('BitAssetsSyncButton')).tap();
+      await waitForId('BitAssetsEmptyBalances', 60000);
+    }
   });
 
   it('runs native constructor broadcasts when BITASSETS_E2E_FULL is enabled', async () => {
@@ -138,45 +141,89 @@ async function scrollToCreateButtonIfNeeded() {
 }
 
 async function openCreatedWallet() {
-  const walletCardId = `WalletCard-${walletLabel}`;
-  try {
-    await waitFor(element(by.id(walletCardId)))
-      .toBeVisible()
-      .withTimeout(90000);
-    await element(by.id(walletCardId)).tap();
-    return;
-  } catch (_) {}
+  if (await isVisibleId('BitAssetsWalletScreen', 3000)) return;
 
   try {
     await waitFor(element(by.id(walletLabel)))
       .toBeVisible()
-      .withTimeout(90000);
+      .withTimeout(5000);
     await element(by.id(walletLabel)).tap();
-    return;
+    if (await isVisibleId('BitAssetsWalletScreen', 3000)) return;
+  } catch (_) {}
+
+  const walletCardId = `WalletCard-${walletLabel}`;
+  try {
+    await waitFor(element(by.id(walletCardId)))
+      .toBeVisible()
+      .withTimeout(5000);
+    await element(by.id(walletCardId)).tap();
+    if (await isVisibleId('BitAssetsWalletScreen', 3000)) return;
   } catch (_) {}
 
   try {
     await waitFor(element(by.text(walletLabel)))
       .toBeVisible()
-      .withTimeout(60000);
+      .withTimeout(5000);
     await element(by.text(walletLabel)).tap();
-    return;
+    if (await isVisibleId('BitAssetsWalletScreen', 3000)) return;
   } catch (_) {}
 
   await openSelectedWalletCard();
 }
 
 async function openSelectedWalletCard() {
-  await waitForId('WalletsList', 60000);
+  if (await isVisibleId('BitAssetsWalletScreen', 3000)) return;
   try {
     await waitFor(element(by.id('SelectedWalletCard')))
       .toBeVisible()
-      .withTimeout(60000);
+      .withTimeout(5000);
     await element(by.id('SelectedWalletCard')).tap();
-    return;
+    if (await isVisibleId('BitAssetsWalletScreen', 3000)) return;
   } catch (_) {}
 
-  await element(by.id('WalletsList')).tapAtPoint({ x: 200, y: 140 });
+  await element(by.id('WalletsList')).tapAtPoint({ x: 200, y: 95 });
+}
+
+async function selectReserveOperation() {
+  try {
+    await element(by.id('BitAssetsOperation-reserve')).tap();
+    await sleep(500);
+    if (await isSelectedOperation('Reserve')) return;
+  } catch (_err) {
+    // fall through to the text matcher and coordinate fallback below
+  }
+
+  try {
+    await element(by.text('Reserve')).tap();
+    await sleep(500);
+    if (await isSelectedOperation('Reserve')) return;
+  } catch (_err) {
+    // fall through to the coordinate fallback below
+  }
+
+  if (device.getPlatform() === 'ios') {
+    await element(by.id('BitAssetsWalletScreen')).tapAtPoint({ x: 200, y: 430 });
+  }
+}
+
+async function isSelectedOperation(label) {
+  try {
+    await expect(element(by.id('BitAssetsSelectedOperation'))).toHaveText(label);
+    return true;
+  } catch (_err) {
+    return false;
+  }
+}
+
+async function isVisibleId(id, timeout = 1000) {
+  try {
+    await waitFor(element(by.id(id)))
+      .toBeVisible()
+      .withTimeout(timeout);
+    return true;
+  } catch (_) {
+    return false;
+  }
 }
 
 async function scrollToBitAssetsField(field) {

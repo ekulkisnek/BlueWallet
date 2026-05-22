@@ -32,6 +32,13 @@ export interface BitAssetsUtxo {
   amount?: number;
   content_kind?: string;
   confirmed?: boolean;
+  utreexo_leaf_hash?: string;
+  proof_refs?: Array<{
+    block_hash?: string | null;
+    sidechain_block_height?: number;
+    bmm_inclusions?: string[];
+    best_main_verification?: string;
+  }>;
 }
 
 export interface TransferParams {

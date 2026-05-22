@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Alert, AppState, Keyboard, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, AppState, Keyboard, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { RouteProp, useFocusEffect, useRoute } from '@react-navigation/native';
 
 import { BlueCard, BlueFormLabel, BlueText } from '../../BlueComponents';
@@ -187,18 +187,31 @@ const BitAssetsWallet: React.FC = () => {
       </Section>
 
       <Section title="Operation">
+        <BlueText bold testID="BitAssetsSelectedOperation" style={styles.selectedOperation}>
+          {definition.label}
+        </BlueText>
         <View style={styles.operationGrid}>
           {BITASSETS_OPERATION_DEFINITIONS.map(item => (
-            <Button
+            <Pressable
               key={item.key}
               testID={`BitAssetsOperation-${item.key}`}
-              title={item.label}
+              accessibilityRole="button"
+              accessibilityLabel={item.label}
+              style={[
+                styles.operationPill,
+                {
+                  backgroundColor: operation === item.key ? colors.mainColor : colors.buttonDisabledBackgroundColor,
+                },
+              ]}
               onPress={() => {
                 setOperation(item.key);
                 setResult('');
               }}
-              disabled={isLoading}
-            />
+            >
+              <BlueText bold style={{ color: operation === item.key ? colors.buttonTextColor : colors.foregroundColor }}>
+                {item.label}
+              </BlueText>
+            </Pressable>
           ))}
         </View>
 
@@ -312,7 +325,20 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   operationGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
+    marginBottom: 12,
+  },
+  operationPill: {
+    minHeight: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  selectedOperation: {
     marginBottom: 12,
   },
   field: {

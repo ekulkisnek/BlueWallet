@@ -287,7 +287,7 @@ const WalletsList: React.FC = () => {
           testID="WalletsList"
           horizontal
           scrollEnabled={isFocused}
-          animateChanges={true}
+          animateChanges={false}
         />
       </>
     );
@@ -498,7 +498,6 @@ const WalletsList: React.FC = () => {
         maxToRenderPerBatch={10}
         updateCellsBatchingPeriod={50}
         getItemLayout={getItemLayout}
-        ignoreTopInset={true} // Ignore top inset as the screen header already handles it
         {...refreshProps}
       />
       {renderScanButton()}
