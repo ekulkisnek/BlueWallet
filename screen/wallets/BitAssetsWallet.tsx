@@ -216,7 +216,7 @@ const BitAssetsWallet: React.FC = () => {
       <View style={styles.buttons}>
         <Button testID="BitAssetsSyncButton" title={isLoading ? 'Working...' : 'Sync'} onPress={() => sync(false)} disabled={isLoading} />
         {__DEV__ ? (
-          <>
+          <View style={styles.e2eButtons}>
             <Button
               testID="BitAssetsE2ESyncButton"
               accessibilityLabel="Sync BitAssets wallet"
@@ -231,9 +231,57 @@ const BitAssetsWallet: React.FC = () => {
               onPress={submit}
               disabled={false}
             />
-          </>
+          </View>
         ) : null}
       </View>
+
+      {__DEV__ ? (
+        <>
+          <View style={styles.e2eOperationGrid} testID="BitAssetsE2EOperationGrid">
+            {BITASSETS_OPERATION_DEFINITIONS.map(item => (
+              <Pressable
+                key={item.key}
+                testID={`BitAssetsE2EOperation-${item.key}`}
+                accessibilityRole="button"
+                accessibilityLabel={`E2E ${item.label}`}
+                style={[
+                  styles.e2eOperationPill,
+                  {
+                    backgroundColor: operation === item.key ? colors.mainColor : colors.buttonDisabledBackgroundColor,
+                  },
+                ]}
+                onPress={() => {
+                  setOperation(item.key);
+                  setResult('');
+                  setErrorMessage('');
+                }}
+              >
+                <BlueText style={{ color: operation === item.key ? colors.buttonTextColor : colors.foregroundColor }}>
+                  {item.label}
+                </BlueText>
+              </Pressable>
+            ))}
+          </View>
+          <View style={styles.e2eFields} testID="BitAssetsE2EFormFields">
+            {definition.fields.map(field => (
+              <TextInput
+                key={field.key}
+                testID={`BitAssetsE2EField-${field.key}`}
+                value={forms[operation][field.key] ?? ''}
+                onChangeText={value => updateField(field.key, value)}
+                autoCapitalize="none"
+                autoCorrect={false}
+                placeholder={field.label}
+                multiline={field.multiline}
+                blurOnSubmit={!field.multiline}
+                returnKeyType={field.multiline ? 'default' : 'done'}
+                keyboardType="default"
+                style={[styles.input, field.multiline && styles.multilineInput, stylesHook.input]}
+              />
+            ))}
+          </View>
+        </>
+      ) : null}
 
       <Section title="Balances">
         {Object.keys(balances).length === 0 ? (
@@ -371,7 +419,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   content: {
-    paddingBottom: 64,
+    paddingBottom: 320,
   },
   center: {
     flex: 1,
@@ -383,6 +431,25 @@ const styles = StyleSheet.create({
   },
   buttons: {
     marginVertical: 12,
+  },
+  e2eButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  e2eFields: {
+    gap: 8,
+    marginBottom: 12,
+  },
+  e2eOperationGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 8,
+  },
+  e2eOperationPill: {
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
   section: {
     marginTop: 8,

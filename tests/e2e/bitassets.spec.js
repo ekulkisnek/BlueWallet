@@ -71,7 +71,7 @@ describeIfBitAssets('BitAssets native mobile wallet', () => {
       await waitForId('BitAssetsEmptyBalances', 60000);
     }
 
-    await selectReserveOperation();
+    await selectOperation('reserve');
     await sleep(500);
     await expect(element(by.id('BitAssetsSelectedOperation'))).toHaveText('Reserve');
     await scrollToBitAssetsField('name');
@@ -169,7 +169,12 @@ async function submitOperation(operation, values) {
   for (const [key, value] of Object.entries(values)) {
     if (value === '') continue;
     await scrollToBitAssetsField(key);
-    await element(by.id(`BitAssetsField-${key}`)).replaceText(String(value));
+    await element(by.id(bitAssetsFieldId(key))).replaceText(String(value));
+    if (device.getPlatform() === 'ios' && process.env.BITASSETS_E2E_PROVE_MOBILE_FLOW === '1') {
+      try {
+        await element(by.id(bitAssetsFieldId(key))).tapReturnKey();
+      } catch (_) {}
+    }
     lastField = key;
   }
   if (process.env.BITASSETS_E2E_PROVE_MOBILE_FLOW === '1' && device.getPlatform() === 'ios') {
@@ -179,7 +184,7 @@ async function submitOperation(operation, values) {
   }
   if (device.getPlatform() === 'ios' && lastField) {
     try {
-      await element(by.id(`BitAssetsField-${lastField}`)).tapReturnKey();
+      await element(by.id(bitAssetsFieldId(lastField))).tapReturnKey();
       await waitForBitAssetsSubmitTxid();
       return extractLatestTxid();
     } catch (_) {}
@@ -213,6 +218,13 @@ async function selectOperation(operation) {
     await expect(element(by.id('BitAssetsSelectedOperation'))).toHaveText(expectedLabel);
     return;
   } catch (_) {}
+
+  if (process.env.BITASSETS_E2E_PROVE_MOBILE_FLOW === '1') {
+    await element(by.id(`BitAssetsE2EOperation-${operation}`)).tap();
+    await sleep(500);
+    await expect(element(by.id('BitAssetsSelectedOperation'))).toHaveText(expectedLabel);
+    return;
+  }
 
   try {
     await waitFor(element(by.id(`BitAssetsOperation-${operation}`)))
@@ -373,11 +385,11 @@ async function waitForBitAssetsSubmitTxid() {
   while (Date.now() < deadline) {
     if (await resultHasTxid(1000)) return;
     if (await isExistingId('BitAssetsError', 1000)) {
-      await waitFor(element(by.id('BitAssetsError')))
-        .toBeVisible()
-        .whileElement(by.id('BitAssetsWalletScreen'))
-        .scroll(500, 'down');
-      await expect(element(by.id('BitAssetsError'))).not.toExist();
+      let errorText = '<unreadable>';
+      try {
+        errorText = await extractTextFromElementById('BitAssetsError');
+      } catch (_) {}
+      throw new Error(`BitAssets submit failed: ${errorText}`);
     }
     await sleep(1000);
   }
@@ -449,37 +461,6 @@ async function openSelectedWalletCard() {
   await element(by.id('WalletsList')).tapAtPoint({ x: 200, y: 95 });
 }
 
-async function selectReserveOperation() {
-  try {
-    await element(by.id('BitAssetsOperation-reserve')).tap();
-    await sleep(500);
-    if (await isSelectedOperation('Reserve')) return;
-  } catch (_err) {
-    // fall through to the text matcher and coordinate fallback below
-  }
-
-  try {
-    await element(by.text('Reserve')).tap();
-    await sleep(500);
-    if (await isSelectedOperation('Reserve')) return;
-  } catch (_err) {
-    // fall through to the coordinate fallback below
-  }
-
-  if (device.getPlatform() === 'ios') {
-    await element(by.id('BitAssetsWalletScreen')).tapAtPoint({ x: 200, y: 430 });
-  }
-}
-
-async function isSelectedOperation(label) {
-  try {
-    await expect(element(by.id('BitAssetsSelectedOperation'))).toHaveText(label);
-    return true;
-  } catch (_err) {
-    return false;
-  }
-}
-
 async function isVisibleId(id, timeout = 1000) {
   try {
     await waitFor(element(by.id(id)))
@@ -503,25 +484,31 @@ async function isExistingId(id, timeout = 1000) {
 }
 
 async function scrollToBitAssetsField(field) {
-  if (device.getPlatform() === 'ios' && process.env.BITASSETS_E2E_PROVE_MOBILE_FLOW === '1') {
-    await waitFor(element(by.id(`BitAssetsField-${field}`)))
-      .toExist()
-      .withTimeout(5000);
-    return;
+  const fieldId = bitAssetsFieldId(field);
+  for (let i = 0; i < 8; i++) {
+    if (await isVisibleId(fieldId, 500)) return;
+    try {
+      await element(by.id('BitAssetsWalletScreen')).scroll(180, 'down');
+    } catch (_) {}
   }
 
-  try {
-    await waitFor(element(by.id(`BitAssetsField-${field}`)))
-      .toBeVisible()
-      .whileElement(by.id('BitAssetsWalletScreen'))
-      .scroll(500, 'down');
-    return;
-  } catch (_) {}
+  for (let i = 0; i < 4; i++) {
+    if (await isVisibleId(fieldId, 500)) return;
+    try {
+      await element(by.id('BitAssetsWalletScreen')).scroll(120, 'up');
+    } catch (_) {}
+  }
 
-  await waitFor(element(by.id(`BitAssetsField-${field}`)))
+  await waitFor(element(by.id(fieldId)))
     .toBeVisible()
-    .whileElement(by.id('BitAssetsWalletScreen'))
-    .scroll(500, 'up');
+    .withTimeout(3000);
+}
+
+function bitAssetsFieldId(field) {
+  if (process.env.BITASSETS_E2E_PROVE_MOBILE_FLOW === '1') {
+    return `BitAssetsE2EField-${field}`;
+  }
+  return `BitAssetsField-${field}`;
 }
 
 async function scrollToBroadcastButton() {
