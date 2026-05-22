@@ -19,6 +19,17 @@ const submitLabels = {
   dutchAuctionBid: 'Bid',
   dutchAuctionCollect: 'Collect',
 };
+const operationLabels = {
+  transfer: 'Transfer',
+  reserve: 'Reserve',
+  register: 'Register',
+  ammMint: 'AMM mint',
+  ammSwap: 'AMM swap',
+  ammBurn: 'AMM burn',
+  dutchAuctionCreate: 'Auction create',
+  dutchAuctionBid: 'Auction bid',
+  dutchAuctionCollect: 'Auction collect',
+};
 
 describeIfBitAssets('BitAssets native mobile wallet', () => {
   beforeAll(async () => {
@@ -153,8 +164,7 @@ describeIfBitAssets('BitAssets native mobile wallet', () => {
 });
 
 async function submitOperation(operation, values) {
-  await element(by.id(`BitAssetsOperation-${operation}`)).tap();
-  await sleep(500);
+  await selectOperation(operation);
   let lastField = '';
   for (const [key, value] of Object.entries(values)) {
     if (value === '') continue;
@@ -164,37 +174,71 @@ async function submitOperation(operation, values) {
   }
   if (process.env.BITASSETS_E2E_PROVE_MOBILE_FLOW === '1' && device.getPlatform() === 'ios') {
     await tapE2ESubmitButton();
-    await waitForBitAssetsSubmitResult();
+    await waitForBitAssetsSubmitTxid();
     return extractLatestTxid();
   }
   if (device.getPlatform() === 'ios' && lastField) {
     try {
       await element(by.id(`BitAssetsField-${lastField}`)).tapReturnKey();
-      await waitForBitAssetsSubmitResult();
+      await waitForBitAssetsSubmitTxid();
       return extractLatestTxid();
     } catch (_) {}
   }
   await scrollToBroadcastButton();
-  if (await isExistingId('BitAssetsResult', 1000)) return extractLatestTxid();
+  if (await resultHasTxid(1000)) return extractLatestTxid();
   try {
     await element(by.id('BitAssetsBroadcastButton')).tap();
   } catch (error) {
     if (device.getPlatform() !== 'ios') throw error;
     try {
-      await waitForBitAssetsSubmitResult();
+      await waitForBitAssetsSubmitTxid();
       await sleep(500);
       return extractLatestTxid();
     } catch (_) {}
     try {
       await element(by.label(submitLabels[operation])).tap();
     } catch (fallbackError) {
-      if (await isExistingId('BitAssetsResult', 1000)) return extractLatestTxid();
+      if (await resultHasTxid(1000)) return extractLatestTxid();
       throw fallbackError;
     }
   }
-  await waitForBitAssetsSubmitResult();
+  await waitForBitAssetsSubmitTxid();
   await sleep(500);
   return extractLatestTxid();
+}
+
+async function selectOperation(operation) {
+  const expectedLabel = operationLabels[operation];
+  try {
+    await expect(element(by.id('BitAssetsSelectedOperation'))).toHaveText(expectedLabel);
+    return;
+  } catch (_) {}
+
+  try {
+    await waitFor(element(by.id(`BitAssetsOperation-${operation}`)))
+      .toBeVisible()
+      .whileElement(by.id('BitAssetsWalletScreen'))
+      .scroll(500, 'down');
+    await element(by.id(`BitAssetsOperation-${operation}`)).tap();
+  } catch (_scrollError) {
+    try {
+      await element(by.id('BitAssetsWalletScreen')).scroll(400, 'down');
+      await element(by.id(`BitAssetsOperation-${operation}`)).tap();
+    } catch (_tapError) {
+      try {
+        await element(by.text(expectedLabel)).tap();
+      } catch (error) {
+        if (device.getPlatform() === 'android') {
+          await element(by.id('BitAssetsWalletScreen')).tapAtPoint({ x: 600, y: 1320 });
+        } else {
+          throw error;
+        }
+      }
+    }
+  }
+
+  await sleep(500);
+  await expect(element(by.id('BitAssetsSelectedOperation'))).toHaveText(expectedLabel);
 }
 
 async function extractLatestTxid() {
@@ -203,8 +247,28 @@ async function extractLatestTxid() {
 
 async function mineAndSync(txid, minimumProofBackedUtxos) {
   mineBitAssetsTx(txid);
-  await element(by.id('BitAssetsSyncButton')).tap();
+  await tapSyncButton();
   await expectProofBackedUtxos(minimumProofBackedUtxos);
+}
+
+async function tapSyncButton() {
+  try {
+    await element(by.id('BitAssetsE2ESyncButton')).tap();
+    return;
+  } catch (_) {}
+
+  try {
+    await element(by.id('BitAssetsSyncButton')).tap();
+    return;
+  } catch (_) {}
+
+  try {
+    await element(by.id('BitAssetsWalletScreen')).scroll(700, 'up');
+    await element(by.id('BitAssetsE2ESyncButton')).tap();
+    return;
+  } catch (_) {}
+
+  await element(by.id('BitAssetsWalletScreen')).tapAtPoint({ x: 160, y: 220 });
 }
 
 async function tapE2ESubmitButton() {
@@ -257,7 +321,7 @@ async function expectProofBackedUtxos(minimum = 1) {
     const rawCount = await extractTextFromElementById('BitAssetsProofBackedUtxoCount');
     const count = Number(String(rawCount).replace(/[^\d]/g, ''));
     if (Number.isFinite(count) && count >= minimum) return;
-    await element(by.id('BitAssetsSyncButton')).tap();
+    await tapSyncButton();
     await sleep(3000);
   }
   await scrollToProofBackedCount();
@@ -304,34 +368,27 @@ async function scrollToProofBackedCount() {
     .scroll(500, 'up');
 }
 
-async function waitForBitAssetsSubmitResult() {
-  try {
-    await waitFor(element(by.id('BitAssetsResult')))
-      .toExist()
-      .withTimeout(90000);
-    return;
-  } catch (_) {}
+async function waitForBitAssetsSubmitTxid() {
+  const deadline = Date.now() + 90000;
+  while (Date.now() < deadline) {
+    if (await resultHasTxid(1000)) return;
+    if (await isExistingId('BitAssetsError', 1000)) {
+      await waitFor(element(by.id('BitAssetsError')))
+        .toBeVisible()
+        .whileElement(by.id('BitAssetsWalletScreen'))
+        .scroll(500, 'down');
+      await expect(element(by.id('BitAssetsError'))).not.toExist();
+    }
+    await sleep(1000);
+  }
+  const result = (await isExistingId('BitAssetsResultText', 1000)) ? await extractTextFromElementById('BitAssetsResultText') : '<missing>';
+  throw new Error(`Timed out waiting for BitAssets submit txid. Last result: ${result}`);
+}
 
-  try {
-    await waitFor(element(by.id('BitAssetsResult')))
-      .toBeVisible()
-      .whileElement(by.id('BitAssetsWalletScreen'))
-      .scroll(500, 'down');
-    return;
-  } catch (_) {}
-
-  try {
-    await waitFor(element(by.id('BitAssetsResult')))
-      .toBeVisible()
-      .withTimeout(90000);
-    return;
-  } catch (_) {}
-
-  await waitFor(element(by.id('BitAssetsError')))
-    .toBeVisible()
-    .whileElement(by.id('BitAssetsWalletScreen'))
-    .scroll(500, 'down');
-  await expect(element(by.id('BitAssetsError'))).not.toExist();
+async function resultHasTxid(timeout = 1000) {
+  if (!(await isExistingId('BitAssetsResultText', timeout))) return false;
+  const result = await extractTextFromElementById('BitAssetsResultText');
+  return /[0-9a-f]{64}/i.test(String(result));
 }
 
 async function scrollToCreateButtonIfNeeded() {

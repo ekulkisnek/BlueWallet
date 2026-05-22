@@ -216,13 +216,22 @@ const BitAssetsWallet: React.FC = () => {
       <View style={styles.buttons}>
         <Button testID="BitAssetsSyncButton" title={isLoading ? 'Working...' : 'Sync'} onPress={() => sync(false)} disabled={isLoading} />
         {__DEV__ ? (
-          <Button
-            testID="BitAssetsE2ESubmitButton"
-            accessibilityLabel="Submit BitAssets operation"
-            title="Submit operation"
-            onPress={submit}
-            disabled={false}
-          />
+          <>
+            <Button
+              testID="BitAssetsE2ESyncButton"
+              accessibilityLabel="Sync BitAssets wallet"
+              title="E2E sync"
+              onPress={() => sync(false)}
+              disabled={false}
+            />
+            <Button
+              testID="BitAssetsE2ESubmitButton"
+              accessibilityLabel="Submit BitAssets operation"
+              title="Submit operation"
+              onPress={submit}
+              disabled={false}
+            />
+          </>
         ) : null}
       </View>
 
