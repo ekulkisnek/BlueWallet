@@ -202,6 +202,93 @@ describe('BitAssets mobile wallet bridge', () => {
     });
   });
 
+  it('keeps proof-backed receive and change UTXOs after native asset creation and send flow', async () => {
+    const wallet = new BitAssetsWallet();
+    wallet.secret = 'bitassets://persisted-address';
+    wallet.bitassetsRpcUrl = 'http://127.0.0.1:6004';
+    mockNativeModule.reserve.mockResolvedValue('tx-reserve');
+    mockNativeModule.register.mockResolvedValue('tx-register');
+    mockNativeModule.transfer.mockResolvedValue('tx-transfer');
+    mockNativeModule.sync.mockResolvedValue(
+      JSON.stringify({
+        enabled: true,
+        address_count: 2,
+        confirmed_utxo_count: 2,
+        mempool_utxo_count: 0,
+        balances: { asset_a: 24 },
+        last_tip_hash: 'tip-after-transfer',
+        last_tip_height: 125,
+      }),
+    );
+    mockNativeModule.listUtxos.mockResolvedValue(
+      JSON.stringify({
+        confirmed: [
+          {
+            txid: 'tx-register',
+            vout: 0,
+            asset_id: 'asset_a',
+            amount: 23,
+            content_kind: 'bitasset',
+            confirmed: true,
+            utreexo_leaf_hash: 'leaf-register-receive',
+            proof_refs: [
+              {
+                block_hash: 'side-block-register',
+                sidechain_block_height: 124,
+                bmm_inclusions: ['bmm-register'],
+                best_main_verification: 'best-main-register',
+              },
+            ],
+          },
+          {
+            txid: 'tx-transfer',
+            vout: 1,
+            asset_id: 'asset_a',
+            amount: 1,
+            content_kind: 'bitasset',
+            confirmed: true,
+            utreexo_leaf_hash: 'leaf-transfer-change',
+            proof_refs: [
+              {
+                block_hash: 'side-block-transfer',
+                sidechain_block_height: 125,
+                bmm_inclusions: ['bmm-transfer'],
+                best_main_verification: 'best-main-transfer',
+              },
+            ],
+          },
+        ],
+        mempool: [],
+      }),
+    );
+
+    await expect(wallet.reserveBitAsset({ name: 'FLOW', feeSats: 0 })).resolves.toBe('tx-reserve');
+    await expect(wallet.registerBitAsset({ name: 'FLOW', initialSupply: 25, bitassetData: {}, feeSats: 0 })).resolves.toBe('tx-register');
+    await expect(
+      wallet.transferBitAssets({ destinationAddress: 'persisted-address', assetId: 'asset_a', amount: 1, feeSats: 0 }),
+    ).resolves.toBe('tx-transfer');
+    await wallet.syncBitAssets();
+
+    const persisted = JSON.stringify({ ...wallet, type: wallet.type });
+    const restored = BitAssetsWallet.fromJson(persisted) as typeof wallet;
+    await restored.init();
+
+    expect(restored.bitassetsInfo?.last_tip_height).toBe(125);
+    expect(restored.bitassetsUtxos).toHaveLength(2);
+    expect(restored.bitassetsUtxos.map((utxo: { utreexo_leaf_hash?: string }) => utxo.utreexo_leaf_hash)).toEqual([
+      'leaf-register-receive',
+      'leaf-transfer-change',
+    ]);
+    expect(
+      restored.bitassetsUtxos.every(
+        (utxo: { proof_refs?: Array<{ sidechain_block_height?: number; bmm_inclusions?: string[]; best_main_verification?: string }> }) =>
+          typeof utxo.proof_refs?.[0]?.sidechain_block_height === 'number' &&
+          Boolean(utxo.proof_refs?.[0]?.bmm_inclusions?.length) &&
+          Boolean(utxo.proof_refs?.[0]?.best_main_verification),
+      ),
+    ).toBe(true);
+  });
+
   it('serializes every native constructor payload and parses txids', async () => {
     const client = new EmbeddedBitAssetsWalletClient();
     mockNativeModule.transfer.mockResolvedValue(JSON.stringify({ txid: 'tx-transfer' }));
