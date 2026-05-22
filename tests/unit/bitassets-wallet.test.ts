@@ -23,6 +23,15 @@ jest.mock('../../blue_modules/BlueElectrum', () => ({
 }));
 jest.mock('../../class/wallets/legacy-wallet', () => ({
   LegacyWallet: class {
+    static fromJson(obj: string) {
+      const parsed = JSON.parse(obj);
+      const wallet = new this();
+      for (const key of Object.keys(parsed)) {
+        (wallet as any)[key] = parsed[key];
+      }
+      return wallet;
+    }
+
     secret = '';
     balance = 0;
     unconfirmed_balance = 0;
@@ -166,11 +175,31 @@ describe('BitAssets mobile wallet bridge', () => {
     const wallet = new BitAssetsWallet();
 
     const info = await wallet.syncBitAssets();
-    await wallet.fetchTransactions();
 
     expect(info.balances.asset_a).toBe(25);
     expect(wallet.getBalance()).toBe(25);
     expect(wallet.bitassetsUtxos.map((utxo: { txid?: string }) => utxo.txid)).toEqual(['a', 'b']);
+  });
+
+  it('persists proof-backed BitAssets UTXOs across wallet JSON round trips', async () => {
+    const wallet = new BitAssetsWallet();
+    wallet.secret = 'bitassets://persisted-address';
+    wallet.bitassetsRpcUrl = 'http://127.0.0.1:6004';
+
+    await wallet.syncBitAssets();
+
+    const persisted = JSON.stringify({ ...wallet, type: wallet.type });
+    const restored = BitAssetsWallet.fromJson(persisted) as typeof wallet;
+    await restored.init();
+
+    expect(restored.getAddress()).toBe('persisted-address');
+    expect(restored.bitassetsUtxos).toEqual(wallet.bitassetsUtxos);
+    expect(restored.bitassetsUtxos[0].utreexo_leaf_hash).toBe('leaf-a-utreexo');
+    expect(restored.bitassetsUtxos[0].proof_refs?.[0]).toMatchObject({
+      sidechain_block_height: 123,
+      bmm_inclusions: ['bmm-incl-xyz'],
+      best_main_verification: 'best-main-ok',
+    });
   });
 
   it('serializes every native constructor payload and parses txids', async () => {

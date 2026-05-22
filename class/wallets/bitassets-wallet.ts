@@ -91,10 +91,13 @@ export class BitAssetsWallet extends LegacyWallet {
   }
 
   async syncBitAssets(): Promise<BitAssetsWalletInfo> {
-    const info = await (await this.getConfiguredClient()).sync();
+    const client = await this.getConfiguredClient();
+    const info = await client.sync();
+    this.bitassetsUtxos = await client.listUtxos();
     this.bitassetsInfo = info;
     this.balance = Object.values(info.balances ?? {}).reduce((sum, amount) => sum + amount, 0);
     this._lastBalanceFetch = +new Date();
+    this._lastTxFetch = +new Date();
     return info;
   }
 
