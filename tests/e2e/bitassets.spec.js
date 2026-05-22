@@ -1,6 +1,7 @@
 import { element, waitFor } from 'detox';
+import { execFileSync } from 'child_process';
 
-import { sleep, tapAndTapAgainIfElementIsNotVisible, waitForId } from './helperz';
+import { extractTextFromElementById, sleep, tapAndTapAgainIfElementIsNotVisible, waitForId } from './helperz';
 
 const describeIfBitAssets = process.env.BITASSETS_E2E === '1' ? describe : describe.skip;
 const rpcUrl = process.env.BITASSETS_RPC_URL || (device.getPlatform() === 'android' ? 'http://10.0.2.2:6004' : 'http://127.0.0.1:6004');
@@ -27,6 +28,7 @@ describeIfBitAssets('BitAssets native mobile wallet', () => {
   }, 120000);
 
   it('creates a native wallet, syncs, and exposes typed constructor forms', async () => {
+    await device.disableSynchronization();
     await waitForId('WalletsList');
     await waitFor(element(by.id('CreateAWallet')))
       .toBeVisible()
@@ -78,8 +80,32 @@ describeIfBitAssets('BitAssets native mobile wallet', () => {
   it('runs native constructor broadcasts when BITASSETS_E2E_FULL is enabled', async () => {
     if (process.env.BITASSETS_E2E_FULL !== '1') return;
 
+    await device.disableSynchronization();
     await waitForId('BitAssetsWalletScreen');
-    await submitOperation('reserve', { name: process.env.BITASSETS_E2E_RESERVE_NAME || `full-${Date.now()}` });
+    const reserveName = process.env.BITASSETS_E2E_RESERVE_NAME || `full-${Date.now()}`;
+    const reserveTxid = await submitOperation('reserve', { name: reserveName });
+
+    if (process.env.BITASSETS_E2E_PROVE_MOBILE_FLOW === '1') {
+      await mineAndSync(reserveTxid, 1);
+
+      const registerTxid = await submitOperation('register', {
+        bitassetData: process.env.BITASSETS_E2E_ASSET_DATA || '{}',
+        name: reserveName,
+        initialSupply: process.env.BITASSETS_E2E_INITIAL_SUPPLY || '25',
+      });
+      await mineAndSync(registerTxid, 1);
+
+      const assetId = await firstVisibleAssetId();
+      const destinationAddress = await extractTextFromElementById('BitAssetsAddress');
+      const transferTxid = await submitOperation('transfer', {
+        destinationAddress,
+        assetId,
+        amount: '1',
+      });
+      await mineAndSync(transferTxid, 1);
+      await expectProofBackedUtxos();
+      return;
+    }
 
     if (process.env.BITASSETS_E2E_ASSET_A && process.env.BITASSETS_E2E_ASSET_B) {
       const assetA = process.env.BITASSETS_E2E_ASSET_A;
@@ -136,15 +162,20 @@ async function submitOperation(operation, values) {
     await element(by.id(`BitAssetsField-${key}`)).replaceText(String(value));
     lastField = key;
   }
+  if (process.env.BITASSETS_E2E_PROVE_MOBILE_FLOW === '1' && device.getPlatform() === 'ios') {
+    await tapE2ESubmitButton();
+    await waitForBitAssetsSubmitResult();
+    return extractLatestTxid();
+  }
   if (device.getPlatform() === 'ios' && lastField) {
     try {
       await element(by.id(`BitAssetsField-${lastField}`)).tapReturnKey();
-      await sleep(500);
-      if (await isVisibleId('BitAssetsResult', 1000)) return;
+      await waitForBitAssetsSubmitResult();
+      return extractLatestTxid();
     } catch (_) {}
   }
   await scrollToBroadcastButton();
-  if (await isExistingId('BitAssetsResult', 1000)) return;
+  if (await isExistingId('BitAssetsResult', 1000)) return extractLatestTxid();
   try {
     await element(by.id('BitAssetsBroadcastButton')).tap();
   } catch (error) {
@@ -152,17 +183,125 @@ async function submitOperation(operation, values) {
     try {
       await waitForBitAssetsSubmitResult();
       await sleep(500);
-      return;
+      return extractLatestTxid();
     } catch (_) {}
     try {
       await element(by.label(submitLabels[operation])).tap();
     } catch (fallbackError) {
-      if (await isExistingId('BitAssetsResult', 1000)) return;
+      if (await isExistingId('BitAssetsResult', 1000)) return extractLatestTxid();
       throw fallbackError;
     }
   }
   await waitForBitAssetsSubmitResult();
   await sleep(500);
+  return extractLatestTxid();
+}
+
+async function extractLatestTxid() {
+  return extractTxid(await extractTextFromElementById('BitAssetsResultText'));
+}
+
+async function mineAndSync(txid, minimumProofBackedUtxos) {
+  mineBitAssetsTx(txid);
+  await element(by.id('BitAssetsSyncButton')).tap();
+  await expectProofBackedUtxos(minimumProofBackedUtxos);
+}
+
+async function tapE2ESubmitButton() {
+  try {
+    await element(by.id('BitAssetsE2ESubmitButton')).tap();
+    return;
+  } catch (_) {}
+
+  await element(by.id('BitAssetsWalletScreen')).scroll(700, 'up');
+  await element(by.id('BitAssetsE2ESubmitButton')).tap();
+}
+
+function mineBitAssetsTx(txid) {
+  if (!txid) throw new Error('Cannot mine BitAssets tx without txid');
+  const localDevDir = process.env.BITASSETS_E2E_LOCAL_DEV_DIR || '/Users/lukekensik/drivechain-wallet-dev/local-dev';
+  const composeFile = process.env.BITASSETS_E2E_COMPOSE_FILE || 'docker-compose.local-minimal.yml';
+  console.log(`[BitAssets E2E] mining tx ${txid}`);
+  const command = [
+    `cd ${shellQuote(localDevDir)} &&`,
+    `COMPOSE_FILE=${shellQuote(composeFile)}`,
+    `BITASSETS_CONFIRM_TXID=${shellQuote(txid)}`,
+    `BITASSETS_IMAGE=${shellQuote(process.env.BITASSETS_IMAGE || 'local/plain-bitassets:codex-proof')}`,
+    `BMM_MINE_ATTEMPTS=${shellQuote(process.env.BMM_MINE_ATTEMPTS || '8')}`,
+    `BMM_REQUEST_SETTLE_SECS=${shellQuote(process.env.BMM_REQUEST_SETTLE_SECS || '40')}`,
+    `BITASSETS_MINE_TIMEOUT=${shellQuote(process.env.BITASSETS_MINE_TIMEOUT || '120')}`,
+    './scripts/mine-bitassets-block.sh',
+  ].join(' ');
+  execFileSync('bash', ['-lc', command], { stdio: 'inherit', timeout: Number(process.env.BITASSETS_E2E_MINE_TIMEOUT_MS || 900000) });
+  const proof = execFileSync(
+    'bash',
+    [
+      '-lc',
+      [
+        `cd ${shellQuote(localDevDir)} &&`,
+        `docker compose -f ${shellQuote(composeFile)} exec -T bitassets plain_bitassets_app_cli get-transaction-proof ${shellQuote(txid)}`,
+      ].join(' '),
+    ],
+    { encoding: 'utf8', timeout: 60000 },
+  );
+  const parsedProof = JSON.parse(proof);
+  if (typeof parsedProof?.sidechain_block_height !== 'number') {
+    throw new Error(`BitAssets tx ${txid} was not confirmed after mining: ${proof}`);
+  }
+  console.log(`[BitAssets E2E] confirmed tx ${txid} at sidechain height ${parsedProof.sidechain_block_height}`);
+}
+
+async function expectProofBackedUtxos(minimum = 1) {
+  for (let i = 0; i < 6; i++) {
+    await scrollToProofBackedCount();
+    const rawCount = await extractTextFromElementById('BitAssetsProofBackedUtxoCount');
+    const count = Number(String(rawCount).replace(/[^\d]/g, ''));
+    if (Number.isFinite(count) && count >= minimum) return;
+    await element(by.id('BitAssetsSyncButton')).tap();
+    await sleep(3000);
+  }
+  await scrollToProofBackedCount();
+  await expect(element(by.id('BitAssetsProofBackedUtxoCount'))).toHaveText(String(minimum));
+}
+
+async function firstVisibleAssetId() {
+  await waitFor(element(by.id('BitAssetsBalanceAsset-0')))
+    .toBeVisible()
+    .whileElement(by.id('BitAssetsWalletScreen'))
+    .scroll(500, 'down');
+  for (let index = 0; index < 8; index++) {
+    if (!(await isExistingId(`BitAssetsBalanceAsset-${index}`, 1000))) break;
+    const asset = await extractTextFromElementById(`BitAssetsBalanceAsset-${index}`);
+    const rawAmount = await extractTextFromElementById(`BitAssetsBalanceAmount-${index}`);
+    const amount = Number(String(rawAmount).replace(/[^\d]/g, ''));
+    if (!String(asset).startsWith('control:') && !String(asset).startsWith('lp:') && amount > 1) {
+      return asset;
+    }
+  }
+  throw new Error('Could not find a spendable BitAssets balance in the mobile wallet UI');
+}
+
+function extractTxid(text) {
+  const match = String(text).match(/[0-9a-f]{64}/i);
+  if (!match) throw new Error(`Could not extract txid from BitAssets result: ${text}`);
+  return match[0];
+}
+
+function shellQuote(value) {
+  return `'${String(value).replace(/'/g, "'\\''")}'`;
+}
+
+async function scrollToProofBackedCount() {
+  try {
+    await waitFor(element(by.id('BitAssetsProofBackedUtxoCount')))
+      .toBeVisible()
+      .withTimeout(2000);
+    return;
+  } catch (_) {}
+  await waitFor(element(by.id('BitAssetsProofBackedUtxoCount')))
+    .toBeVisible()
+    .whileElement(by.id('BitAssetsWalletScreen'))
+    .scroll(500, 'up');
 }
 
 async function waitForBitAssetsSubmitResult() {
@@ -307,10 +446,25 @@ async function isExistingId(id, timeout = 1000) {
 }
 
 async function scrollToBitAssetsField(field) {
+  if (device.getPlatform() === 'ios' && process.env.BITASSETS_E2E_PROVE_MOBILE_FLOW === '1') {
+    await waitFor(element(by.id(`BitAssetsField-${field}`)))
+      .toExist()
+      .withTimeout(5000);
+    return;
+  }
+
+  try {
+    await waitFor(element(by.id(`BitAssetsField-${field}`)))
+      .toBeVisible()
+      .whileElement(by.id('BitAssetsWalletScreen'))
+      .scroll(500, 'down');
+    return;
+  } catch (_) {}
+
   await waitFor(element(by.id(`BitAssetsField-${field}`)))
     .toBeVisible()
     .whileElement(by.id('BitAssetsWalletScreen'))
-    .scroll(500, 'down');
+    .scroll(500, 'up');
 }
 
 async function scrollToBroadcastButton() {
@@ -327,10 +481,11 @@ async function scrollToBroadcastButton() {
   }
 
   // iOS can consider the button visible while its tappable point is clipped
-  // under the top safe area after field-focused scrolling. Nudge it lower.
+  // under the top safe area after field-focused scrolling. Move content down
+  // enough that the native hittable point is inside the viewport.
   if (device.getPlatform() === 'ios') {
     try {
-      await element(by.id('BitAssetsWalletScreen')).scroll(120, 'down');
+      await element(by.id('BitAssetsWalletScreen')).scroll(180, 'up');
     } catch (_) {}
   }
 }

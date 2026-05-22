@@ -104,6 +104,22 @@ const BitAssetsWallet: React.FC = () => {
   const confirmedCount =
     info?.confirmed_utxo_count ?? wallet.bitassetsInfo?.confirmed_utxo_count ?? utxos.filter(utxo => utxo.confirmed).length;
   const mempoolCount = info?.mempool_utxo_count ?? wallet.bitassetsInfo?.mempool_utxo_count ?? utxos.filter(utxo => !utxo.confirmed).length;
+  const proofBackedCount = utxos.filter(
+    utxo =>
+      utxo.confirmed !== false &&
+      typeof utxo.utreexo_leaf_hash === 'string' &&
+      utxo.utreexo_leaf_hash.length > 0 &&
+      Array.isArray(utxo.proof_refs) &&
+      utxo.proof_refs.length > 0 &&
+      utxo.proof_refs.every(
+        proof =>
+          typeof proof.sidechain_block_height === 'number' &&
+          Array.isArray(proof.bmm_inclusions) &&
+          proof.bmm_inclusions.length > 0 &&
+          typeof proof.best_main_verification === 'string' &&
+          proof.best_main_verification.length > 0,
+      ),
+  ).length;
 
   const updateField = (key: string, value: string) => {
     setForms(current => ({
@@ -193,23 +209,35 @@ const BitAssetsWallet: React.FC = () => {
           <StatusItem label="Tip" value={String(info?.last_tip_height ?? 'not synced')} />
           <StatusItem label="Confirmed UTXOs" value={String(confirmedCount)} />
           <StatusItem label="Mempool UTXOs" value={String(mempoolCount)} />
+          <StatusItem label="Proof-backed" value={String(proofBackedCount)} testID="BitAssetsProofBackedUtxoCount" />
         </View>
       </BlueCard>
 
       <View style={styles.buttons}>
         <Button testID="BitAssetsSyncButton" title={isLoading ? 'Working...' : 'Sync'} onPress={() => sync(false)} disabled={isLoading} />
+        {__DEV__ ? (
+          <Button
+            testID="BitAssetsE2ESubmitButton"
+            accessibilityLabel="Submit BitAssets operation"
+            title="Submit operation"
+            onPress={submit}
+            disabled={false}
+          />
+        ) : null}
       </View>
 
       <Section title="Balances">
         {Object.keys(balances).length === 0 ? (
           <BlueText testID="BitAssetsEmptyBalances">No confirmed balances yet.</BlueText>
         ) : (
-          Object.entries(balances).map(([asset, amount]) => (
+          Object.entries(balances).map(([asset, amount], index) => (
             <View key={asset} style={styles.row} testID={`BitAssetsBalance-${asset}`}>
-              <BlueText selectable style={styles.rowLabel}>
+              <BlueText selectable style={styles.rowLabel} testID={`BitAssetsBalanceAsset-${index}`}>
                 {asset}
               </BlueText>
-              <BlueText bold>{amount}</BlueText>
+              <BlueText bold testID={`BitAssetsBalanceAmount-${index}`}>
+                {amount}
+              </BlueText>
             </View>
           ))
         )}
@@ -266,7 +294,9 @@ const BitAssetsWallet: React.FC = () => {
 
         {result ? (
           <View style={styles.operationMessage} testID="BitAssetsResult">
-            <BlueText selectable>{result}</BlueText>
+            <BlueText selectable testID="BitAssetsResultText">
+              {result}
+            </BlueText>
           </View>
         ) : null}
 
@@ -317,10 +347,12 @@ const Section: React.FC<React.PropsWithChildren<{ title: string }>> = ({ title, 
   </BlueCard>
 );
 
-const StatusItem: React.FC<{ label: string; value: string }> = ({ label, value }) => (
+const StatusItem: React.FC<{ label: string; value: string; testID?: string }> = ({ label, value, testID }) => (
   <View style={styles.statusItem}>
     <BlueText style={styles.statusLabel}>{label}</BlueText>
-    <BlueText bold>{value}</BlueText>
+    <BlueText bold testID={testID}>
+      {value}
+    </BlueText>
   </View>
 );
 
