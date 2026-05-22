@@ -88,6 +88,15 @@ describe('BitAssets mobile wallet bridge', () => {
             asset_id: 'asset_a',
             amount: 25,
             confirmed: true,
+            utreexo_leaf_hash: 'leaf-a-utreexo',
+            proof_refs: [
+              {
+                block_hash: 'side-block-1',
+                sidechain_block_height: 123,
+                bmm_inclusions: ['bmm-incl-xyz'],
+                best_main_verification: 'best-main-ok',
+              },
+            ],
           },
         ],
         mempool: [
