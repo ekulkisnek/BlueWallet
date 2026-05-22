@@ -5,7 +5,7 @@ import { sleep, tapAndTapAgainIfElementIsNotVisible, waitForId } from './helperz
 const describeIfBitAssets = process.env.BITASSETS_E2E === '1' ? describe : describe.skip;
 const rpcUrl = process.env.BITASSETS_RPC_URL || (device.getPlatform() === 'android' ? 'http://10.0.2.2:6004' : 'http://127.0.0.1:6004');
 const walletLabel = process.env.BITASSETS_E2E_WALLET_LABEL || `BitAssets E2E ${Date.now()}`;
-const noSyncLaunchArgs = { detoxEnableSynchronization: 0 };
+const noSyncLaunchArgs = { detoxEnableSynchronization: '0' };
 
 describeIfBitAssets('BitAssets native mobile wallet', () => {
   beforeAll(async () => {
