@@ -144,17 +144,35 @@ async function submitOperation(operation, values) {
     } catch (_) {}
   }
   await scrollToBroadcastButton();
+  if (await isExistingId('BitAssetsResult', 1000)) return;
   try {
     await element(by.id('BitAssetsBroadcastButton')).tap();
   } catch (error) {
     if (device.getPlatform() !== 'ios') throw error;
-    await element(by.label(submitLabels[operation])).tap();
+    try {
+      await waitForBitAssetsSubmitResult();
+      await sleep(500);
+      return;
+    } catch (_) {}
+    try {
+      await element(by.label(submitLabels[operation])).tap();
+    } catch (fallbackError) {
+      if (await isExistingId('BitAssetsResult', 1000)) return;
+      throw fallbackError;
+    }
   }
   await waitForBitAssetsSubmitResult();
   await sleep(500);
 }
 
 async function waitForBitAssetsSubmitResult() {
+  try {
+    await waitFor(element(by.id('BitAssetsResult')))
+      .toExist()
+      .withTimeout(90000);
+    return;
+  } catch (_) {}
+
   try {
     await waitFor(element(by.id('BitAssetsResult')))
       .toBeVisible()
@@ -270,6 +288,17 @@ async function isVisibleId(id, timeout = 1000) {
   try {
     await waitFor(element(by.id(id)))
       .toBeVisible()
+      .withTimeout(timeout);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function isExistingId(id, timeout = 1000) {
+  try {
+    await waitFor(element(by.id(id)))
+      .toExist()
       .withTimeout(timeout);
     return true;
   } catch (_) {

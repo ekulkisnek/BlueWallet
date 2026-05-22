@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { Alert, AppState, Keyboard, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { AppState, Keyboard, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { RouteProp, useFocusEffect, useRoute } from '@react-navigation/native';
 
 import { BlueCard, BlueFormLabel, BlueText } from '../../BlueComponents';
@@ -33,7 +33,8 @@ const BitAssetsWallet: React.FC = () => {
   const [info, setInfo] = useState<BitAssetsWalletInfo | undefined>(wallet?.bitassetsInfo);
   const [utxos, setUtxos] = useState<BitAssetsUtxo[]>(wallet?.bitassetsUtxos ?? []);
   const [isLoading, setIsLoading] = useState(false);
-  const nativeCallInFlight = useRef(false);
+  const submitInFlight = useRef(false);
+  const syncInFlight = useRef(false);
 
   const stylesHook = useMemo(
     () => ({
@@ -53,8 +54,8 @@ const BitAssetsWallet: React.FC = () => {
   const sync = useCallback(
     async (quiet = false) => {
       if (!wallet) return;
-      if (quiet && nativeCallInFlight.current) return;
-      nativeCallInFlight.current = true;
+      if (syncInFlight.current || submitInFlight.current) return;
+      syncInFlight.current = true;
       if (!quiet) setIsLoading(true);
       try {
         const nextInfo = await wallet.syncBitAssets();
@@ -69,10 +70,9 @@ const BitAssetsWallet: React.FC = () => {
         const normalizedError = normalizeBitAssetsError(error);
         if (!quiet) {
           setErrorMessage(normalizedError);
-          Alert.alert('BitAssets sync failed', normalizedError);
         }
       } finally {
-        nativeCallInFlight.current = false;
+        syncInFlight.current = false;
         if (!quiet) setIsLoading(false);
       }
     },
@@ -116,17 +116,18 @@ const BitAssetsWallet: React.FC = () => {
   };
 
   const submit = async () => {
-    if (nativeCallInFlight.current) {
-      setErrorMessage('BitAssets wallet is already syncing. Try again in a moment.');
+    if (submitInFlight.current) {
+      setErrorMessage('BitAssets transaction is already in progress.');
       return;
     }
-    nativeCallInFlight.current = true;
+    submitInFlight.current = true;
     setIsLoading(true);
     setResult('');
     setErrorMessage('');
     Keyboard.dismiss();
     try {
       const params = buildBitAssetsOperationParams(operation, forms[operation]);
+      console.debug('[BitAssetsWallet] submit begin', operation);
       let txid: string;
       switch (operation) {
         case 'transfer':
@@ -157,23 +158,29 @@ const BitAssetsWallet: React.FC = () => {
           txid = await wallet.dutchAuctionCollect(params as any);
           break;
       }
+      console.debug('[BitAssetsWallet] submit ok', operation, txid);
       setResult(JSON.stringify({ operation, txid }, null, 2));
       setIsLoading(false);
       // Broadcast success should be visible immediately. The refresh can be slow
       // while local signet mines, so keep it off the submit critical path.
       sync(true).catch(error => console.warn('[BitAssetsWallet] post-broadcast sync failed', error));
     } catch (error: any) {
+      console.debug('[BitAssetsWallet] submit error', operation, error);
       const normalizedError = normalizeBitAssetsError(error);
       setErrorMessage(normalizedError);
-      Alert.alert('BitAssets transaction failed', normalizedError);
     } finally {
-      nativeCallInFlight.current = false;
+      submitInFlight.current = false;
       setIsLoading(false);
     }
   };
 
   return (
-    <ScrollView style={[styles.root, stylesHook.root]} keyboardShouldPersistTaps="always" testID="BitAssetsWalletScreen">
+    <ScrollView
+      style={[styles.root, stylesHook.root]}
+      contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="always"
+      testID="BitAssetsWalletScreen"
+    >
       <BlueCard>
         <BlueText h3>{wallet.getLabel()}</BlueText>
         <BlueText selectable style={styles.address} testID="BitAssetsAddress">
@@ -228,6 +235,7 @@ const BitAssetsWallet: React.FC = () => {
               onPress={() => {
                 setOperation(item.key);
                 setResult('');
+                setErrorMessage('');
               }}
             >
               <BlueText bold style={{ color: operation === item.key ? colors.buttonTextColor : colors.foregroundColor }}>
@@ -255,6 +263,18 @@ const BitAssetsWallet: React.FC = () => {
             />
           </View>
         ))}
+
+        {result ? (
+          <View style={styles.operationMessage} testID="BitAssetsResult">
+            <BlueText selectable>{result}</BlueText>
+          </View>
+        ) : null}
+
+        {errorMessage ? (
+          <View style={styles.operationMessage} testID="BitAssetsError">
+            <BlueText selectable>{errorMessage}</BlueText>
+          </View>
+        ) : null}
 
         <View style={styles.buttons}>
           <Button
@@ -284,18 +304,6 @@ const BitAssetsWallet: React.FC = () => {
           ))
         )}
       </Section>
-
-      {result ? (
-        <BlueCard testID="BitAssetsResult">
-          <BlueText selectable>{result}</BlueText>
-        </BlueCard>
-      ) : null}
-
-      {errorMessage ? (
-        <BlueCard testID="BitAssetsError">
-          <BlueText selectable>{errorMessage}</BlueText>
-        </BlueCard>
-      ) : null}
     </ScrollView>
   );
 };
@@ -320,6 +328,9 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     padding: 16,
+  },
+  content: {
+    paddingBottom: 64,
   },
   center: {
     flex: 1,
@@ -380,6 +391,9 @@ const styles = StyleSheet.create({
   },
   field: {
     marginBottom: 12,
+  },
+  operationMessage: {
+    marginTop: 8,
   },
   input: {
     minHeight: 44,
