@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Alert, AppState, Keyboard, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { RouteProp, useFocusEffect, useRoute } from '@react-navigation/native';
 
@@ -33,6 +33,7 @@ const BitAssetsWallet: React.FC = () => {
   const [info, setInfo] = useState<BitAssetsWalletInfo | undefined>(wallet?.bitassetsInfo);
   const [utxos, setUtxos] = useState<BitAssetsUtxo[]>(wallet?.bitassetsUtxos ?? []);
   const [isLoading, setIsLoading] = useState(false);
+  const nativeCallInFlight = useRef(false);
 
   const stylesHook = useMemo(
     () => ({
@@ -52,6 +53,8 @@ const BitAssetsWallet: React.FC = () => {
   const sync = useCallback(
     async (quiet = false) => {
       if (!wallet) return;
+      if (quiet && nativeCallInFlight.current) return;
+      nativeCallInFlight.current = true;
       if (!quiet) setIsLoading(true);
       try {
         const nextInfo = await wallet.syncBitAssets();
@@ -69,6 +72,7 @@ const BitAssetsWallet: React.FC = () => {
           Alert.alert('BitAssets sync failed', normalizedError);
         }
       } finally {
+        nativeCallInFlight.current = false;
         if (!quiet) setIsLoading(false);
       }
     },
@@ -112,6 +116,11 @@ const BitAssetsWallet: React.FC = () => {
   };
 
   const submit = async () => {
+    if (nativeCallInFlight.current) {
+      setErrorMessage('BitAssets wallet is already syncing. Try again in a moment.');
+      return;
+    }
+    nativeCallInFlight.current = true;
     setIsLoading(true);
     setResult('');
     setErrorMessage('');
@@ -158,12 +167,13 @@ const BitAssetsWallet: React.FC = () => {
       setErrorMessage(normalizedError);
       Alert.alert('BitAssets transaction failed', normalizedError);
     } finally {
+      nativeCallInFlight.current = false;
       setIsLoading(false);
     }
   };
 
   return (
-    <ScrollView style={[styles.root, stylesHook.root]} keyboardShouldPersistTaps="handled" testID="BitAssetsWalletScreen">
+    <ScrollView style={[styles.root, stylesHook.root]} keyboardShouldPersistTaps="always" testID="BitAssetsWalletScreen">
       <BlueCard>
         <BlueText h3>{wallet.getLabel()}</BlueText>
         <BlueText selectable style={styles.address} testID="BitAssetsAddress">

@@ -43,6 +43,7 @@ func floresta_bitassets_wallet_dutch_auction_collect(_ handle: UInt, _ paramsJso
 
 @objc(BitAssetsWalletModule)
 class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
+    private static let bitAssetsQueue = DispatchQueue(label: "com.layertwolabs.bluewallet.bitassets.wallet", qos: .userInitiated)
     private var handle: UInt = 0
     private let walletLock = NSLock()
     private let seedService = "com.layertwolabs.bluewallet.bitassets"
@@ -50,6 +51,7 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
 
     static func moduleName() -> String! { "BitAssetsWallet" }
     static func requiresMainQueueSetup() -> Bool { false }
+    @objc static func methodQueue() -> DispatchQueue! { bitAssetsQueue }
 
     @objc func configure(_ configJson: String, resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
         do {
@@ -75,23 +77,23 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
         }
     }
 
-    @objc func getNewAddress(_ resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
+    @objc func getNewAddress(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         call(resolve, reject) { floresta_bitassets_wallet_get_new_address(try self.openWallet()) }
     }
 
-    @objc func walletInfo(_ resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
+    @objc func walletInfo(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         call(resolve, reject) { floresta_bitassets_wallet_info(try self.openWallet()) }
     }
 
-    @objc func sync(_ resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
+    @objc func sync(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         call(resolve, reject) { floresta_bitassets_wallet_sync(try self.openWallet()) }
     }
 
-    @objc func listUtxos(_ resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
+    @objc func listUtxos(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         call(resolve, reject) { floresta_bitassets_wallet_list_utxos(try self.openWallet()) }
     }
 
-    @objc func getBalance(_ assetId: String?, resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
+    @objc func getBalance(_ assetId: String?, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         call(resolve, reject) {
             let normalizedAssetId = assetId ?? ""
             if normalizedAssetId.isEmpty {
@@ -102,39 +104,39 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
         }
     }
 
-    @objc func transfer(_ paramsJson: String, resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
+    @objc func transfer(_ paramsJson: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         callJson(paramsJson, resolve, reject, floresta_bitassets_wallet_transfer)
     }
 
-    @objc func reserve(_ paramsJson: String, resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
+    @objc func reserve(_ paramsJson: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         callJson(paramsJson, resolve, reject, floresta_bitassets_wallet_reserve)
     }
 
-    @objc func register(_ paramsJson: String, resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
+    @objc func register(_ paramsJson: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         callJson(paramsJson, resolve, reject, floresta_bitassets_wallet_register)
     }
 
-    @objc func ammMint(_ paramsJson: String, resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
+    @objc func ammMint(_ paramsJson: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         callJson(paramsJson, resolve, reject, floresta_bitassets_wallet_amm_mint)
     }
 
-    @objc func ammSwap(_ paramsJson: String, resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
+    @objc func ammSwap(_ paramsJson: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         callJson(paramsJson, resolve, reject, floresta_bitassets_wallet_amm_swap)
     }
 
-    @objc func ammBurn(_ paramsJson: String, resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
+    @objc func ammBurn(_ paramsJson: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         callJson(paramsJson, resolve, reject, floresta_bitassets_wallet_amm_burn)
     }
 
-    @objc func dutchAuctionCreate(_ paramsJson: String, resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
+    @objc func dutchAuctionCreate(_ paramsJson: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         callJson(paramsJson, resolve, reject, floresta_bitassets_wallet_dutch_auction_create)
     }
 
-    @objc func dutchAuctionBid(_ paramsJson: String, resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
+    @objc func dutchAuctionBid(_ paramsJson: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         callJson(paramsJson, resolve, reject, floresta_bitassets_wallet_dutch_auction_bid)
     }
 
-    @objc func dutchAuctionCollect(_ paramsJson: String, resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
+    @objc func dutchAuctionCollect(_ paramsJson: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         callJson(paramsJson, resolve, reject, floresta_bitassets_wallet_dutch_auction_collect)
     }
 
@@ -306,9 +308,9 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
 
     private func callJson(
         _ paramsJson: String,
-        _ resolve: RCTPromiseResolveBlock,
-        _ reject: RCTPromiseRejectBlock,
-        _ f: (UInt, UnsafePointer<CChar>) -> FlorestaBitAssetsFfiResult
+        _ resolve: @escaping RCTPromiseResolveBlock,
+        _ reject: @escaping RCTPromiseRejectBlock,
+        _ f: @escaping (UInt, UnsafePointer<CChar>) -> FlorestaBitAssetsFfiResult
     ) {
         call(resolve, reject) {
             let wallet = try self.openWallet()
@@ -317,16 +319,23 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
     }
 
     private func call(
-        _ resolve: RCTPromiseResolveBlock,
-        _ reject: RCTPromiseRejectBlock,
-        _ f: () throws -> FlorestaBitAssetsFfiResult
+        _ resolve: @escaping RCTPromiseResolveBlock,
+        _ reject: @escaping RCTPromiseRejectBlock,
+        _ f: @escaping () throws -> FlorestaBitAssetsFfiResult
     ) {
-        do {
-            walletLock.lock()
-            defer { walletLock.unlock() }
-            resolve(try unwrap(f()))
-        } catch {
-            reject("BITASSETS_WALLET_ERROR", error.localizedDescription, error)
+        BitAssetsWalletModule.bitAssetsQueue.async {
+            do {
+                self.walletLock.lock()
+                defer { self.walletLock.unlock() }
+                let value = try self.unwrap(f())
+                DispatchQueue.main.async {
+                    resolve(value)
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    reject("BITASSETS_WALLET_ERROR", error.localizedDescription, error)
+                }
+            }
         }
     }
 
