@@ -44,6 +44,7 @@ func floresta_bitassets_wallet_dutch_auction_collect(_ handle: UInt, _ paramsJso
 @objc(BitAssetsWalletModule)
 class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
     private var handle: UInt = 0
+    private let walletLock = NSLock()
     private let seedService = "com.layertwolabs.bluewallet.bitassets"
     private let seedAccount = "native-wallet-seed-v1"
 
@@ -52,19 +53,23 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
 
     @objc func configure(_ configJson: String, resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
         do {
+            walletLock.lock()
+            defer { walletLock.unlock() }
             guard let data = configJson.data(using: .utf8),
                   let config = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
                 throw NSError(domain: "BitAssetsWallet", code: 4, userInfo: [NSLocalizedDescriptionKey: "Invalid BitAssets wallet config"])
             }
             let rpcUrl = ((config["rpcUrl"] ?? config["rpc_url"]) as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             try validateRpcUrl(rpcUrl)
-            UserDefaults.standard.set(rpcUrl, forKey: "bitassetsRpcUrl")
-            UserDefaults.standard.synchronize()
+            let groupDefaults = UserDefaults(suiteName: "group.com.layertwolabs.bluewallet") ?? UserDefaults.standard
+            groupDefaults.set(rpcUrl, forKey: "bitassetsRpcUrl")
+            groupDefaults.synchronize()
             if handle != 0 {
                 floresta_bitassets_wallet_free(handle)
                 handle = 0
             }
-            resolve("{\"configured\":true,\"rpcUrl\":\"\(rpcUrl)\"}")
+            let responseData = try JSONSerialization.data(withJSONObject: ["configured": true, "rpcUrl": rpcUrl])
+            resolve(String(data: responseData, encoding: .utf8) ?? "{\"configured\":true}")
         } catch {
             reject("BITASSETS_WALLET_CONFIG_ERROR", error.localizedDescription, error)
         }
@@ -86,13 +91,14 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
         call(resolve, reject) { floresta_bitassets_wallet_list_utxos(try self.openWallet()) }
     }
 
-    @objc func getBalance(_ assetId: String, resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
+    @objc func getBalance(_ assetId: String?, resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
         call(resolve, reject) {
-            if assetId.isEmpty {
+            let normalizedAssetId = assetId ?? ""
+            if normalizedAssetId.isEmpty {
                 return floresta_bitassets_wallet_get_balance(try self.openWallet(), nil)
             }
             let wallet = try self.openWallet()
-            return assetId.withCString { floresta_bitassets_wallet_get_balance(wallet, $0) }
+            return normalizedAssetId.withCString { floresta_bitassets_wallet_get_balance(wallet, $0) }
         }
     }
 
@@ -132,14 +138,42 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
         callJson(paramsJson, resolve, reject, floresta_bitassets_wallet_dutch_auction_collect)
     }
 
+    @objc func clear(_ resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
+        walletLock.lock()
+        defer { walletLock.unlock() }
+        if handle != 0 {
+            floresta_bitassets_wallet_free(handle)
+            handle = 0
+        }
+        // Purge persisted signer state (wallet.json + any sidecars) from app support sandbox.
+        let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let walletDirectory = directory.appendingPathComponent("bitassets", isDirectory: true)
+        if FileManager.default.fileExists(atPath: walletDirectory.path) {
+            try? FileManager.default.removeItem(at: walletDirectory)
+        }
+        let keychainQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: seedService,
+            kSecAttrAccount as String: seedAccount,
+        ]
+        SecItemDelete(keychainQuery as CFDictionary)
+        let groupDefaults = UserDefaults(suiteName: "group.com.layertwolabs.bluewallet") ?? UserDefaults.standard
+        groupDefaults.removeObject(forKey: "bitassetsRpcUrl")
+        groupDefaults.synchronize()
+        resolve("{\"cleared\":true}")
+    }
+
     private func openWallet() throws -> UInt {
         if handle != 0 { return handle }
         let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let walletDirectory = directory.appendingPathComponent("bitassets", isDirectory: true)
         try FileManager.default.createDirectory(at: walletDirectory, withIntermediateDirectories: true)
-        try? FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication], ofItemAtPath: walletDirectory.path)
+        // NOTE: removed directory file-protection set -- it could interfere with Rust FFI writes to wallet.json
+        // under certain sandbox / data-protection / Catalyst conditions. wallet.json holds no seed (persist_seed=false),
+        // so default protection is sufficient; seed lives only in Keychain.
         let walletFile = walletDirectory.appendingPathComponent("wallet.json")
-        guard let rpcUrl = UserDefaults.standard.string(forKey: "bitassetsRpcUrl"), !rpcUrl.isEmpty else {
+        let groupDefaults = UserDefaults(suiteName: "group.com.layertwolabs.bluewallet") ?? UserDefaults.standard
+        guard let rpcUrl = groupDefaults.string(forKey: "bitassetsRpcUrl"), !rpcUrl.isEmpty else {
             throw NSError(domain: "BitAssetsWallet", code: 3, userInfo: [NSLocalizedDescriptionKey: "BitAssets RPC URL is not configured"])
         }
         let seedHex = try getOrCreateSeedHex(walletFile: walletFile)
@@ -179,8 +213,7 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
         let simulatorSeedHex = simulatorSeed.map { String(format: "%02x", Int($0)) }.joined()
         try simulatorSeedHex.write(to: simulatorSeedFile, atomically: true, encoding: .utf8)
         return simulatorSeedHex
-        #endif
-
+        #else
         if let seed = try readKeychainSeedHex() {
             return seed
         }
@@ -196,6 +229,7 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
         let seedHex = seed.map { String(format: "%02x", Int($0)) }.joined()
         try writeKeychainSeedHex(seedHex)
         return seedHex
+        #endif
     }
 
     private func readPersistedSeedHex(walletFile: URL) -> String? {
@@ -288,6 +322,8 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
         _ f: () throws -> FlorestaBitAssetsFfiResult
     ) {
         do {
+            walletLock.lock()
+            defer { walletLock.unlock() }
             resolve(try unwrap(f()))
         } catch {
             reject("BITASSETS_WALLET_ERROR", error.localizedDescription, error)
@@ -299,5 +335,11 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
         floresta_bitassets_string_free(result.value)
         if result.ok { return value }
         throw NSError(domain: "BitAssetsWallet", code: 1, userInfo: [NSLocalizedDescriptionKey: value])
+    }
+
+    deinit {
+        if handle != 0 {
+            floresta_bitassets_wallet_free(handle)
+        }
     }
 }

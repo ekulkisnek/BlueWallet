@@ -35,20 +35,23 @@ class BitAssetsWalletModule(private val reactContext: ReactApplicationContext) :
     }
 
     private var walletHandle: Long = 0
+    private val walletLock = Any()
 
     @ReactMethod
     override fun configure(configJson: String, promise: Promise) {
         try {
-            val config = JSONObject(configJson)
-            val rpcUrl = config.optString("rpcUrl", config.optString("rpc_url", "")).trim()
-            validateRpcUrl(rpcUrl)
-            val sharedPref = reactContext.getSharedPreferences("group.com.layertwolabs.bluewallet", android.content.Context.MODE_PRIVATE)
-            sharedPref.edit().putString("bitassetsRpcUrl", rpcUrl).apply()
-            if (walletHandle != 0L) {
-                nativeFree(walletHandle)
-                walletHandle = 0
+            synchronized(walletLock) {
+                val config = JSONObject(configJson)
+                val rpcUrl = config.optString("rpcUrl", config.optString("rpc_url", "")).trim()
+                validateRpcUrl(rpcUrl)
+                val sharedPref = reactContext.getSharedPreferences("group.com.layertwolabs.bluewallet", android.content.Context.MODE_PRIVATE)
+                sharedPref.edit().putString("bitassetsRpcUrl", rpcUrl).apply()
+                if (walletHandle != 0L) {
+                    nativeFree(walletHandle)
+                    walletHandle = 0
+                }
+                promise.resolve(JSONObject().put("configured", true).put("rpcUrl", rpcUrl).toString())
             }
-            promise.resolve(JSONObject().put("configured", true).put("rpcUrl", rpcUrl).toString())
         } catch (error: Throwable) {
             promise.reject("BITASSETS_WALLET_CONFIG_ERROR", error.message, error)
         }
@@ -95,6 +98,32 @@ class BitAssetsWalletModule(private val reactContext: ReactApplicationContext) :
 
     @ReactMethod
     override fun dutchAuctionCollect(paramsJson: String, promise: Promise) = resolve(promise) { nativeDutchAuctionCollect(openWallet(), paramsJson) }
+
+    @ReactMethod
+    override fun clear(promise: Promise) {
+        try {
+            synchronized(walletLock) {
+                if (walletHandle != 0L) {
+                    nativeFree(walletHandle)
+                    walletHandle = 0L
+                }
+                val walletDir = File(reactContext.noBackupFilesDir, "bitassets")
+                if (walletDir.exists()) {
+                    walletDir.deleteRecursively()
+                }
+                val sharedPref = reactContext.getSharedPreferences("group.com.layertwolabs.bluewallet", android.content.Context.MODE_PRIVATE)
+                sharedPref.edit()
+                    .remove(SEED_PREF)
+                    .remove("bitassetsRpcUrl")
+                    .apply()
+                deleteSecretKey()
+            }
+            promise.resolve(JSONObject().put("cleared", true).toString())
+        } catch (error: Throwable) {
+            // still succeed so caller delete flow isn't blocked by purge errors
+            promise.resolve(JSONObject().put("cleared", true).put("warning", "partial").toString())
+        }
+    }
 
     private fun openWallet(): Long {
         if (walletHandle != 0L) return walletHandle
@@ -178,6 +207,13 @@ class BitAssetsWalletModule(private val reactContext: ReactApplicationContext) :
         return generator.generateKey()
     }
 
+    private fun deleteSecretKey() {
+        val keyStore = KeyStore.getInstance(KEYSTORE).apply { load(null) }
+        if (keyStore.containsAlias(KEY_ALIAS)) {
+            keyStore.deleteEntry(KEY_ALIAS)
+        }
+    }
+
     private fun validateRpcUrl(rpcUrl: String) {
         if (rpcUrl.isBlank()) {
             throw IllegalArgumentException("BitAssets RPC URL is required")
@@ -193,7 +229,7 @@ class BitAssetsWalletModule(private val reactContext: ReactApplicationContext) :
 
     private fun resolve(promise: Promise, call: () -> String) {
         try {
-            promise.resolve(unwrap(call()))
+            promise.resolve(synchronized(walletLock) { unwrap(call()) })
         } catch (error: Throwable) {
             promise.reject("BITASSETS_WALLET_ERROR", error.message, error)
         }

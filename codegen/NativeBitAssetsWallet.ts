@@ -17,6 +17,7 @@ export interface Spec extends TurboModule {
   dutchAuctionCreate(paramsJson: string): Promise<string>;
   dutchAuctionBid(paramsJson: string): Promise<string>;
   dutchAuctionCollect(paramsJson: string): Promise<string>;
+  clear(): Promise<string>;
 }
 
 const nativeModule = TurboModuleRegistry.get<Spec>('BitAssetsWallet');

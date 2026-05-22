@@ -17,4 +17,5 @@ RCT_EXTERN_METHOD(ammBurn:(NSString *)paramsJson resolve:(RCTPromiseResolveBlock
 RCT_EXTERN_METHOD(dutchAuctionCreate:(NSString *)paramsJson resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(dutchAuctionBid:(NSString *)paramsJson resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(dutchAuctionCollect:(NSString *)paramsJson resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(clear:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
 @end

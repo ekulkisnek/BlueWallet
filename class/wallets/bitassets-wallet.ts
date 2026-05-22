@@ -43,10 +43,7 @@ export class BitAssetsWallet extends LegacyWallet {
     if (rpcUrl) {
       this.bitassetsRpcUrl = rpcUrl;
     }
-    const client = this.getClient();
-    if (client.configure && this.bitassetsRpcUrl) {
-      await client.configure({ rpcUrl: this.bitassetsRpcUrl });
-    }
+    const client = await this.getConfiguredClient();
     const address = await client.getNewAddress();
     this._address = address;
     this.secret = `bitassets://${address}`;
@@ -81,7 +78,7 @@ export class BitAssetsWallet extends LegacyWallet {
   }
 
   async fetchBalance(): Promise<void> {
-    const info = await this.getClient().walletInfo();
+    const info = await (await this.getConfiguredClient()).walletInfo();
     this.bitassetsInfo = info;
     this.balance = Object.values(info.balances ?? {}).reduce((sum, amount) => sum + amount, 0);
     this.unconfirmed_balance = 0;
@@ -89,55 +86,80 @@ export class BitAssetsWallet extends LegacyWallet {
   }
 
   async fetchTransactions(): Promise<void> {
-    this.bitassetsUtxos = await this.getClient().listUtxos();
+    this.bitassetsUtxos = await (await this.getConfiguredClient()).listUtxos();
     this._lastTxFetch = +new Date();
   }
 
   async syncBitAssets(): Promise<BitAssetsWalletInfo> {
-    const info = await this.getClient().sync();
+    const info = await (await this.getConfiguredClient()).sync();
     this.bitassetsInfo = info;
     this.balance = Object.values(info.balances ?? {}).reduce((sum, amount) => sum + amount, 0);
     this._lastBalanceFetch = +new Date();
     return info;
   }
 
-  transferBitAssets(params: TransferParams): Promise<string> {
-    return this.getClient().transfer(params);
+  async transferBitAssets(params: TransferParams): Promise<string> {
+    return (await this.getConfiguredClient()).transfer(params);
   }
 
-  reserveBitAsset(params: ReserveParams): Promise<string> {
-    return this.getClient().reserve(params);
+  async reserveBitAsset(params: ReserveParams): Promise<string> {
+    return (await this.getConfiguredClient()).reserve(params);
   }
 
-  registerBitAsset(params: RegisterParams): Promise<string> {
-    return this.getClient().register(params);
+  async registerBitAsset(params: RegisterParams): Promise<string> {
+    return (await this.getConfiguredClient()).register(params);
   }
 
-  ammMint(params: AmmMintParams): Promise<string> {
-    return this.getClient().ammMint(params);
+  async ammMint(params: AmmMintParams): Promise<string> {
+    return (await this.getConfiguredClient()).ammMint(params);
   }
 
-  ammSwap(params: AmmSwapParams): Promise<string> {
-    return this.getClient().ammSwap(params);
+  async ammSwap(params: AmmSwapParams): Promise<string> {
+    return (await this.getConfiguredClient()).ammSwap(params);
   }
 
-  ammBurn(params: AmmBurnParams): Promise<string> {
-    return this.getClient().ammBurn(params);
+  async ammBurn(params: AmmBurnParams): Promise<string> {
+    return (await this.getConfiguredClient()).ammBurn(params);
   }
 
-  dutchAuctionCreate(params: DutchAuctionCreateParams): Promise<string> {
-    return this.getClient().dutchAuctionCreate(params);
+  async dutchAuctionCreate(params: DutchAuctionCreateParams): Promise<string> {
+    return (await this.getConfiguredClient()).dutchAuctionCreate(params);
   }
 
-  dutchAuctionBid(params: DutchAuctionBidParams): Promise<string> {
-    return this.getClient().dutchAuctionBid(params);
+  async dutchAuctionBid(params: DutchAuctionBidParams): Promise<string> {
+    return (await this.getConfiguredClient()).dutchAuctionBid(params);
   }
 
-  dutchAuctionCollect(params: DutchAuctionCollectParams): Promise<string> {
-    return this.getClient().dutchAuctionCollect(params);
+  async dutchAuctionCollect(params: DutchAuctionCollectParams): Promise<string> {
+    return (await this.getConfiguredClient()).dutchAuctionCollect(params);
+  }
+
+  /**
+   * Purges the native embedded signer persistence (wallet files in app sandbox + seed from
+   * Keychain/Keystore). Call this when deleting the BitAssets wallet entry so no orphan
+   * signer state or seeds remain. Safe to call even if no native wallet was ever created.
+   * Resolves write/sandbox issues for full lifecycle control of the signer.
+   */
+  async clearNativeSigner(): Promise<void> {
+    const client = this.getClient();
+    if (client.clear) {
+      try {
+        await client.clear();
+      } catch (e) {
+        console.warn('[BitAssetsWallet] native clear failed (non-fatal)', e);
+      }
+    }
   }
 
   private getClient(): BitAssetsWalletClient {
     return new EmbeddedBitAssetsWalletClient();
+  }
+
+  private async getConfiguredClient(): Promise<BitAssetsWalletClient> {
+    const client = this.getClient();
+    if (client.configure && this.bitassetsRpcUrl) {
+      await client.configure({ rpcUrl: this.bitassetsRpcUrl });
+    }
+    return client;
   }
 }

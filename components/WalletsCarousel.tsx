@@ -394,6 +394,7 @@ export const WalletCarouselItem: React.FC<WalletCarouselItemProps> = React.memo(
 
     return (
       <Animated.View
+        testID={isSelectedWallet ? 'SelectedWalletCard' : undefined}
         style={[
           sizeClass === SizeClass.Large || !horizontal
             ? [iStyles.rootLargeDevice, customStyle]

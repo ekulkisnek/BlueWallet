@@ -124,6 +124,7 @@ export interface BitAssetsWalletClient {
   dutchAuctionCreate(params: DutchAuctionCreateParams): Promise<Txid>;
   dutchAuctionBid(params: DutchAuctionBidParams): Promise<Txid>;
   dutchAuctionCollect(params: DutchAuctionCollectParams): Promise<Txid>;
+  clear?(): Promise<void>;
 }
 
 export class EmbeddedBitAssetsWalletClient implements BitAssetsWalletClient {
@@ -188,6 +189,10 @@ export class EmbeddedBitAssetsWalletClient implements BitAssetsWalletClient {
 
   async dutchAuctionCollect(params: DutchAuctionCollectParams): Promise<Txid> {
     return parseTxid(await requireNative().dutchAuctionCollect(JSON.stringify(params)));
+  }
+
+  async clear(): Promise<void> {
+    await requireNative().clear();
   }
 }
 

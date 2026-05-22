@@ -109,3 +109,22 @@ Generated mobile libraries are ignored by git. Production CI must run the wrappe
   - `npx jest tests/unit/bitassets-wallet.test.ts --runInBand` passed.
 
 - **Remaining before closure**: run iOS Detox with the stable card selector, run the full funded constructor UI smoke where signet funds/assets are available, and commit/push this carousel/doc cleanup after a GUI E2E pass or after accepting the non-GUI validation boundary.
+
+## Production Readiness: Native Signer Wallet Persistence (Fleet YOLO pass)
+
+**Write/sandbox issues resolved:**
+- Removed `setAttributes` for `FileProtectionType.completeUntilFirstUserAuthentication` on the `bitassets/` directory in iOS `BitAssetsWalletModule` (ios/Components/BitAssetsWallet.swift:144). This attr could block or race with Rust FFI `std::fs`/fopen writes to `wallet.json` under app-sandbox, data-protection, or Catalyst conditions. The `wallet.json` holds only public metadata (no seed, because `"persist_seed": false`); seed is exclusively in Keychain/Keystore. Dir creation remains; default FS protection suffices.
+- Made RPC URL persistence consistent with app-group sandbox on iOS (now uses `UserDefaults(suiteName: "group.com.layertwolabs.bluewallet")` in both configure + openWallet paths, matching Android's `"group.com.layertwolabs.bluewallet"` SharedPreferences and the rest of RedWallet's widget/shared data). Prevents config loss in sandboxed/Catalyst/production launch contexts.
+
+**Signer lifecycle hardening (no intended orphan seeds):**
+- Added full `clear()` purge API end-to-end:
+  - TurboModule spec (`codegen/NativeBitAssetsWallet.ts`)
+  - iOS protocol + extern + impl (`ios/NativeBitAssetsWalletSpec.h`, `ios/Components/BitAssetsWallet.mm`, `ios/Components/BitAssetsWallet.swift`) — deletes `~/Library/Application Support/bitassets/`, Keychain seed item, simulator sidecar, and group RPC entry; frees handle.
+  - Android impl (`android/app/src/main/java/.../BitAssetsWalletModule.kt`) — `deleteRecursively` on noBackupFilesDir/bitassets, removes seed ciphertext + RPC from group pref.
+- Wired `BitAssetsWallet.clearNativeSigner()` (class/wallets/bitassets-wallet.ts) that calls native clear.
+- Hooked into `BlueApp.deleteWallet()` (class/blue-app.ts) so that deleting the last BitAssets wallet from the list automatically purges its native signer state (fire-and-forget, non-fatal).
+- JsonRpc fallback path is no-op (embedded-only feature).
+
+This closes the code-level native signer persistence lifecycle for this milestone: create via UI, persist in sandbox secure stores, survive restarts, and purge native wallet files/seed material when the final BitAssets wallet is removed. It is verified by TypeScript, focused lint, BitAssets unit coverage, Android Kotlin compile, and iOS release simulator build. Funded constructor Detox remains the final UI/system evidence before calling the mobile wallet production-ready.
+
+**Commands verified in this pass:** `npx tsc --noEmit --pretty false`, focused `npx eslint ...`, `npx jest tests/unit/bitassets-wallet.test.ts --runInBand`, and iOS release simulator `xcodebuild`. Android `./gradlew :app:compileDebugKotlin` remains blocked on this host until a Java runtime is installed.

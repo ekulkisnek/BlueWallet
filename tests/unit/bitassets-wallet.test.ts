@@ -14,6 +14,7 @@ const mockNativeModule = {
   dutchAuctionCreate: jest.fn(),
   dutchAuctionBid: jest.fn(),
   dutchAuctionCollect: jest.fn(),
+  clear: jest.fn(),
 };
 
 jest.mock('../../codegen/NativeBitAssetsWallet', () => mockNativeModule);
@@ -101,6 +102,7 @@ describe('BitAssets mobile wallet bridge', () => {
       }),
     );
     mockNativeModule.getBalance.mockResolvedValue(JSON.stringify({ asset_a: 25 }));
+    mockNativeModule.clear.mockResolvedValue('{"cleared":true}');
   });
 
   it('creates a native wallet, stores its address, and sums balances', async () => {
@@ -115,6 +117,40 @@ describe('BitAssets mobile wallet bridge', () => {
     expect(wallet.getAddress()).toBe('bitassets-address-1');
     expect(wallet.secret).toBe('bitassets://bitassets-address-1');
     expect(wallet.getBalance()).toBe(42);
+  });
+
+  it('rehydrates persisted BitAssets wallets and configures the native signer before every use', async () => {
+    const wallet = new BitAssetsWallet();
+    wallet.secret = 'bitassets://persisted-address';
+    wallet.bitassetsRpcUrl = 'http://127.0.0.1:6004';
+    mockNativeModule.reserve.mockResolvedValue('txid');
+
+    await wallet.init();
+    await wallet.fetchBalance();
+    await expect(wallet.reserveBitAsset({ name: 'PERSISTED', feeSats: 0 })).resolves.toBe('txid');
+
+    expect(wallet.getAddress()).toBe('persisted-address');
+    expect(mockNativeModule.configure).toHaveBeenCalledTimes(2);
+    expect(mockNativeModule.configure).toHaveBeenCalledWith(JSON.stringify({ rpcUrl: 'http://127.0.0.1:6004' }));
+    expect(mockNativeModule.reserve).toHaveBeenCalledWith(JSON.stringify({ name: 'PERSISTED', feeSats: 0 }));
+  });
+
+  it('keeps only persistent BitAssets wallet fields on the JS wallet', async () => {
+    const wallet = new BitAssetsWallet();
+    wallet.bitassetsRpcUrl = 'http://127.0.0.1:6004';
+
+    await wallet.syncBitAssets();
+
+    expect((wallet as any)._bitassetsConfiguredRpcUrl).toBeUndefined();
+    expect(wallet.bitassetsRpcUrl).toBe('http://127.0.0.1:6004');
+  });
+
+  it('purges native signer persistence through the embedded bridge', async () => {
+    const wallet = new BitAssetsWallet();
+
+    await expect(wallet.clearNativeSigner()).resolves.toBeUndefined();
+
+    expect(mockNativeModule.clear).toHaveBeenCalledTimes(1);
   });
 
   it('syncs and flattens confirmed and mempool UTXOs', async () => {

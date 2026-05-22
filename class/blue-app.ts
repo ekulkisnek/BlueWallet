@@ -518,15 +518,23 @@ export class BlueApp {
   deleteWallet = (wallet: TWallet): void => {
     const ID = wallet.getID();
     const tempWallets = [];
+    let shouldClearBitAssetsSigner = wallet instanceof BitAssetsWallet;
 
     for (const value of this.wallets) {
       if (value.getID() === ID) {
         // the one we should delete
-        // nop
       } else {
         // the one we must keep
+        if (value instanceof BitAssetsWallet) {
+          shouldClearBitAssetsSigner = false;
+        }
         tempWallets.push(value);
       }
+    }
+    if (shouldClearBitAssetsSigner) {
+      // The embedded signer is global to the native BitAssets wallet backend. Purge it
+      // only when the last JS BitAssets wallet is removed.
+      (wallet as BitAssetsWallet).clearNativeSigner().catch(() => {});
     }
     this.wallets = tempWallets;
   };
