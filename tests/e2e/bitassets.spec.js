@@ -4,14 +4,13 @@ import { sleep, tapAndTapAgainIfElementIsNotVisible, waitForId } from './helperz
 
 const describeIfBitAssets = process.env.BITASSETS_E2E === '1' ? describe : describe.skip;
 const rpcUrl = process.env.BITASSETS_RPC_URL || (device.getPlatform() === 'android' ? 'http://10.0.2.2:6004' : 'http://127.0.0.1:6004');
-const walletLabel = process.env.BITASSETS_E2E_WALLET_LABEL || `BitAssets E2E ${Date.now()}`;
-const noSyncLaunchArgs = { detoxEnableSynchronization: '0' };
+const walletLabel = process.env.BITASSETS_E2E_WALLET_LABEL || 'my first wallet';
+const noSyncLaunchArgs = { detoxEnableSynchronization: 'NO' };
 
 describeIfBitAssets('BitAssets native mobile wallet', () => {
   beforeAll(async () => {
     await device.clearKeychain();
     await device.launchApp({ delete: true, permissions: { notifications: 'YES' }, launchArgs: noSyncLaunchArgs });
-    await device.disableSynchronization();
   }, 120000);
 
   it('creates a native wallet, syncs, and exposes typed constructor forms', async () => {
@@ -21,7 +20,9 @@ describeIfBitAssets('BitAssets native mobile wallet', () => {
       .whileElement(by.id('WalletsList'))
       .scroll(500, 'right');
     await tapAndTapAgainIfElementIsNotVisible('CreateAWallet', 'WalletNameInput');
-    await element(by.id('WalletNameInput')).replaceText(walletLabel);
+    if (process.env.BITASSETS_E2E_WALLET_LABEL) {
+      await element(by.id('WalletNameInput')).replaceText(walletLabel);
+    }
     await waitForId('ActivateBitAssetsButton');
     await tapAndTapAgainIfElementIsNotVisible('ActivateBitAssetsButton', 'BitAssetsRpcUrlInput');
     await waitFor(element(by.id('BitAssetsRpcUrlInput')))
@@ -35,10 +36,8 @@ describeIfBitAssets('BitAssets native mobile wallet', () => {
     }
     await sleep(500);
     await scrollToCreateButtonIfNeeded();
-    await device.disableSynchronization();
     await element(by.id('Create')).tap();
     await sleep(1000);
-    await device.disableSynchronization();
     await openCreatedWallet();
     await waitForId('BitAssetsWalletScreen');
     await element(by.id('BitAssetsSyncButton')).tap();
@@ -53,7 +52,6 @@ describeIfBitAssets('BitAssets native mobile wallet', () => {
 
     await device.terminateApp();
     await device.launchApp({ newInstance: true, permissions: { notifications: 'YES' }, launchArgs: noSyncLaunchArgs });
-    await device.disableSynchronization();
     await waitForId('WalletsList');
     await openCreatedWallet();
     await waitForId('BitAssetsWalletScreen');

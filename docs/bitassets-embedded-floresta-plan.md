@@ -128,3 +128,22 @@ Generated mobile libraries are ignored by git. Production CI must run the wrappe
 This closes the code-level native signer persistence lifecycle for this milestone: create via UI, persist in sandbox secure stores, survive restarts, and purge native wallet files/seed material when the final BitAssets wallet is removed. It is verified by TypeScript, focused lint, BitAssets unit coverage, Android Kotlin compile, and iOS release simulator build. Funded constructor Detox remains the final UI/system evidence before calling the mobile wallet production-ready.
 
 **Commands verified in this pass:** `npx tsc --noEmit --pretty false`, focused `npx eslint ...`, `npx jest tests/unit/bitassets-wallet.test.ts --runInBand`, Android `JAVA_HOME=/opt/homebrew/opt/openjdk@17 ANDROID_HOME=/opt/homebrew/share/android-commandlinetools ./gradlew :app:compileDebugKotlin`, and iOS release simulator `xcodebuild`.
+
+## Current iOS Detox State
+
+The iOS release simulator app builds successfully with the embedded Floresta XCFramework using the Detox release command:
+
+```sh
+NODE_BINARY=/opt/homebrew/bin/node npx detox build -c ios.release
+```
+
+For BitAssets-only UI smoke attempts, use the no-sync Detox configuration so the default iOS E2E configs keep normal synchronization behavior:
+
+```sh
+BITASSETS_E2E=1 BITASSETS_RPC_URL=http://127.0.0.1:6004 \
+  npx detox test -c ios.release.nosync tests/e2e/bitassets.spec.js --loglevel verbose --reuse --no-build
+```
+
+Latest local result: Detox launches the rebuilt release app with `-detoxEnableSynchronization NO`, but the first UI wait can still block on Detox reporting the app busy on the main run loop / main queue. The app is visible in the simulator; the remaining issue is Detox idling instrumentation, not a native compile/link failure. The BitAssets spec now avoids unnecessary runtime `device.disableSynchronization()` calls, uses the default wallet label unless a custom label is explicitly requested, and the Add Wallet text inputs have stable 44pt hit targets for simulator/UI accessibility.
+
+Docker-backed funded UI smoke is currently blocked because Docker Desktop is not running locally (`Cannot connect to the Docker daemon at unix:///Users/lukekensik/.docker/run/docker.sock`). Once Docker is available, the next closure command is the same Detox command above with the local signet stack running, followed by `BITASSETS_E2E_FULL=1` funded constructor inputs.

@@ -664,7 +664,10 @@ const styles = StyleSheet.create({
   },
   textInputCommon: {
     flex: 1,
+    minHeight: 44,
+    height: 44,
     marginHorizontal: 8,
+    paddingVertical: 0,
     color: '#81868e',
   },
   buttons: {
