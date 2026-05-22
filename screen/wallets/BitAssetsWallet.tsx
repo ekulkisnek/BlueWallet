@@ -29,6 +29,7 @@ const BitAssetsWallet: React.FC = () => {
   const [operation, setOperation] = useState<BitAssetsOperation>('transfer');
   const [forms, setForms] = useState(initialBitAssetsFormState);
   const [result, setResult] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
   const [info, setInfo] = useState<BitAssetsWalletInfo | undefined>(wallet?.bitassetsInfo);
   const [utxos, setUtxos] = useState<BitAssetsUtxo[]>(wallet?.bitassetsUtxos ?? []);
   const [isLoading, setIsLoading] = useState(false);
@@ -62,7 +63,11 @@ const BitAssetsWallet: React.FC = () => {
           setResult(JSON.stringify({ synced: true, tip: nextInfo.last_tip_height ?? null }, null, 2));
         }
       } catch (error: any) {
-        if (!quiet) Alert.alert('BitAssets sync failed', normalizeBitAssetsError(error));
+        const normalizedError = normalizeBitAssetsError(error);
+        if (!quiet) {
+          setErrorMessage(normalizedError);
+          Alert.alert('BitAssets sync failed', normalizedError);
+        }
       } finally {
         if (!quiet) setIsLoading(false);
       }
@@ -108,6 +113,8 @@ const BitAssetsWallet: React.FC = () => {
 
   const submit = async () => {
     setIsLoading(true);
+    setResult('');
+    setErrorMessage('');
     Keyboard.dismiss();
     try {
       const params = buildBitAssetsOperationParams(operation, forms[operation]);
@@ -142,9 +149,14 @@ const BitAssetsWallet: React.FC = () => {
           break;
       }
       setResult(JSON.stringify({ operation, txid }, null, 2));
-      await sync(true);
+      setIsLoading(false);
+      // Broadcast success should be visible immediately. The refresh can be slow
+      // while local signet mines, so keep it off the submit critical path.
+      sync(true).catch(error => console.warn('[BitAssetsWallet] post-broadcast sync failed', error));
     } catch (error: any) {
-      Alert.alert('BitAssets transaction failed', normalizeBitAssetsError(error));
+      const normalizedError = normalizeBitAssetsError(error);
+      setErrorMessage(normalizedError);
+      Alert.alert('BitAssets transaction failed', normalizedError);
     } finally {
       setIsLoading(false);
     }
@@ -225,6 +237,9 @@ const BitAssetsWallet: React.FC = () => {
               autoCapitalize="none"
               autoCorrect={false}
               multiline={field.multiline}
+              blurOnSubmit={!field.multiline}
+              returnKeyType={field.multiline ? 'default' : 'done'}
+              onSubmitEditing={field.multiline ? undefined : submit}
               keyboardType={field.type === 'number' ? 'number-pad' : 'default'}
               style={[styles.input, field.multiline && styles.multilineInput, stylesHook.input]}
             />
@@ -232,7 +247,13 @@ const BitAssetsWallet: React.FC = () => {
         ))}
 
         <View style={styles.buttons}>
-          <Button testID="BitAssetsBroadcastButton" title={definition.submitLabel} onPress={submit} disabled={isLoading} />
+          <Button
+            testID="BitAssetsBroadcastButton"
+            accessibilityLabel={definition.submitLabel}
+            title={definition.submitLabel}
+            onPress={submit}
+            disabled={isLoading}
+          />
         </View>
       </Section>
 
@@ -257,6 +278,12 @@ const BitAssetsWallet: React.FC = () => {
       {result ? (
         <BlueCard testID="BitAssetsResult">
           <BlueText selectable>{result}</BlueText>
+        </BlueCard>
+      ) : null}
+
+      {errorMessage ? (
+        <BlueCard testID="BitAssetsError">
+          <BlueText selectable>{errorMessage}</BlueText>
         </BlueCard>
       ) : null}
     </ScrollView>

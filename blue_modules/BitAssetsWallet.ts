@@ -135,72 +135,92 @@ export interface BitAssetsWalletClient {
 }
 
 export class EmbeddedBitAssetsWalletClient implements BitAssetsWalletClient {
+  private readonly timeoutMs = 45000;
+
   async configure(params: { rpcUrl: string }): Promise<void> {
-    await requireNative().configure(JSON.stringify(params));
+    await withNativeTimeout(requireNative().configure(JSON.stringify(params)), 'configure', this.timeoutMs);
   }
 
   async getNewAddress(): Promise<string> {
-    return requireNative().getNewAddress();
+    return withNativeTimeout(requireNative().getNewAddress(), 'getNewAddress', this.timeoutMs);
   }
 
   async walletInfo(): Promise<BitAssetsWalletInfo> {
-    return parseJson<BitAssetsWalletInfo>(await requireNative().walletInfo());
+    return parseJson<BitAssetsWalletInfo>(await withNativeTimeout(requireNative().walletInfo(), 'walletInfo', this.timeoutMs));
   }
 
   async sync(): Promise<BitAssetsWalletInfo> {
-    return parseJson<BitAssetsWalletInfo>(await requireNative().sync());
+    return parseJson<BitAssetsWalletInfo>(await withNativeTimeout(requireNative().sync(), 'sync', this.timeoutMs));
   }
 
   async listUtxos(): Promise<BitAssetsUtxo[]> {
     const value = parseJson<BitAssetsUtxo[] | { confirmed?: BitAssetsUtxo[]; mempool?: BitAssetsUtxo[] }>(
-      await requireNative().listUtxos(),
+      await withNativeTimeout(requireNative().listUtxos(), 'listUtxos', this.timeoutMs),
     );
     return Array.isArray(value) ? value : [...(value.confirmed ?? []), ...(value.mempool ?? [])];
   }
 
   async getBalance(assetId?: string): Promise<{ confirmed: number } | BitAssetsBalances> {
-    return parseJson<{ confirmed: number } | BitAssetsBalances>(await requireNative().getBalance(assetId));
+    return parseJson<{ confirmed: number } | BitAssetsBalances>(
+      await withNativeTimeout(requireNative().getBalance(assetId), 'getBalance', this.timeoutMs),
+    );
   }
 
   async transfer(params: TransferParams): Promise<Txid> {
-    return parseTxid(await requireNative().transfer(JSON.stringify(params)));
+    return parseTxid(await withNativeTimeout(requireNative().transfer(JSON.stringify(params)), 'transfer', this.timeoutMs));
   }
 
   async reserve(params: ReserveParams): Promise<Txid> {
-    return parseTxid(await requireNative().reserve(JSON.stringify(params)));
+    return parseTxid(await withNativeTimeout(requireNative().reserve(JSON.stringify(params)), 'reserve', this.timeoutMs));
   }
 
   async register(params: RegisterParams): Promise<Txid> {
-    return parseTxid(await requireNative().register(JSON.stringify(params)));
+    return parseTxid(await withNativeTimeout(requireNative().register(JSON.stringify(params)), 'register', this.timeoutMs));
   }
 
   async ammMint(params: AmmMintParams): Promise<Txid> {
-    return parseTxid(await requireNative().ammMint(JSON.stringify(params)));
+    return parseTxid(await withNativeTimeout(requireNative().ammMint(JSON.stringify(params)), 'ammMint', this.timeoutMs));
   }
 
   async ammSwap(params: AmmSwapParams): Promise<Txid> {
-    return parseTxid(await requireNative().ammSwap(JSON.stringify(params)));
+    return parseTxid(await withNativeTimeout(requireNative().ammSwap(JSON.stringify(params)), 'ammSwap', this.timeoutMs));
   }
 
   async ammBurn(params: AmmBurnParams): Promise<Txid> {
-    return parseTxid(await requireNative().ammBurn(JSON.stringify(params)));
+    return parseTxid(await withNativeTimeout(requireNative().ammBurn(JSON.stringify(params)), 'ammBurn', this.timeoutMs));
   }
 
   async dutchAuctionCreate(params: DutchAuctionCreateParams): Promise<Txid> {
-    return parseTxid(await requireNative().dutchAuctionCreate(JSON.stringify(params)));
+    return parseTxid(
+      await withNativeTimeout(requireNative().dutchAuctionCreate(JSON.stringify(params)), 'dutchAuctionCreate', this.timeoutMs),
+    );
   }
 
   async dutchAuctionBid(params: DutchAuctionBidParams): Promise<Txid> {
-    return parseTxid(await requireNative().dutchAuctionBid(JSON.stringify(params)));
+    return parseTxid(await withNativeTimeout(requireNative().dutchAuctionBid(JSON.stringify(params)), 'dutchAuctionBid', this.timeoutMs));
   }
 
   async dutchAuctionCollect(params: DutchAuctionCollectParams): Promise<Txid> {
-    return parseTxid(await requireNative().dutchAuctionCollect(JSON.stringify(params)));
+    return parseTxid(
+      await withNativeTimeout(requireNative().dutchAuctionCollect(JSON.stringify(params)), 'dutchAuctionCollect', this.timeoutMs),
+    );
   }
 
   async clear(): Promise<void> {
-    await requireNative().clear();
+    await withNativeTimeout(requireNative().clear(), 'clear', this.timeoutMs);
   }
+}
+
+function withNativeTimeout<T>(promise: Promise<T>, operation: string, timeoutMs: number): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_resolve, reject) => {
+    timeout = setTimeout(() => {
+      reject(new Error(`BitAssets native wallet ${operation} timed out after ${timeoutMs / 1000}s`));
+    }, timeoutMs);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeout) clearTimeout(timeout);
+  });
 }
 
 export class JsonRpcBitAssetsWalletClient implements BitAssetsWalletClient {

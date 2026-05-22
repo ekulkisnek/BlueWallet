@@ -7,11 +7,23 @@ const rpcUrl = process.env.BITASSETS_RPC_URL || (device.getPlatform() === 'andro
 const walletLabel = process.env.BITASSETS_E2E_WALLET_LABEL || 'BitAssets';
 const noSyncLaunchArgs = { detoxEnableSynchronization: 'NO' };
 const requireRpc = process.env.BITASSETS_E2E_REQUIRE_RPC === '1' || process.env.BITASSETS_E2E_FULL === '1';
+const submitLabels = {
+  transfer: 'Send transfer',
+  reserve: 'Reserve name',
+  register: 'Register asset',
+  ammMint: 'Mint LP',
+  ammSwap: 'Swap',
+  ammBurn: 'Burn LP',
+  dutchAuctionCreate: 'Create auction',
+  dutchAuctionBid: 'Bid',
+  dutchAuctionCollect: 'Collect',
+};
 
 describeIfBitAssets('BitAssets native mobile wallet', () => {
   beforeAll(async () => {
     await device.clearKeychain();
-    await device.launchApp({ delete: true, permissions: { notifications: 'YES' }, launchArgs: noSyncLaunchArgs });
+    await device.launchApp({ delete: true, permissions: { notifications: 'NO' }, launchArgs: noSyncLaunchArgs });
+    await device.disableSynchronization();
   }, 120000);
 
   it('creates a native wallet, syncs, and exposes typed constructor forms', async () => {
@@ -53,7 +65,8 @@ describeIfBitAssets('BitAssets native mobile wallet', () => {
     await expect(element(by.id('BitAssetsBroadcastButton'))).toExist();
 
     await device.terminateApp();
-    await device.launchApp({ newInstance: true, permissions: { notifications: 'YES' }, launchArgs: noSyncLaunchArgs });
+    await device.launchApp({ newInstance: true, permissions: { notifications: 'NO' }, launchArgs: noSyncLaunchArgs });
+    await device.disableSynchronization();
     await openCreatedWallet();
     await waitForId('BitAssetsWalletScreen');
     if (requireRpc) {
@@ -66,13 +79,13 @@ describeIfBitAssets('BitAssets native mobile wallet', () => {
     if (process.env.BITASSETS_E2E_FULL !== '1') return;
 
     await waitForId('BitAssetsWalletScreen');
-    await submitOperation('reserve', { name: process.env.BITASSETS_E2E_RESERVE_NAME || `FULL${Date.now()}` });
+    await submitOperation('reserve', { name: process.env.BITASSETS_E2E_RESERVE_NAME || `full-${Date.now()}` });
 
     if (process.env.BITASSETS_E2E_ASSET_A && process.env.BITASSETS_E2E_ASSET_B) {
       const assetA = process.env.BITASSETS_E2E_ASSET_A;
       const assetB = process.env.BITASSETS_E2E_ASSET_B;
       await submitOperation('register', {
-        name: process.env.BITASSETS_E2E_REGISTER_NAME || process.env.BITASSETS_E2E_RESERVE_NAME || `REG${Date.now()}`,
+        name: process.env.BITASSETS_E2E_REGISTER_NAME || process.env.BITASSETS_E2E_RESERVE_NAME || `reg-${Date.now()}`,
         initialSupply: process.env.BITASSETS_E2E_INITIAL_SUPPLY || '100',
         bitassetData: process.env.BITASSETS_E2E_ASSET_DATA || '{}',
       });
@@ -116,14 +129,52 @@ describeIfBitAssets('BitAssets native mobile wallet', () => {
 async function submitOperation(operation, values) {
   await element(by.id(`BitAssetsOperation-${operation}`)).tap();
   await sleep(500);
+  let lastField = '';
   for (const [key, value] of Object.entries(values)) {
     if (value === '') continue;
     await scrollToBitAssetsField(key);
     await element(by.id(`BitAssetsField-${key}`)).replaceText(String(value));
+    lastField = key;
   }
-  await element(by.id('BitAssetsBroadcastButton')).tap();
-  await waitForId('BitAssetsResult', 90000);
+  if (device.getPlatform() === 'ios' && lastField) {
+    try {
+      await element(by.id(`BitAssetsField-${lastField}`)).tapReturnKey();
+      await sleep(500);
+      if (await isVisibleId('BitAssetsResult', 1000)) return;
+    } catch (_) {}
+  }
+  await scrollToBroadcastButton();
+  try {
+    await element(by.id('BitAssetsBroadcastButton')).tap();
+  } catch (error) {
+    if (device.getPlatform() !== 'ios') throw error;
+    await element(by.label(submitLabels[operation])).tap();
+  }
+  await waitForBitAssetsSubmitResult();
   await sleep(500);
+}
+
+async function waitForBitAssetsSubmitResult() {
+  try {
+    await waitFor(element(by.id('BitAssetsResult')))
+      .toBeVisible()
+      .whileElement(by.id('BitAssetsWalletScreen'))
+      .scroll(500, 'down');
+    return;
+  } catch (_) {}
+
+  try {
+    await waitFor(element(by.id('BitAssetsResult')))
+      .toBeVisible()
+      .withTimeout(90000);
+    return;
+  } catch (_) {}
+
+  await waitFor(element(by.id('BitAssetsError')))
+    .toBeVisible()
+    .whileElement(by.id('BitAssetsWalletScreen'))
+    .scroll(500, 'down');
+  await expect(element(by.id('BitAssetsError'))).not.toExist();
 }
 
 async function scrollToCreateButtonIfNeeded() {
@@ -231,4 +282,26 @@ async function scrollToBitAssetsField(field) {
     .toBeVisible()
     .whileElement(by.id('BitAssetsWalletScreen'))
     .scroll(500, 'down');
+}
+
+async function scrollToBroadcastButton() {
+  try {
+    await waitFor(element(by.id('BitAssetsBroadcastButton')))
+      .toBeVisible()
+      .whileElement(by.id('BitAssetsWalletScreen'))
+      .scroll(300, 'down');
+  } catch (_) {
+    if (device.getPlatform() === 'ios') return;
+    await waitFor(element(by.id('BitAssetsBroadcastButton')))
+      .toBeVisible()
+      .withTimeout(5000);
+  }
+
+  // iOS can consider the button visible while its tappable point is clipped
+  // under the top safe area after field-focused scrolling. Nudge it lower.
+  if (device.getPlatform() === 'ios') {
+    try {
+      await element(by.id('BitAssetsWalletScreen')).scroll(120, 'down');
+    } catch (_) {}
+  }
 }
