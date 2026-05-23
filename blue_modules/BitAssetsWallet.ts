@@ -418,12 +418,17 @@ function parseJson<T>(value: string): T {
 }
 
 function parseTxid(value: string): Txid {
+  let txid: string;
   try {
     const parsed = JSON.parse(value);
-    return requireString(typeof parsed === 'string' ? parsed : parsed.txid);
+    txid = requireString(typeof parsed === 'string' ? parsed : parsed.txid);
   } catch {
-    return requireString(value);
+    txid = requireString(value);
   }
+  if (!/^[0-9a-f]{64}$/i.test(txid)) {
+    throw new Error('expected 64-character hex txid');
+  }
+  return txid;
 }
 
 function requireString(value: unknown): string {

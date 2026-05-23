@@ -72,6 +72,16 @@ const {
 } = require('../../blue_modules/BitAssetsWalletForms');
 const { walletOpenRouteFor } = require('../../screen/wallets/walletOpenRoute');
 
+const TXID_RESERVE = '11'.repeat(32);
+const TXID_REGISTER = '22'.repeat(32);
+const TXID_TRANSFER = '33'.repeat(32);
+const TXID_MINT = '44'.repeat(32);
+const TXID_SWAP = '55'.repeat(32);
+const TXID_BURN = '66'.repeat(32);
+const TXID_AUCTION_CREATE = '77'.repeat(32);
+const TXID_AUCTION_BID = '88'.repeat(32);
+const TXID_AUCTION_COLLECT = '99'.repeat(32);
+
 describe('BitAssets mobile wallet bridge', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -167,11 +177,11 @@ describe('BitAssets mobile wallet bridge', () => {
     const wallet = new BitAssetsWallet();
     wallet.secret = 'bitassets://persisted-address';
     wallet.bitassetsRpcUrl = 'http://127.0.0.1:6004';
-    mockNativeModule.reserve.mockResolvedValue('txid');
+    mockNativeModule.reserve.mockResolvedValue(TXID_RESERVE);
 
     await wallet.init();
     await wallet.fetchBalance();
-    await expect(wallet.reserveBitAsset({ name: 'PERSISTED', feeSats: 0 })).resolves.toBe('txid');
+    await expect(wallet.reserveBitAsset({ name: 'PERSISTED', feeSats: 0 })).resolves.toBe(TXID_RESERVE);
 
     expect(wallet.getAddress()).toBe('persisted-address');
     expect(mockNativeModule.configure).toHaveBeenCalledTimes(2);
@@ -237,9 +247,9 @@ describe('BitAssets mobile wallet bridge', () => {
     const wallet = new BitAssetsWallet();
     wallet.secret = 'bitassets://persisted-address';
     wallet.bitassetsRpcUrl = 'http://127.0.0.1:6004';
-    mockNativeModule.reserve.mockResolvedValue('tx-reserve');
-    mockNativeModule.register.mockResolvedValue('tx-register');
-    mockNativeModule.transfer.mockResolvedValue('tx-transfer');
+    mockNativeModule.reserve.mockResolvedValue(TXID_RESERVE);
+    mockNativeModule.register.mockResolvedValue(TXID_REGISTER);
+    mockNativeModule.transfer.mockResolvedValue(TXID_TRANSFER);
     mockNativeModule.sync.mockResolvedValue(
       JSON.stringify({
         enabled: true,
@@ -255,7 +265,7 @@ describe('BitAssets mobile wallet bridge', () => {
       JSON.stringify({
         confirmed: [
           {
-            txid: 'tx-register',
+            txid: TXID_REGISTER,
             vout: 0,
             asset_id: 'asset_a',
             amount: 23,
@@ -272,7 +282,7 @@ describe('BitAssets mobile wallet bridge', () => {
             ],
           },
           {
-            txid: 'tx-transfer',
+            txid: TXID_TRANSFER,
             vout: 1,
             asset_id: 'asset_a',
             amount: 1,
@@ -293,11 +303,11 @@ describe('BitAssets mobile wallet bridge', () => {
       }),
     );
 
-    await expect(wallet.reserveBitAsset({ name: 'FLOW', feeSats: 0 })).resolves.toBe('tx-reserve');
-    await expect(wallet.registerBitAsset({ name: 'FLOW', initialSupply: 25, bitassetData: {}, feeSats: 0 })).resolves.toBe('tx-register');
+    await expect(wallet.reserveBitAsset({ name: 'FLOW', feeSats: 0 })).resolves.toBe(TXID_RESERVE);
+    await expect(wallet.registerBitAsset({ name: 'FLOW', initialSupply: 25, bitassetData: {}, feeSats: 0 })).resolves.toBe(TXID_REGISTER);
     await expect(
       wallet.transferBitAssets({ destinationAddress: 'persisted-address', assetId: 'asset_a', amount: 1, feeSats: 0 }),
-    ).resolves.toBe('tx-transfer');
+    ).resolves.toBe(TXID_TRANSFER);
     await wallet.syncBitAssets();
 
     const persisted = JSON.stringify({ ...wallet, type: wallet.type });
@@ -342,15 +352,15 @@ describe('BitAssets mobile wallet bridge', () => {
 
   it('serializes every native constructor payload and parses txids', async () => {
     const client = new EmbeddedBitAssetsWalletClient();
-    mockNativeModule.transfer.mockResolvedValue(JSON.stringify({ txid: 'tx-transfer' }));
-    mockNativeModule.reserve.mockResolvedValue('tx-reserve');
-    mockNativeModule.register.mockResolvedValue(JSON.stringify({ txid: 'tx-register' }));
-    mockNativeModule.ammMint.mockResolvedValue(JSON.stringify({ txid: 'tx-mint' }));
-    mockNativeModule.ammSwap.mockResolvedValue(JSON.stringify({ txid: 'tx-swap' }));
-    mockNativeModule.ammBurn.mockResolvedValue(JSON.stringify({ txid: 'tx-burn' }));
-    mockNativeModule.dutchAuctionCreate.mockResolvedValue(JSON.stringify({ txid: 'tx-create' }));
-    mockNativeModule.dutchAuctionBid.mockResolvedValue(JSON.stringify({ txid: 'tx-bid' }));
-    mockNativeModule.dutchAuctionCollect.mockResolvedValue(JSON.stringify({ txid: 'tx-collect' }));
+    mockNativeModule.transfer.mockResolvedValue(JSON.stringify({ txid: TXID_TRANSFER }));
+    mockNativeModule.reserve.mockResolvedValue(TXID_RESERVE);
+    mockNativeModule.register.mockResolvedValue(JSON.stringify({ txid: TXID_REGISTER }));
+    mockNativeModule.ammMint.mockResolvedValue(JSON.stringify({ txid: TXID_MINT }));
+    mockNativeModule.ammSwap.mockResolvedValue(JSON.stringify({ txid: TXID_SWAP }));
+    mockNativeModule.ammBurn.mockResolvedValue(JSON.stringify({ txid: TXID_BURN }));
+    mockNativeModule.dutchAuctionCreate.mockResolvedValue(JSON.stringify({ txid: TXID_AUCTION_CREATE }));
+    mockNativeModule.dutchAuctionBid.mockResolvedValue(JSON.stringify({ txid: TXID_AUCTION_BID }));
+    mockNativeModule.dutchAuctionCollect.mockResolvedValue(JSON.stringify({ txid: TXID_AUCTION_COLLECT }));
 
     await expect(
       client.transfer({
@@ -360,8 +370,8 @@ describe('BitAssets mobile wallet bridge', () => {
         feeSats: 0,
         memo: 'm',
       }),
-    ).resolves.toBe('tx-transfer');
-    await expect(client.reserve({ name: 'ASSET', feeSats: 0 })).resolves.toBe('tx-reserve');
+    ).resolves.toBe(TXID_TRANSFER);
+    await expect(client.reserve({ name: 'ASSET', feeSats: 0 })).resolves.toBe(TXID_RESERVE);
     await expect(
       client.register({
         name: 'ASSET',
@@ -369,7 +379,7 @@ describe('BitAssets mobile wallet bridge', () => {
         bitassetData: { ticker: 'ASSET' },
         feeSats: 0,
       }),
-    ).resolves.toBe('tx-register');
+    ).resolves.toBe(TXID_REGISTER);
     await expect(
       client.ammMint({
         asset0: 'a',
@@ -379,7 +389,7 @@ describe('BitAssets mobile wallet bridge', () => {
         lpTokenMint: 3,
         feeSats: 0,
       }),
-    ).resolves.toBe('tx-mint');
+    ).resolves.toBe(TXID_MINT);
     await expect(
       client.ammSwap({
         assetSpend: 'a',
@@ -388,7 +398,7 @@ describe('BitAssets mobile wallet bridge', () => {
         amountReceive: 2,
         feeSats: 0,
       }),
-    ).resolves.toBe('tx-swap');
+    ).resolves.toBe(TXID_SWAP);
     await expect(
       client.ammBurn({
         asset0: 'a',
@@ -398,7 +408,7 @@ describe('BitAssets mobile wallet bridge', () => {
         lpTokenBurn: 3,
         feeSats: 0,
       }),
-    ).resolves.toBe('tx-burn');
+    ).resolves.toBe(TXID_BURN);
     await expect(
       client.dutchAuctionCreate({
         baseAsset: 'a',
@@ -409,7 +419,7 @@ describe('BitAssets mobile wallet bridge', () => {
         duration: 10,
         feeSats: 0,
       }),
-    ).resolves.toBe('tx-create');
+    ).resolves.toBe(TXID_AUCTION_CREATE);
     await expect(
       client.dutchAuctionBid({
         auctionId: 'auction',
@@ -419,7 +429,7 @@ describe('BitAssets mobile wallet bridge', () => {
         receiveQuantity: 2,
         feeSats: 0,
       }),
-    ).resolves.toBe('tx-bid');
+    ).resolves.toBe(TXID_AUCTION_BID);
     await expect(
       client.dutchAuctionCollect({
         auctionId: 'auction',
@@ -429,7 +439,7 @@ describe('BitAssets mobile wallet bridge', () => {
         amountQuote: 2,
         feeSats: 0,
       }),
-    ).resolves.toBe('tx-collect');
+    ).resolves.toBe(TXID_AUCTION_COLLECT);
 
     expect(JSON.parse(mockNativeModule.ammMint.mock.calls[0][0])).toEqual({
       asset0: 'a',
