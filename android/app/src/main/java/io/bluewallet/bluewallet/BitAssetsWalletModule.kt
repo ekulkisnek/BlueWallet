@@ -151,13 +151,14 @@ class BitAssetsWalletModule(private val reactContext: ReactApplicationContext) :
     private fun getOrCreateSeedHex(walletFile: File, sharedPref: android.content.SharedPreferences): String {
         sharedPref.getString(SEED_PREF, null)?.let { return decryptSeedHex(it) }
         readPersistedSeedHex(walletFile)?.let { seedHex ->
-            sharedPref.edit().putString(SEED_PREF, encryptSeedHex(seedHex)).apply()
+            persistSeedHex(sharedPref, seedHex)
+            scrubPersistedSeedHex(walletFile)
             return seedHex
         }
         val seed = ByteArray(64)
         SecureRandom().nextBytes(seed)
         val seedHex = seed.joinToString("") { "%02x".format(it.toInt() and 0xff) }
-        sharedPref.edit().putString(SEED_PREF, encryptSeedHex(seedHex)).apply()
+        persistSeedHex(sharedPref, seedHex)
         return seedHex
     }
 
@@ -167,6 +168,27 @@ class BitAssetsWalletModule(private val reactContext: ReactApplicationContext) :
             JSONObject(walletFile.readText()).optString("seed_hex").takeIf { isSeedHex(it) }
         } catch (_: Throwable) {
             null
+        }
+    }
+
+    private fun persistSeedHex(sharedPref: android.content.SharedPreferences, seedHex: String) {
+        if (!sharedPref.edit().putString(SEED_PREF, encryptSeedHex(seedHex)).commit()) {
+            throw IllegalStateException("Could not persist BitAssets seed")
+        }
+    }
+
+    private fun scrubPersistedSeedHex(walletFile: File) {
+        val json = JSONObject(walletFile.readText())
+        if (!json.has("seed_hex")) return
+        json.remove("seed_hex")
+
+        val tmpFile = File(walletFile.parentFile, "${walletFile.name}.scrubbed")
+        tmpFile.writeText(json.toString(), Charsets.UTF_8)
+        if (!tmpFile.renameTo(walletFile)) {
+            if (!walletFile.delete() || !tmpFile.renameTo(walletFile)) {
+                tmpFile.delete()
+                throw IllegalStateException("Could not remove legacy BitAssets seed from wallet file")
+            }
         }
     }
 

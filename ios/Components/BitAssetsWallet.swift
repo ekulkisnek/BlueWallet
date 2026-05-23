@@ -205,6 +205,7 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
         }
         if let migrated = readPersistedSeedHex(walletFile: walletFile) {
             try migrated.write(to: simulatorSeedFile, atomically: true, encoding: .utf8)
+            try scrubPersistedSeedHex(walletFile: walletFile)
             return migrated
         }
         var simulatorSeed = [UInt8](repeating: 0, count: 64)
@@ -221,6 +222,7 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
         }
         if let migrated = readPersistedSeedHex(walletFile: walletFile) {
             try writeKeychainSeedHex(migrated)
+            try scrubPersistedSeedHex(walletFile: walletFile)
             return migrated
         }
         var seed = [UInt8](repeating: 0, count: 64)
@@ -242,6 +244,17 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
             return nil
         }
         return seedHex
+    }
+
+    private func scrubPersistedSeedHex(walletFile: URL) throws {
+        guard let data = try? Data(contentsOf: walletFile),
+              var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              json["seed_hex"] != nil else {
+            return
+        }
+        json.removeValue(forKey: "seed_hex")
+        let scrubbedData = try JSONSerialization.data(withJSONObject: json)
+        try scrubbedData.write(to: walletFile, options: .atomic)
     }
 
     private func readKeychainSeedHex() throws -> String? {
