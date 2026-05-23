@@ -61,6 +61,7 @@ const {
   buildBitAssetsOperationParams,
   initialBitAssetsFormState,
   normalizeBitAssetsError,
+  redactSensitiveBitAssetsDetails,
   validateBitAssetsRpcUrl,
 } = require('../../blue_modules/BitAssetsWalletForms');
 const { walletOpenRouteFor } = require('../../screen/wallets/walletOpenRoute');
@@ -556,6 +557,13 @@ describe('BitAssets mobile wallet bridge', () => {
     expect(normalizeBitAssetsError(new Error('Network request failed'))).toBe(
       'Could not reach the BitAssets RPC endpoint. Check the RPC URL and local signet stack.',
     );
+  });
+
+  it('redacts BitAssets seed material from surfaced errors and logs', () => {
+    const seedHex = 'a'.repeat(128);
+    expect(redactSensitiveBitAssetsDetails(`native config failed seed_hex=${seedHex}`)).toBe('native config failed seed_hex=[redacted]');
+    expect(redactSensitiveBitAssetsDetails(`{"seedHex":"${seedHex}"}`)).toBe('{"seedHex":"[redacted]"}');
+    expect(normalizeBitAssetsError(new Error(`wallet open failed with ${seedHex}`))).toBe('wallet open failed with [redacted-seed]');
   });
 
   it('requires HTTPS for non-local BitAssets RPC endpoints', () => {

@@ -13,6 +13,7 @@ import {
   ReserveParams,
   TransferParams,
 } from '../../blue_modules/BitAssetsWallet';
+import { normalizeBitAssetsError } from '../../blue_modules/BitAssetsWalletForms';
 import { BitcoinUnit, Chain } from '../../models/bitcoinUnits';
 import { LegacyWallet } from './legacy-wallet';
 import { Transaction } from './types';
@@ -150,7 +151,7 @@ export class BitAssetsWallet extends LegacyWallet {
         await client.clear();
       } catch (e) {
         if (__DEV__) {
-          console.warn('[BitAssetsWallet] native clear failed (non-fatal)', e);
+          console.warn('[BitAssetsWallet] native clear failed (non-fatal)', normalizeBitAssetsError(e));
         }
       }
     }

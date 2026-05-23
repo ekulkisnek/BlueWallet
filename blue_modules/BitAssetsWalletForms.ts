@@ -291,8 +291,15 @@ export function validateBitAssetsRpcUrl(rpcUrl: string): string {
   return trimmed;
 }
 
+export function redactSensitiveBitAssetsDetails(message: string): string {
+  return message
+    .replace(/("(?:seed_hex|seedHex)"\s*:\s*")([0-9a-f]{128})(")/gi, '$1[redacted]$3')
+    .replace(/((?:seed_hex|seedHex)\s*[:=]\s*)([0-9a-f]{128})/gi, '$1[redacted]')
+    .replace(/\b[0-9a-f]{128}\b/gi, '[redacted-seed]');
+}
+
 export function normalizeBitAssetsError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = redactSensitiveBitAssetsDetails(error instanceof Error ? error.message : String(error));
   if (/fee[_ ]?sats|nonzero fee|fee must be 0/i.test(message)) {
     return 'BitAssets mobile constructors currently support fee_sats = 0 only.';
   }

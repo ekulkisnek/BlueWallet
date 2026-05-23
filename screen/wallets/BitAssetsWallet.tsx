@@ -261,14 +261,14 @@ const BitAssetsWallet: React.FC = () => {
       // while local signet mines, so keep it off the submit critical path.
       sync(true).catch(error => {
         if (__DEV__) {
-          console.warn('[BitAssetsWallet] post-broadcast sync failed', error);
+          console.warn('[BitAssetsWallet] post-broadcast sync failed', normalizeBitAssetsError(error));
         }
       });
     } catch (error: any) {
-      if (__DEV__) {
-        console.debug('[BitAssetsWallet] submit error', operationOverride ?? operationRef.current, error);
-      }
       const normalizedError = normalizeBitAssetsError(error);
+      if (__DEV__) {
+        console.debug('[BitAssetsWallet] submit error', operationOverride ?? operationRef.current, normalizedError);
+      }
       setErrorMessage(normalizedError);
     } finally {
       submitInFlight.current = false;
