@@ -148,6 +148,16 @@ describe('BitAssets mobile wallet bridge', () => {
     expect(wallet.getBalance()).toBe(42);
   });
 
+  it('requires the persisted BitAssets RPC URL before native signer use', async () => {
+    const wallet = new BitAssetsWallet();
+
+    await expect(wallet.generate()).rejects.toThrow('BitAssets RPC URL is required');
+    await expect(wallet.fetchBalance()).rejects.toThrow('BitAssets RPC URL is required');
+
+    expect(mockNativeModule.configure).not.toHaveBeenCalled();
+    expect(mockNativeModule.getNewAddress).not.toHaveBeenCalled();
+  });
+
   it('rehydrates persisted BitAssets wallets and configures the native signer before every use', async () => {
     const wallet = new BitAssetsWallet();
     wallet.secret = 'bitassets://persisted-address';
@@ -184,6 +194,7 @@ describe('BitAssets mobile wallet bridge', () => {
 
   it('syncs and flattens confirmed and mempool UTXOs', async () => {
     const wallet = new BitAssetsWallet();
+    wallet.bitassetsRpcUrl = 'http://127.0.0.1:6004';
 
     const info = await wallet.syncBitAssets();
 
@@ -606,6 +617,7 @@ describe('BitAssets mobile wallet bridge', () => {
   });
 
   it('requires HTTPS for non-local BitAssets RPC endpoints', () => {
+    expect(() => validateBitAssetsRpcUrl('   ')).toThrow('BitAssets RPC URL is required');
     expect(validateBitAssetsRpcUrl(' http://127.0.0.1:6004 ')).toBe('http://127.0.0.1:6004');
     expect(validateBitAssetsRpcUrl('http://10.0.2.2:6004')).toBe('http://10.0.2.2:6004');
     expect(validateBitAssetsRpcUrl('http://172.16.1.2:6004')).toBe('http://172.16.1.2:6004');

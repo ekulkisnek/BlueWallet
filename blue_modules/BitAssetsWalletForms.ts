@@ -273,6 +273,10 @@ function isLocalBitAssetsRpcHost(hostname: string): boolean {
 
 export function validateBitAssetsRpcUrl(rpcUrl: string): string {
   const trimmed = rpcUrl.trim();
+  if (trimmed.length === 0) {
+    throw new Error('BitAssets RPC URL is required.');
+  }
+
   let parsed: URL;
   try {
     parsed = new URL(trimmed);

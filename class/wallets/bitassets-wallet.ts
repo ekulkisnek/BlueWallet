@@ -13,7 +13,7 @@ import {
   ReserveParams,
   TransferParams,
 } from '../../blue_modules/BitAssetsWallet';
-import { normalizeBitAssetsError } from '../../blue_modules/BitAssetsWalletForms';
+import { normalizeBitAssetsError, validateBitAssetsRpcUrl } from '../../blue_modules/BitAssetsWalletForms';
 import { BitcoinUnit, Chain } from '../../models/bitcoinUnits';
 import { LegacyWallet } from './legacy-wallet';
 import { Transaction } from './types';
@@ -41,9 +41,7 @@ export class BitAssetsWallet extends LegacyWallet {
   }
 
   async generate(rpcUrl?: string): Promise<void> {
-    if (rpcUrl) {
-      this.bitassetsRpcUrl = rpcUrl;
-    }
+    this.bitassetsRpcUrl = validateBitAssetsRpcUrl(rpcUrl ?? this.bitassetsRpcUrl);
     const client = await this.getConfiguredClient();
     const address = await client.getNewAddress();
     this._address = address;
@@ -167,8 +165,9 @@ export class BitAssetsWallet extends LegacyWallet {
 
   private async getConfiguredClient(): Promise<BitAssetsWalletClient> {
     const client = this.getClient();
-    if (client.configure && this.bitassetsRpcUrl) {
-      await client.configure({ rpcUrl: this.bitassetsRpcUrl });
+    const rpcUrl = validateBitAssetsRpcUrl(this.bitassetsRpcUrl);
+    if (client.configure) {
+      await client.configure({ rpcUrl });
     }
     return client;
   }
