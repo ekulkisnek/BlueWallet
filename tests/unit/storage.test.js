@@ -62,6 +62,18 @@ it('Appstorage - createFakeStorage purges BitAssets native signer state before r
   assert.strictEqual(Storage.wallets.length, 0);
 });
 
+it('Appstorage - deleteWallet waits for BitAssets native signer purge', async () => {
+  const Storage = new BlueApp();
+  const wallet = new BitAssetsWallet();
+  const clearNativeSigner = jest.spyOn(wallet, 'clearNativeSigner').mockResolvedValue(undefined);
+  Storage.wallets.push(wallet);
+
+  await Storage.deleteWallet(wallet);
+
+  expect(clearNativeSigner).toHaveBeenCalledTimes(1);
+  assert.strictEqual(Storage.wallets.length, 0);
+});
+
 it('Appstorage - decryptStorage purges BitAssets native signer state before switching buckets', async () => {
   const Storage = new BlueApp();
   Storage.cachedPassword = 'password';

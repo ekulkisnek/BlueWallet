@@ -524,7 +524,7 @@ export class BlueApp {
    *
    * @param wallet {AbstractWallet}
    */
-  deleteWallet = (wallet: TWallet): void => {
+  deleteWallet = async (wallet: TWallet): Promise<void> => {
     const ID = wallet.getID();
     const tempWallets = [];
     let shouldClearBitAssetsSigner = wallet instanceof BitAssetsWallet;
@@ -543,7 +543,7 @@ export class BlueApp {
     if (shouldClearBitAssetsSigner) {
       // The embedded signer is global to the native BitAssets wallet backend. Purge it
       // only when the last JS BitAssets wallet is removed.
-      (wallet as BitAssetsWallet).clearNativeSigner().catch(() => {});
+      await (wallet as BitAssetsWallet).clearNativeSigner();
     }
     this.wallets = tempWallets;
   };

@@ -26,7 +26,7 @@ interface StorageContextType {
   saveToDisk: (force?: boolean) => Promise<void>;
   selectedWalletID: () => string | undefined; // Change from string|undefined to a function
   addWallet: (wallet: TWallet) => void;
-  deleteWallet: (wallet: TWallet) => void;
+  deleteWallet: (wallet: TWallet) => Promise<void>;
   currentSharedCosigner: string;
   setSharedCosigner: (cosigner: string) => void;
   addAndSaveWallet: (wallet: TWallet) => Promise<void>;
@@ -170,8 +170,8 @@ export const StorageProvider = ({ children }: { children: React.ReactNode }) => 
     setWallets([...BlueApp.getWallets()]);
   }, []);
 
-  const deleteWallet = useCallback((wallet: TWallet) => {
-    BlueApp.deleteWallet(wallet);
+  const deleteWallet = useCallback(async (wallet: TWallet) => {
+    await BlueApp.deleteWallet(wallet);
     setWallets([...BlueApp.getWallets()]);
   }, []);
 
@@ -185,7 +185,7 @@ export const StorageProvider = ({ children }: { children: React.ReactNode }) => 
       }
 
       if (forceDelete) {
-        deleteWallet(wallet);
+        await deleteWallet(wallet);
         await saveToDisk(true);
         triggerHapticFeedback(HapticFeedbackTypes.NotificationSuccess);
         return true;
@@ -247,7 +247,7 @@ export const StorageProvider = ({ children }: { children: React.ReactNode }) => 
             }
           }
         }
-        deleteWallet(wallet);
+        await deleteWallet(wallet);
         console.debug(`handleWalletDeletion: wallet ${walletID} deleted successfully`);
         await saveToDisk(true);
         triggerHapticFeedback(HapticFeedbackTypes.NotificationSuccess);
