@@ -222,6 +222,43 @@ export function buildBitAssetsOperationParams(operation: BitAssetsOperation, val
   return params as unknown as BitAssetsOperationParams;
 }
 
+function isLocalBitAssetsRpcHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (host === 'localhost' || host === '::1') return true;
+  if (host.startsWith('127.')) return true;
+  if (host.startsWith('10.')) return true;
+  if (host.startsWith('192.168.')) return true;
+
+  const match = /^172\.(\d{1,2})\./.exec(host);
+  if (!match) return false;
+  const secondOctet = Number(match[1]);
+  return Number.isInteger(secondOctet) && secondOctet >= 16 && secondOctet <= 31;
+}
+
+export function validateBitAssetsRpcUrl(rpcUrl: string): string {
+  const trimmed = rpcUrl.trim();
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new Error('BitAssets RPC URL must be a valid http(s) URL.');
+  }
+
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error('BitAssets RPC URL must use http or https.');
+  }
+
+  if (!parsed.hostname) {
+    throw new Error('BitAssets RPC URL must include a host.');
+  }
+
+  if (parsed.protocol === 'http:' && !isLocalBitAssetsRpcHost(parsed.hostname)) {
+    throw new Error('BitAssets RPC URL must use HTTPS unless it points to a local or private development host.');
+  }
+
+  return trimmed;
+}
+
 export function normalizeBitAssetsError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   if (/fee[_ ]?sats|nonzero fee|fee must be 0/i.test(message)) {

@@ -301,9 +301,27 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
         guard !rpcUrl.isEmpty else {
             throw NSError(domain: "BitAssetsWallet", code: 5, userInfo: [NSLocalizedDescriptionKey: "BitAssets RPC URL is required"])
         }
-        guard let url = URL(string: rpcUrl), let scheme = url.scheme, ["http", "https"].contains(scheme), url.host != nil else {
+        guard let url = URL(string: rpcUrl), let scheme = url.scheme, ["http", "https"].contains(scheme), let host = url.host else {
             throw NSError(domain: "BitAssetsWallet", code: 6, userInfo: [NSLocalizedDescriptionKey: "BitAssets RPC URL must be an http(s) URL with a host"])
         }
+        if scheme == "http" && !isLocalRpcHost(host) {
+            throw NSError(domain: "BitAssetsWallet", code: 6, userInfo: [NSLocalizedDescriptionKey: "BitAssets RPC URL must use HTTPS unless it points to a local or private development host"])
+        }
+    }
+
+    private func isLocalRpcHost(_ host: String) -> Bool {
+        let normalized = host.lowercased()
+        if normalized == "localhost" || normalized == "::1" || normalized.hasPrefix("127.") {
+            return true
+        }
+        if normalized.hasPrefix("10.") || normalized.hasPrefix("192.168.") {
+            return true
+        }
+        let parts = normalized.split(separator: ".")
+        guard parts.count >= 2, parts[0] == "172", let secondOctet = Int(parts[1]) else {
+            return false
+        }
+        return secondOctet >= 16 && secondOctet <= 31
     }
 
     private func debugLog(_ message: String) {

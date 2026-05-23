@@ -28,6 +28,7 @@ import { hexToUint8Array, uint8ArrayToHex } from '../../blue_modules/uint8array-
 import { LightningArkWallet } from '../../class/wallets/lightning-ark-wallet.ts';
 import { resetScanWasBBQR } from '../../helpers/scan-qr.ts';
 import { BitAssetsWallet } from '../../class/wallets/bitassets-wallet';
+import { validateBitAssetsRpcUrl } from '../../blue_modules/BitAssetsWalletForms';
 
 const DEFAULT_BITASSETS_RPC_URL = Platform.select({
   android: 'http://10.0.2.2:6004',
@@ -451,7 +452,7 @@ const WalletsAdd: React.FC = () => {
     const wallet = new BitAssetsWallet();
     wallet.setLabel(label || 'BitAssets');
     try {
-      await wallet.generate(bitAssetsRpcUrl.trim());
+      await wallet.generate(validateBitAssetsRpcUrl(bitAssetsRpcUrl));
     } catch (Err: any) {
       setIsLoading(false);
       console.warn('bitassets create failure', Err);

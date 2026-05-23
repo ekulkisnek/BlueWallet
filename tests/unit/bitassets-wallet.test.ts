@@ -60,6 +60,7 @@ const {
   buildBitAssetsOperationParams,
   initialBitAssetsFormState,
   normalizeBitAssetsError,
+  validateBitAssetsRpcUrl,
 } = require('../../blue_modules/BitAssetsWalletForms');
 const { walletOpenRouteFor } = require('../../screen/wallets/walletOpenRoute');
 
@@ -535,5 +536,15 @@ describe('BitAssets mobile wallet bridge', () => {
     expect(normalizeBitAssetsError(new Error('Network request failed'))).toBe(
       'Could not reach the BitAssets RPC endpoint. Check the RPC URL and local signet stack.',
     );
+  });
+
+  it('requires HTTPS for non-local BitAssets RPC endpoints', () => {
+    expect(validateBitAssetsRpcUrl(' http://127.0.0.1:6004 ')).toBe('http://127.0.0.1:6004');
+    expect(validateBitAssetsRpcUrl('http://10.0.2.2:6004')).toBe('http://10.0.2.2:6004');
+    expect(validateBitAssetsRpcUrl('http://172.16.1.2:6004')).toBe('http://172.16.1.2:6004');
+    expect(validateBitAssetsRpcUrl('http://192.168.1.2:6004')).toBe('http://192.168.1.2:6004');
+    expect(validateBitAssetsRpcUrl('https://bitassets.example.com')).toBe('https://bitassets.example.com');
+    expect(() => validateBitAssetsRpcUrl('http://bitassets.example.com')).toThrow('must use HTTPS');
+    expect(() => validateBitAssetsRpcUrl('ftp://127.0.0.1:6004')).toThrow('must use http or https');
   });
 });

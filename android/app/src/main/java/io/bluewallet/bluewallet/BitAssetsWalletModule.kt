@@ -225,6 +225,18 @@ class BitAssetsWalletModule(private val reactContext: ReactApplicationContext) :
         if (uri.host.isNullOrBlank()) {
             throw IllegalArgumentException("BitAssets RPC URL must include a host")
         }
+        if (uri.scheme == "http" && !isLocalRpcHost(uri.host.lowercase())) {
+            throw IllegalArgumentException("BitAssets RPC URL must use HTTPS unless it points to a local or private development host")
+        }
+    }
+
+    private fun isLocalRpcHost(host: String): Boolean {
+        if (host == "localhost" || host == "::1" || host.startsWith("127.")) return true
+        if (host.startsWith("10.") || host.startsWith("192.168.")) return true
+        val parts = host.split(".")
+        if (parts.size < 2 || parts[0] != "172") return false
+        val secondOctet = parts[1].toIntOrNull() ?: return false
+        return secondOctet in 16..31
     }
 
     private fun resolve(promise: Promise, call: () -> String) {
