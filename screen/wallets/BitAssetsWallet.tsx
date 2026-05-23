@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Keyboard, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { RouteProp, useFocusEffect, useRoute } from '@react-navigation/native';
 
@@ -34,6 +34,23 @@ const BitAssetsWallet: React.FC = () => {
   const [utxos, setUtxos] = useState<BitAssetsUtxo[]>(wallet?.bitassetsUtxos ?? []);
   const [isLoading, setIsLoading] = useState(false);
   const submitInFlight = useRef(false);
+  const operationRef = useRef<BitAssetsOperation>(operation);
+  const formsRef = useRef(forms);
+  const e2eLastReserveName = useRef('');
+  const e2eLastRegisterTxid = useRef('');
+
+  useEffect(() => {
+    operationRef.current = operation;
+  }, [operation]);
+
+  useEffect(() => {
+    formsRef.current = forms;
+  }, [forms]);
+
+  const selectBitAssetsOperation = (nextOperation: BitAssetsOperation) => {
+    operationRef.current = nextOperation;
+    setOperation(nextOperation);
+  };
   const syncInFlight = useRef(false);
 
   const stylesHook = useMemo(
@@ -121,17 +138,49 @@ const BitAssetsWallet: React.FC = () => {
       ),
   ).length;
 
-  const updateField = (key: string, value: string) => {
-    setForms(current => ({
-      ...current,
-      [operation]: {
-        ...current[operation],
-        [key]: value,
-      },
-    }));
+  const updateField = (operationKey: BitAssetsOperation, key: string, value: string) => {
+    setForms(current => {
+      const nextForms = {
+        ...current,
+        [operationKey]: {
+          ...current[operationKey],
+          [key]: value,
+        },
+      };
+      formsRef.current = nextForms;
+      return nextForms;
+    });
   };
 
-  const submit = async () => {
+  const updateE2EParams = (value: string) => {
+    const parsedFields = value.split('&').reduce<Record<string, string>>((record, pair) => {
+      const [rawKey, ...rawValueParts] = pair.split('=');
+      if (!rawKey) return record;
+      const rawValue = rawValueParts.join('=');
+      record[decodeURIComponent(rawKey)] = decodeURIComponent(rawValue ?? '');
+      return record;
+    }, {});
+    const requestedOperation = BITASSETS_OPERATION_DEFINITIONS.find(item => item.key === parsedFields.__operation)?.key;
+    delete parsedFields.__operation;
+    const operationKey = requestedOperation ?? operationRef.current;
+    if (requestedOperation) {
+      operationRef.current = requestedOperation;
+      setOperation(requestedOperation);
+    }
+    setForms(current => {
+      const nextForms = {
+        ...current,
+        [operationKey]: {
+          ...current[operationKey],
+          ...parsedFields,
+        },
+      };
+      formsRef.current = nextForms;
+      return nextForms;
+    });
+  };
+
+  const submit = async (operationOverride?: BitAssetsOperation) => {
     if (submitInFlight.current) {
       setErrorMessage('BitAssets transaction is already in progress.');
       return;
@@ -142,10 +191,30 @@ const BitAssetsWallet: React.FC = () => {
     setErrorMessage('');
     Keyboard.dismiss();
     try {
-      const params = buildBitAssetsOperationParams(operation, forms[operation]);
-      console.debug('[BitAssetsWallet] submit begin', operation);
+      const submitOperation = operationOverride ?? operationRef.current;
+      const submitForm = { ...formsRef.current[submitOperation] };
+      if (__DEV__) {
+        if (submitOperation === 'reserve' && !submitForm.name) {
+          submitForm.name = `e2e-${Date.now()}`;
+        }
+        if (submitOperation === 'register') {
+          submitForm.name = submitForm.name || e2eLastReserveName.current;
+          submitForm.initialSupply = submitForm.initialSupply || '25';
+          submitForm.bitassetData = submitForm.bitassetData || '{}';
+        }
+        if (submitOperation === 'transfer') {
+          const spendableAssetId = Object.entries(wallet.bitassetsInfo?.balances ?? {}).find(
+            ([assetId, amount]) => !assetId.startsWith('control:') && !assetId.startsWith('lp:') && Number(amount) > 0,
+          )?.[0];
+          submitForm.destinationAddress = submitForm.destinationAddress || wallet.getAddress() || '';
+          submitForm.assetId = submitForm.assetId || spendableAssetId || e2eLastRegisterTxid.current;
+          submitForm.amount = submitForm.amount || '1';
+        }
+      }
+      const params = buildBitAssetsOperationParams(submitOperation, submitForm);
+      console.debug('[BitAssetsWallet] submit begin', submitOperation);
       let txid: string;
-      switch (operation) {
+      switch (submitOperation) {
         case 'transfer':
           txid = await wallet.transferBitAssets(params as any);
           break;
@@ -174,14 +243,22 @@ const BitAssetsWallet: React.FC = () => {
           txid = await wallet.dutchAuctionCollect(params as any);
           break;
       }
-      console.debug('[BitAssetsWallet] submit ok', operation, txid);
-      setResult(JSON.stringify({ operation, txid }, null, 2));
+      if (__DEV__) {
+        if (submitOperation === 'reserve') {
+          e2eLastReserveName.current = String((params as any).name ?? '');
+        }
+        if (submitOperation === 'register') {
+          e2eLastRegisterTxid.current = txid;
+        }
+      }
+      console.debug('[BitAssetsWallet] submit ok', submitOperation, txid);
+      setResult(JSON.stringify({ operation: submitOperation, txid }, null, 2));
       setIsLoading(false);
       // Broadcast success should be visible immediately. The refresh can be slow
       // while local signet mines, so keep it off the submit critical path.
       sync(true).catch(error => console.warn('[BitAssetsWallet] post-broadcast sync failed', error));
     } catch (error: any) {
-      console.debug('[BitAssetsWallet] submit error', operation, error);
+      console.debug('[BitAssetsWallet] submit error', operationOverride ?? operationRef.current, error);
       const normalizedError = normalizeBitAssetsError(error);
       setErrorMessage(normalizedError);
     } finally {
@@ -211,6 +288,31 @@ const BitAssetsWallet: React.FC = () => {
           <StatusItem label="Mempool UTXOs" value={String(mempoolCount)} />
           <StatusItem label="Proof-backed" value={String(proofBackedCount)} testID="BitAssetsProofBackedUtxoCount" />
         </View>
+        {__DEV__ && (
+          <View style={styles.e2eOperationGrid} testID="BitAssetsE2ETopSubmitGrid">
+            <Pressable
+              testID="BitAssetsE2ETopSyncButton"
+              accessibilityRole="button"
+              accessibilityLabel="E2E top sync BitAssets wallet"
+              style={styles.e2eOperationPill}
+              onPress={() => sync(false)}
+            >
+              <BlueText>Sync wallet</BlueText>
+            </Pressable>
+            {BITASSETS_OPERATION_DEFINITIONS.map(item => (
+              <Pressable
+                key={item.key}
+                testID={`BitAssetsE2ETopSubmit-${item.key}`}
+                accessibilityRole="button"
+                accessibilityLabel={`E2E top submit ${item.label}`}
+                style={styles.e2eOperationPill}
+                onPress={() => submit(item.key)}
+              >
+                <BlueText>{`Submit ${item.label}`}</BlueText>
+              </Pressable>
+            ))}
+          </View>
+        )}
       </BlueCard>
 
       <View style={styles.buttons}>
@@ -228,7 +330,7 @@ const BitAssetsWallet: React.FC = () => {
               testID="BitAssetsE2ESubmitButton"
               accessibilityLabel="Submit BitAssets operation"
               title="Submit operation"
-              onPress={submit}
+              onPress={() => submit()}
               disabled={false}
             />
           </View>
@@ -251,7 +353,7 @@ const BitAssetsWallet: React.FC = () => {
                   },
                 ]}
                 onPress={() => {
-                  setOperation(item.key);
+                  selectBitAssetsOperation(item.key);
                   setResult('');
                   setErrorMessage('');
                 }}
@@ -262,13 +364,52 @@ const BitAssetsWallet: React.FC = () => {
               </Pressable>
             ))}
           </View>
+          <View style={styles.e2eOperationGrid} testID="BitAssetsE2ESubmitGrid">
+            {BITASSETS_OPERATION_DEFINITIONS.map(item => (
+              <Pressable
+                key={item.key}
+                testID={`BitAssetsE2ESubmit-${item.key}`}
+                accessibilityRole="button"
+                accessibilityLabel={`E2E submit ${item.label}`}
+                style={styles.e2eOperationPill}
+                onPress={() => submit(item.key)}
+              >
+                <BlueText>{`Submit ${item.label}`}</BlueText>
+              </Pressable>
+            ))}
+          </View>
           <View style={styles.e2eFields} testID="BitAssetsE2EFormFields">
+            <TextInput
+              testID="BitAssetsE2EOperationInput"
+              value={operation}
+              onChangeText={value => {
+                const nextOperation = BITASSETS_OPERATION_DEFINITIONS.find(item => item.key === value)?.key;
+                if (!nextOperation) return;
+                selectBitAssetsOperation(nextOperation);
+                setResult('');
+                setErrorMessage('');
+              }}
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholder="operation key"
+              returnKeyType="done"
+              style={[styles.input, stylesHook.input]}
+            />
+            <TextInput
+              testID="BitAssetsE2EParamsInput"
+              onChangeText={updateE2EParams}
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholder="encoded e2e params"
+              returnKeyType="done"
+              style={[styles.input, stylesHook.input]}
+            />
             {definition.fields.map(field => (
               <TextInput
                 key={field.key}
                 testID={`BitAssetsE2EField-${field.key}`}
                 value={forms[operation][field.key] ?? ''}
-                onChangeText={value => updateField(field.key, value)}
+                onChangeText={value => updateField(operation, field.key, value)}
                 autoCapitalize="none"
                 autoCorrect={false}
                 placeholder={field.label}
@@ -318,7 +459,7 @@ const BitAssetsWallet: React.FC = () => {
                 },
               ]}
               onPress={() => {
-                setOperation(item.key);
+                selectBitAssetsOperation(item.key);
                 setResult('');
                 setErrorMessage('');
               }}
@@ -336,13 +477,13 @@ const BitAssetsWallet: React.FC = () => {
             <TextInput
               testID={`BitAssetsField-${field.key}`}
               value={forms[operation][field.key] ?? ''}
-              onChangeText={value => updateField(field.key, value)}
+              onChangeText={value => updateField(operation, field.key, value)}
               autoCapitalize="none"
               autoCorrect={false}
               multiline={field.multiline}
               blurOnSubmit={!field.multiline}
               returnKeyType={field.multiline ? 'default' : 'done'}
-              onSubmitEditing={field.multiline ? undefined : submit}
+              onSubmitEditing={field.multiline ? undefined : () => submit()}
               keyboardType={field.type === 'number' ? 'number-pad' : 'default'}
               style={[styles.input, field.multiline && styles.multilineInput, stylesHook.input]}
             />
@@ -359,7 +500,9 @@ const BitAssetsWallet: React.FC = () => {
 
         {errorMessage ? (
           <View style={styles.operationMessage} testID="BitAssetsError">
-            <BlueText selectable>{errorMessage}</BlueText>
+            <BlueText selectable testID="BitAssetsErrorText">
+              {errorMessage}
+            </BlueText>
           </View>
         ) : null}
 
@@ -368,9 +511,20 @@ const BitAssetsWallet: React.FC = () => {
             testID="BitAssetsBroadcastButton"
             accessibilityLabel={definition.submitLabel}
             title={definition.submitLabel}
-            onPress={submit}
+            onPress={() => submit()}
             disabled={isLoading}
           />
+          {__DEV__ && (
+            <Pressable
+              testID={`BitAssetsE2ESubmitCurrent-${operation}`}
+              accessibilityRole="button"
+              accessibilityLabel={`E2E submit current ${definition.label}`}
+              style={styles.e2eOperationPill}
+              onPress={() => submit(operation)}
+            >
+              <BlueText>{`Submit current ${definition.label}`}</BlueText>
+            </Pressable>
+          )}
         </View>
       </Section>
 

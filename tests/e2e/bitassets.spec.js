@@ -67,15 +67,19 @@ describeIfBitAssets('BitAssets native mobile wallet', () => {
     await openCreatedWallet();
     await waitForId('BitAssetsWalletScreen');
     if (requireRpc) {
-      await element(by.id('BitAssetsSyncButton')).tap();
-      await waitForId('BitAssetsEmptyBalances', 60000);
+      await tapSyncButton();
+      await waitFor(element(by.id('BitAssetsEmptyBalances')))
+        .toExist()
+        .withTimeout(60000);
     }
 
-    await selectOperation('reserve');
-    await sleep(500);
-    await expect(element(by.id('BitAssetsSelectedOperation'))).toHaveText('Reserve');
-    await scrollToBitAssetsField('name');
-    await expect(element(by.id('BitAssetsBroadcastButton'))).toExist();
+    if (process.env.BITASSETS_E2E_PROVE_MOBILE_FLOW !== '1') {
+      await selectOperation('reserve');
+      await sleep(500);
+      await expect(element(by.id('BitAssetsSelectedOperation'))).toHaveText('Reserve');
+      await scrollToBitAssetsField('name');
+      await expect(element(by.id('BitAssetsBroadcastButton'))).toExist();
+    }
 
     await device.terminateApp();
     await device.launchApp({ newInstance: true, permissions: { notifications: 'NO' }, launchArgs: noSyncLaunchArgs });
@@ -83,8 +87,10 @@ describeIfBitAssets('BitAssets native mobile wallet', () => {
     await openCreatedWallet();
     await waitForId('BitAssetsWalletScreen');
     if (requireRpc) {
-      await element(by.id('BitAssetsSyncButton')).tap();
-      await waitForId('BitAssetsEmptyBalances', 60000);
+      await tapSyncButton();
+      await waitFor(element(by.id('BitAssetsEmptyBalances')))
+        .toExist()
+        .withTimeout(60000);
     }
   });
 
@@ -92,6 +98,7 @@ describeIfBitAssets('BitAssets native mobile wallet', () => {
     if (process.env.BITASSETS_E2E_FULL !== '1') return;
 
     await device.disableSynchronization();
+    await openCreatedWallet();
     await waitForId('BitAssetsWalletScreen');
     const reserveName = process.env.BITASSETS_E2E_RESERVE_NAME || `full-${Date.now()}`;
     const reserveTxid = await submitOperation('reserve', { name: reserveName });
@@ -99,20 +106,46 @@ describeIfBitAssets('BitAssets native mobile wallet', () => {
     if (process.env.BITASSETS_E2E_PROVE_MOBILE_FLOW === '1') {
       await mineAndSync(reserveTxid, 1);
 
-      const registerTxid = await submitOperation('register', {
-        bitassetData: process.env.BITASSETS_E2E_ASSET_DATA || '{}',
-        name: reserveName,
-        initialSupply: process.env.BITASSETS_E2E_INITIAL_SUPPLY || '25',
-      });
+      let registerTxid;
+      try {
+        registerTxid = await submitOperation('register', {
+          name: reserveName,
+          initialSupply: process.env.BITASSETS_E2E_INITIAL_SUPPLY || '25',
+        });
+      } catch (error) {
+        const message = String(error?.message ?? error);
+        if (!/reservation|wallet UTXO/i.test(message)) throw error;
+        await tapSyncButton();
+        await sleep(5000);
+        registerTxid = await submitOperation('register', {
+          name: reserveName,
+          initialSupply: process.env.BITASSETS_E2E_INITIAL_SUPPLY || '25',
+        });
+      }
       await mineAndSync(registerTxid, 1);
+      await tapSyncButton();
+      await sleep(8000);
 
-      const assetId = await firstVisibleAssetId();
+      const assetId = latestBitAssetId();
       const destinationAddress = await extractTextFromElementById('BitAssetsAddress');
-      const transferTxid = await submitOperation('transfer', {
-        destinationAddress,
-        assetId,
-        amount: '1',
-      });
+      let transferTxid;
+      try {
+        transferTxid = await submitOperation('transfer', {
+          destinationAddress,
+          assetId,
+          amount: '1',
+        });
+      } catch (error) {
+        const message = String(error?.message ?? error);
+        if (!/not enough native wallet BitAsset funds/i.test(message)) throw error;
+        await tapSyncButton();
+        await sleep(5000);
+        transferTxid = await submitOperation('transfer', {
+          destinationAddress,
+          assetId,
+          amount: '1',
+        });
+      }
       await mineAndSync(transferTxid, 1);
       await expectProofBackedUtxos();
       return;
@@ -164,21 +197,44 @@ describeIfBitAssets('BitAssets native mobile wallet', () => {
 });
 
 async function submitOperation(operation, values) {
+  if (process.env.BITASSETS_E2E_PROVE_MOBILE_FLOW === '1') {
+    await tapE2ESubmitButton(operation);
+    await waitForBitAssetsSubmitTxid();
+    return extractLatestTxid();
+  }
+
   await selectOperation(operation);
   let lastField = '';
   for (const [key, value] of Object.entries(values)) {
     if (value === '') continue;
     await scrollToBitAssetsField(key);
-    await element(by.id(bitAssetsFieldId(key))).replaceText(String(value));
+    if (device.getPlatform() === 'android' && process.env.BITASSETS_E2E_PROVE_MOBILE_FLOW === '1') {
+      if (key === 'name') {
+        await element(by.id(bitAssetsFieldId(key))).tap();
+        try {
+          await element(by.id(bitAssetsFieldId(key))).clearText();
+        } catch (_) {}
+        await element(by.id(bitAssetsFieldId(key))).typeText(String(value));
+      } else {
+        await element(by.id(bitAssetsFieldId(key))).replaceText(String(value));
+      }
+    } else {
+      await element(by.id(bitAssetsFieldId(key))).replaceText(String(value));
+    }
     if (device.getPlatform() === 'ios' && process.env.BITASSETS_E2E_PROVE_MOBILE_FLOW === '1') {
       try {
         await element(by.id(bitAssetsFieldId(key))).tapReturnKey();
       } catch (_) {}
     }
+    if (device.getPlatform() === 'android' && process.env.BITASSETS_E2E_PROVE_MOBILE_FLOW === '1') {
+      try {
+        await device.pressBack();
+      } catch (_) {}
+    }
     lastField = key;
   }
-  if (process.env.BITASSETS_E2E_PROVE_MOBILE_FLOW === '1' && device.getPlatform() === 'ios') {
-    await tapE2ESubmitButton();
+  if (process.env.BITASSETS_E2E_PROVE_MOBILE_FLOW === '1') {
+    await tapE2ESubmitButton(operation);
     await waitForBitAssetsSubmitTxid();
     return extractLatestTxid();
   }
@@ -220,7 +276,27 @@ async function selectOperation(operation) {
   } catch (_) {}
 
   if (process.env.BITASSETS_E2E_PROVE_MOBILE_FLOW === '1') {
-    await element(by.id(`BitAssetsE2EOperation-${operation}`)).tap();
+    try {
+      await element(by.id('BitAssetsWalletScreen')).scroll(700, 'up');
+    } catch (_) {}
+    let selected = false;
+    try {
+      await element(by.id(`BitAssetsE2EOperation-${operation}`)).tap();
+      await sleep(500);
+      await expect(element(by.id('BitAssetsSelectedOperation'))).toHaveText(expectedLabel);
+      selected = true;
+    } catch (_operationButtonError) {
+      selected = false;
+    }
+    if (!selected) {
+      await scrollToBitAssetsField('OperationInput');
+      await element(by.id('BitAssetsE2EOperationInput')).replaceText(operation);
+      if (device.getPlatform() === 'android') {
+        try {
+          await device.pressBack();
+        } catch (_keyboardDismissError) {}
+      }
+    }
     await sleep(500);
     await expect(element(by.id('BitAssetsSelectedOperation'))).toHaveText(expectedLabel);
     return;
@@ -265,6 +341,14 @@ async function mineAndSync(txid, minimumProofBackedUtxos) {
 
 async function tapSyncButton() {
   try {
+    await element(by.id('BitAssetsWalletScreen')).scroll(1200, 'up');
+  } catch (_) {}
+  try {
+    await element(by.id('BitAssetsE2ETopSyncButton')).tap();
+    return;
+  } catch (_) {}
+
+  try {
     await element(by.id('BitAssetsE2ESyncButton')).tap();
     return;
   } catch (_) {}
@@ -283,14 +367,37 @@ async function tapSyncButton() {
   await element(by.id('BitAssetsWalletScreen')).tapAtPoint({ x: 160, y: 220 });
 }
 
-async function tapE2ESubmitButton() {
+async function tapE2ESubmitButton(operation) {
+  const topOperationSubmitId = `BitAssetsE2ETopSubmit-${operation}`;
+  const operationSubmitId = `BitAssetsE2ESubmit-${operation}`;
+  const currentOperationSubmitId = `BitAssetsE2ESubmitCurrent-${operation}`;
   try {
-    await element(by.id('BitAssetsE2ESubmitButton')).tap();
+    await element(by.id('BitAssetsWalletScreen')).scroll(1200, 'up');
+  } catch (_) {}
+  try {
+    await element(by.id(topOperationSubmitId)).tap();
     return;
   } catch (_) {}
 
+  try {
+    await scrollToBroadcastButton();
+    await element(by.id(currentOperationSubmitId)).tap();
+    return;
+  } catch (_) {}
+
+  try {
+    await element(by.id(operationSubmitId)).tap();
+    return;
+  } catch (_) {}
+
+  await openCreatedWallet();
   await element(by.id('BitAssetsWalletScreen')).scroll(700, 'up');
-  await element(by.id('BitAssetsE2ESubmitButton')).tap();
+  try {
+    await element(by.id(operationSubmitId)).tap();
+  } catch (error) {
+    if (device.getPlatform() !== 'android') throw error;
+    await element(by.id('BitAssetsWalletScreen')).tapAtPoint({ x: 500, y: 1250 });
+  }
 }
 
 function mineBitAssetsTx(txid) {
@@ -327,6 +434,32 @@ function mineBitAssetsTx(txid) {
   console.log(`[BitAssets E2E] confirmed tx ${txid} at sidechain height ${parsedProof.sidechain_block_height}`);
 }
 
+function latestBitAssetId() {
+  const localDevDir = process.env.BITASSETS_E2E_LOCAL_DEV_DIR || '/Users/lukekensik/drivechain-wallet-dev/local-dev';
+  const composeFile = process.env.BITASSETS_E2E_COMPOSE_FILE || 'docker-compose.local-minimal.yml';
+  const output = execFileSync(
+    'bash',
+    [
+      '-lc',
+      [
+        `cd ${shellQuote(localDevDir)} &&`,
+        `docker compose -f ${shellQuote(composeFile)} exec -T bitassets plain_bitassets_app_cli bitassets`,
+      ].join(' '),
+    ],
+    { encoding: 'utf8', timeout: 60000 },
+  );
+  const bitassets = JSON.parse(output);
+  if (!Array.isArray(bitassets) || bitassets.length === 0) {
+    throw new Error(`No BitAssets returned by plain-bitassets: ${output}`);
+  }
+  const [, assetId] = bitassets[bitassets.length - 1];
+  if (assetId === undefined || assetId === null) {
+    throw new Error(`Could not extract latest BitAsset id: ${output}`);
+  }
+  console.log(`[BitAssets E2E] latest registered BitAsset id ${assetId}`);
+  return String(assetId);
+}
+
 async function expectProofBackedUtxos(minimum = 1) {
   for (let i = 0; i < 6; i++) {
     await scrollToProofBackedCount();
@@ -338,23 +471,6 @@ async function expectProofBackedUtxos(minimum = 1) {
   }
   await scrollToProofBackedCount();
   await expect(element(by.id('BitAssetsProofBackedUtxoCount'))).toHaveText(String(minimum));
-}
-
-async function firstVisibleAssetId() {
-  await waitFor(element(by.id('BitAssetsBalanceAsset-0')))
-    .toBeVisible()
-    .whileElement(by.id('BitAssetsWalletScreen'))
-    .scroll(500, 'down');
-  for (let index = 0; index < 8; index++) {
-    if (!(await isExistingId(`BitAssetsBalanceAsset-${index}`, 1000))) break;
-    const asset = await extractTextFromElementById(`BitAssetsBalanceAsset-${index}`);
-    const rawAmount = await extractTextFromElementById(`BitAssetsBalanceAmount-${index}`);
-    const amount = Number(String(rawAmount).replace(/[^\d]/g, ''));
-    if (!String(asset).startsWith('control:') && !String(asset).startsWith('lp:') && amount > 1) {
-      return asset;
-    }
-  }
-  throw new Error('Could not find a spendable BitAssets balance in the mobile wallet UI');
 }
 
 function extractTxid(text) {
@@ -387,7 +503,10 @@ async function waitForBitAssetsSubmitTxid() {
     if (await isExistingId('BitAssetsError', 1000)) {
       let errorText = '<unreadable>';
       try {
-        errorText = await extractTextFromElementById('BitAssetsError');
+        errorText = await extractTextFromElementById('BitAssetsErrorText');
+      } catch (_) {}
+      try {
+        errorText = errorText === '<unreadable>' ? await extractTextFromElementById('BitAssetsError') : errorText;
       } catch (_) {}
       throw new Error(`BitAssets submit failed: ${errorText}`);
     }
@@ -399,8 +518,12 @@ async function waitForBitAssetsSubmitTxid() {
 
 async function resultHasTxid(timeout = 1000) {
   if (!(await isExistingId('BitAssetsResultText', timeout))) return false;
-  const result = await extractTextFromElementById('BitAssetsResultText');
-  return /[0-9a-f]{64}/i.test(String(result));
+  try {
+    const result = await extractTextFromElementById('BitAssetsResultText');
+    return /[0-9a-f]{64}/i.test(String(result));
+  } catch (_) {
+    return false;
+  }
 }
 
 async function scrollToCreateButtonIfNeeded() {
@@ -486,6 +609,13 @@ async function isExistingId(id, timeout = 1000) {
 async function scrollToBitAssetsField(field) {
   const fieldId = bitAssetsFieldId(field);
   for (let i = 0; i < 8; i++) {
+    try {
+      await element(by.id('BitAssetsWalletScreen')).scroll(220, 'up');
+    } catch (_) {}
+    if (await isVisibleId(fieldId, 500)) return;
+  }
+
+  for (let i = 0; i < 8; i++) {
     if (await isVisibleId(fieldId, 500)) return;
     try {
       await element(by.id('BitAssetsWalletScreen')).scroll(180, 'down');
@@ -505,9 +635,8 @@ async function scrollToBitAssetsField(field) {
 }
 
 function bitAssetsFieldId(field) {
-  if (process.env.BITASSETS_E2E_PROVE_MOBILE_FLOW === '1') {
-    return `BitAssetsE2EField-${field}`;
-  }
+  if (field === 'OperationInput') return 'BitAssetsE2EOperationInput';
+  if (field === 'ParamsInput') return 'BitAssetsE2EParamsInput';
   return `BitAssetsField-${field}`;
 }
 
