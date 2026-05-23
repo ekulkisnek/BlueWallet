@@ -451,6 +451,13 @@ describe('BitAssets mobile wallet bridge', () => {
     });
   });
 
+  it('rejects malformed native constructor txids before surfacing broadcast success', async () => {
+    const client = new EmbeddedBitAssetsWalletClient();
+    mockNativeModule.reserve.mockResolvedValue('not-a-txid');
+
+    await expect(client.reserve({ name: 'ASSET', feeSats: 0 })).rejects.toThrow('expected 64-character hex txid');
+  });
+
   it('maps JSON-RPC fallback methods to the Floresta API', async () => {
     const calls: any[] = [];
     const fetchMock = jest.fn(async (_url, init: any) => {
@@ -478,14 +485,16 @@ describe('BitAssets mobile wallet bridge', () => {
                   ],
                   mempool: [],
                 }
-              : 'txid',
+              : body.method === 'bitassets_getnewaddress'
+                ? 'bitassets-jsonrpc-address'
+                : TXID_TRANSFER,
         }),
       };
     });
     global.fetch = fetchMock as any;
 
     const client = new JsonRpcBitAssetsWalletClient('http://127.0.0.1:18443');
-    await expect(client.getNewAddress()).resolves.toBe('txid');
+    await expect(client.getNewAddress()).resolves.toBe('bitassets-jsonrpc-address');
     await expect(client.listUtxos()).resolves.toEqual([
       {
         txid: 'x',
@@ -507,8 +516,8 @@ describe('BitAssets mobile wallet bridge', () => {
         amount: 5,
         feeSats: 0,
       }),
-    ).resolves.toBe('txid');
-    await expect(client.reserve({ name: 'NAME', feeSats: 0 })).resolves.toBe('txid');
+    ).resolves.toBe(TXID_TRANSFER);
+    await expect(client.reserve({ name: 'NAME', feeSats: 0 })).resolves.toBe(TXID_TRANSFER);
     await expect(
       client.dutchAuctionCollect({
         auctionId: 'a',
@@ -517,7 +526,7 @@ describe('BitAssets mobile wallet bridge', () => {
         amountBase: 1,
         amountQuote: 2,
       }),
-    ).resolves.toBe('txid');
+    ).resolves.toBe(TXID_TRANSFER);
 
     expect(calls.map(call => call.method)).toEqual([
       'bitassets_getnewaddress',
