@@ -207,6 +207,7 @@ export class BlueApp {
     if (password === this.cachedPassword) {
       this.cachedPassword = undefined;
       await this.saveToDisk();
+      await this.clearBitAssetsNativeSignerIfPresent();
       this.wallets = [];
       this.tx_metadata = {};
       this.counterparty_metadata = {};

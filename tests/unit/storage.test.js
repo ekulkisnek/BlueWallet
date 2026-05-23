@@ -62,6 +62,22 @@ it('Appstorage - createFakeStorage purges BitAssets native signer state before r
   assert.strictEqual(Storage.wallets.length, 0);
 });
 
+it('Appstorage - decryptStorage purges BitAssets native signer state before switching buckets', async () => {
+  const Storage = new BlueApp();
+  Storage.cachedPassword = 'password';
+  const wallet = new BitAssetsWallet();
+  const clearNativeSigner = jest.spyOn(wallet, 'clearNativeSigner').mockResolvedValue(undefined);
+  Storage.wallets.push(wallet);
+  jest.spyOn(Storage, 'saveToDisk').mockResolvedValue(undefined);
+  jest.spyOn(Storage, 'loadFromDisk').mockResolvedValue(true);
+
+  const decryptResult = await Storage.decryptStorage('password');
+
+  assert.ok(decryptResult);
+  expect(clearNativeSigner).toHaveBeenCalledTimes(1);
+  assert.strictEqual(Storage.wallets.length, 0);
+});
+
 it('Appstorage - loadFromDisk works with ambiguous descriptor in watch-only wallet', async () => {
   let Storage = new BlueApp();
   // Test that wpkh() descriptors are identified by script type, not path
