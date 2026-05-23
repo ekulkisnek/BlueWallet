@@ -27,7 +27,7 @@ import { BlueSpacing20, BlueSpacing40 } from '../../components/BlueSpacing';
 import { hexToUint8Array, uint8ArrayToHex } from '../../blue_modules/uint8array-extras';
 import { LightningArkWallet } from '../../class/wallets/lightning-ark-wallet.ts';
 import { resetScanWasBBQR } from '../../helpers/scan-qr.ts';
-import { BitAssetsWallet } from '../../class/wallets/bitassets-wallet';
+import { BitAssetsWallet, hasBitAssetsWallet } from '../../class/wallets/bitassets-wallet';
 import { validateBitAssetsRpcUrl } from '../../blue_modules/BitAssetsWalletForms';
 
 const DEFAULT_BITASSETS_RPC_URL = Platform.select({
@@ -128,7 +128,7 @@ const WalletsAdd: React.FC = () => {
   const selectedWalletType = state.selectedWalletType;
   const colorScheme = useColorScheme();
   //
-  const { addWallet, saveToDisk } = useStorage();
+  const { addWallet, saveToDisk, wallets } = useStorage();
   const { networkType } = useSettings();
   const { entropy: entropyHex, words } = useRoute<RouteProps>().params || {};
   const entropy = entropyHex ? hexToUint8Array(entropyHex) : undefined;
@@ -449,6 +449,11 @@ const WalletsAdd: React.FC = () => {
   };
 
   const createBitAssetsWallet = async () => {
+    if (hasBitAssetsWallet(wallets)) {
+      setIsLoading(false);
+      return presentAlert({ message: 'A BitAssets native signer wallet already exists on this device.' });
+    }
+
     const wallet = new BitAssetsWallet();
     wallet.setLabel(label || 'BitAssets');
     try {

@@ -53,7 +53,7 @@ jest.mock('../../class/wallets/legacy-wallet', () => ({
   },
 }));
 
-const { BitAssetsWallet } = require('../../class/wallets/bitassets-wallet');
+const { BitAssetsWallet, hasBitAssetsWallet } = require('../../class/wallets/bitassets-wallet');
 const {
   EmbeddedBitAssetsWalletClient,
   JsonRpcBitAssetsWalletClient,
@@ -156,6 +156,11 @@ describe('BitAssets mobile wallet bridge', () => {
 
     expect(mockNativeModule.configure).not.toHaveBeenCalled();
     expect(mockNativeModule.getNewAddress).not.toHaveBeenCalled();
+  });
+
+  it('detects existing BitAssets wallets before creating another native signer entry', () => {
+    expect(hasBitAssetsWallet([{ type: 'HDsegwitBech32' }])).toBe(false);
+    expect(hasBitAssetsWallet([{ type: 'HDsegwitBech32' }, { type: BitAssetsWallet.type }])).toBe(true);
   });
 
   it('rehydrates persisted BitAssets wallets and configures the native signer before every use', async () => {

@@ -172,3 +172,7 @@ export class BitAssetsWallet extends LegacyWallet {
     return client;
   }
 }
+
+export function hasBitAssetsWallet(wallets: Array<{ type?: string }>): boolean {
+  return wallets.some(wallet => wallet.type === BitAssetsWallet.type);
+}
