@@ -65,6 +65,7 @@ const {
   applyBitAssetsE2ETestDefaults,
   buildBitAssetsOperationParams,
   initialBitAssetsFormState,
+  isBitAssetsE2EControlsEnabled,
   normalizeBitAssetsError,
   redactSensitiveBitAssetsDetails,
   validateBitAssetsRpcUrl,
@@ -568,6 +569,13 @@ describe('BitAssets mobile wallet bridge', () => {
         { walletAddress: 'wallet-address', spendableAssetId: 'asset-a', lastRegisterTxid: 'tx-register' },
       ),
     ).toEqual({ destinationAddress: 'wallet-address', assetId: 'asset-a', amount: '1', memo: '' });
+  });
+
+  it('keeps BitAssets E2E controls behind an explicit debug test gate', () => {
+    expect(isBitAssetsE2EControlsEnabled({ BITASSETS_E2E: '1' }, true)).toBe(true);
+    expect(isBitAssetsE2EControlsEnabled({ BITASSETS_E2E: '0' }, true)).toBe(false);
+    expect(isBitAssetsE2EControlsEnabled({}, true)).toBe(false);
+    expect(isBitAssetsE2EControlsEnabled({ BITASSETS_E2E: '1' }, false)).toBe(false);
   });
 
   it('defines a production form for every native constructor and normalizes common errors', () => {

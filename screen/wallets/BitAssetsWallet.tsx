@@ -9,6 +9,7 @@ import {
   applyBitAssetsE2ETestDefaults,
   buildBitAssetsOperationParams,
   initialBitAssetsFormState,
+  isBitAssetsE2EControlsEnabled,
   normalizeBitAssetsError,
 } from '../../blue_modules/BitAssetsWalletForms';
 import { BitAssetsUtxo, BitAssetsWalletInfo, summarizeBitAssetsProofState } from '../../blue_modules/BitAssetsWallet';
@@ -21,7 +22,7 @@ import { DetailViewStackParamList } from '../../navigation/DetailViewStackParamL
 type RouteProps = RouteProp<DetailViewStackParamList, 'BitAssetsWallet'>;
 
 const SYNC_INTERVAL_MS = 30000;
-const BITASSETS_E2E_CONTROLS_ENABLED = __DEV__;
+const BITASSETS_E2E_CONTROLS_ENABLED = isBitAssetsE2EControlsEnabled({ BITASSETS_E2E: process.env.BITASSETS_E2E }, __DEV__);
 
 type BitAssetsSubmitOptions = {
   applyTestDefaults?: boolean;

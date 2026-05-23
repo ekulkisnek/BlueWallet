@@ -254,6 +254,10 @@ export function applyBitAssetsE2ETestDefaults(
   return nextValues;
 }
 
+export function isBitAssetsE2EControlsEnabled(env: { BITASSETS_E2E?: string }, isDev: boolean): boolean {
+  return isDev && env.BITASSETS_E2E === '1';
+}
+
 function isLocalBitAssetsRpcHost(hostname: string): boolean {
   const host = hostname.toLowerCase().replace(/^\[|\]$/g, '');
   if (host === 'localhost' || host === '::1') return true;
