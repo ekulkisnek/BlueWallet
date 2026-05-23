@@ -168,9 +168,7 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
 
     private func openWallet() throws -> UInt {
         if handle != 0 { return handle }
-        let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let walletDirectory = directory.appendingPathComponent("bitassets", isDirectory: true)
-        try FileManager.default.createDirectory(at: walletDirectory, withIntermediateDirectories: true)
+        let walletDirectory = try prepareWalletDirectory()
         // NOTE: removed directory file-protection set -- it could interfere with Rust FFI writes to wallet.json
         // under certain sandbox / data-protection / Catalyst conditions. wallet.json holds no seed (persist_seed=false),
         // so default protection is sufficient; seed lives only in Keychain.
@@ -195,6 +193,16 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
         }
         handle = parsed
         return parsed
+    }
+
+    private func prepareWalletDirectory() throws -> URL {
+        let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        var walletDirectory = directory.appendingPathComponent("bitassets", isDirectory: true)
+        try FileManager.default.createDirectory(at: walletDirectory, withIntermediateDirectories: true)
+        var resourceValues = URLResourceValues()
+        resourceValues.isExcludedFromBackup = true
+        try walletDirectory.setResourceValues(resourceValues)
+        return walletDirectory
     }
 
     private func getOrCreateSeedHex(walletFile: URL) throws -> String {
