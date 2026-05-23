@@ -41,6 +41,43 @@ export interface BitAssetsUtxo {
   }>;
 }
 
+export interface BitAssetsProofSummary {
+  confirmed: number;
+  proofBacked: number;
+  missingProofs: number;
+  label: string;
+}
+
+export function isProofBackedBitAssetsUtxo(utxo: BitAssetsUtxo): boolean {
+  return (
+    utxo.confirmed !== false &&
+    typeof utxo.utreexo_leaf_hash === 'string' &&
+    utxo.utreexo_leaf_hash.length > 0 &&
+    Array.isArray(utxo.proof_refs) &&
+    utxo.proof_refs.length > 0 &&
+    utxo.proof_refs.every(
+      proof =>
+        typeof proof.sidechain_block_height === 'number' &&
+        Array.isArray(proof.bmm_inclusions) &&
+        proof.bmm_inclusions.length > 0 &&
+        typeof proof.best_main_verification === 'string' &&
+        proof.best_main_verification.length > 0,
+    )
+  );
+}
+
+export function summarizeBitAssetsProofState(utxos: BitAssetsUtxo[]): BitAssetsProofSummary {
+  const confirmed = utxos.filter(utxo => utxo.confirmed !== false).length;
+  const proofBacked = utxos.filter(isProofBackedBitAssetsUtxo).length;
+  const missingProofs = Math.max(confirmed - proofBacked, 0);
+  return {
+    confirmed,
+    proofBacked,
+    missingProofs,
+    label: confirmed === 0 ? 'No confirmed UTXOs' : `${proofBacked}/${confirmed} confirmed`,
+  };
+}
+
 export interface TransferParams {
   destinationAddress: string;
   assetId: string;

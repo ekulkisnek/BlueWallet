@@ -11,7 +11,7 @@ import {
   initialBitAssetsFormState,
   normalizeBitAssetsError,
 } from '../../blue_modules/BitAssetsWalletForms';
-import { BitAssetsUtxo, BitAssetsWalletInfo } from '../../blue_modules/BitAssetsWallet';
+import { BitAssetsUtxo, BitAssetsWalletInfo, summarizeBitAssetsProofState } from '../../blue_modules/BitAssetsWallet';
 import Button from '../../components/Button';
 import { useTheme } from '../../components/themes';
 import { useStorage } from '../../hooks/context/useStorage';
@@ -127,22 +127,7 @@ const BitAssetsWallet: React.FC = () => {
   const confirmedCount =
     info?.confirmed_utxo_count ?? wallet.bitassetsInfo?.confirmed_utxo_count ?? utxos.filter(utxo => utxo.confirmed).length;
   const mempoolCount = info?.mempool_utxo_count ?? wallet.bitassetsInfo?.mempool_utxo_count ?? utxos.filter(utxo => !utxo.confirmed).length;
-  const proofBackedCount = utxos.filter(
-    utxo =>
-      utxo.confirmed !== false &&
-      typeof utxo.utreexo_leaf_hash === 'string' &&
-      utxo.utreexo_leaf_hash.length > 0 &&
-      Array.isArray(utxo.proof_refs) &&
-      utxo.proof_refs.length > 0 &&
-      utxo.proof_refs.every(
-        proof =>
-          typeof proof.sidechain_block_height === 'number' &&
-          Array.isArray(proof.bmm_inclusions) &&
-          proof.bmm_inclusions.length > 0 &&
-          typeof proof.best_main_verification === 'string' &&
-          proof.best_main_verification.length > 0,
-      ),
-  ).length;
+  const proofSummary = summarizeBitAssetsProofState(utxos);
 
   const updateField = (operationKey: BitAssetsOperation, key: string, value: string) => {
     setForms(current => {
@@ -295,7 +280,8 @@ const BitAssetsWallet: React.FC = () => {
           <StatusItem label="Tip" value={String(info?.last_tip_height ?? 'not synced')} />
           <StatusItem label="Confirmed UTXOs" value={String(confirmedCount)} />
           <StatusItem label="Mempool UTXOs" value={String(mempoolCount)} />
-          <StatusItem label="Proof-backed" value={String(proofBackedCount)} testID="BitAssetsProofBackedUtxoCount" />
+          <StatusItem label="Proof-backed" value={String(proofSummary.proofBacked)} testID="BitAssetsProofBackedUtxoCount" />
+          <StatusItem label="Proof status" value={proofSummary.label} testID="BitAssetsProofBackedUtxoStatus" />
         </View>
         {BITASSETS_E2E_CONTROLS_ENABLED && (
           <View style={styles.e2eOperationGrid} testID="BitAssetsE2ETopSubmitGrid">

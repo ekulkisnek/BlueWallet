@@ -54,7 +54,12 @@ jest.mock('../../class/wallets/legacy-wallet', () => ({
 }));
 
 const { BitAssetsWallet } = require('../../class/wallets/bitassets-wallet');
-const { EmbeddedBitAssetsWalletClient, JsonRpcBitAssetsWalletClient } = require('../../blue_modules/BitAssetsWallet');
+const {
+  EmbeddedBitAssetsWalletClient,
+  JsonRpcBitAssetsWalletClient,
+  isProofBackedBitAssetsUtxo,
+  summarizeBitAssetsProofState,
+} = require('../../blue_modules/BitAssetsWallet');
 const {
   BITASSETS_OPERATION_DEFINITIONS,
   applyBitAssetsE2ETestDefaults,
@@ -296,6 +301,26 @@ describe('BitAssets mobile wallet bridge', () => {
           Boolean(utxo.proof_refs?.[0]?.best_main_verification),
       ),
     ).toBe(true);
+  });
+
+  it('summarizes proof-backed BitAssets UTXO state for audit UI', () => {
+    const backed = {
+      confirmed: true,
+      utreexo_leaf_hash: 'leaf',
+      proof_refs: [{ sidechain_block_height: 1, bmm_inclusions: ['bmm'], best_main_verification: 'verified' }],
+    };
+    const missingProof = { confirmed: true, utreexo_leaf_hash: '', proof_refs: [] };
+    const mempool = { confirmed: false };
+
+    expect(isProofBackedBitAssetsUtxo(backed)).toBe(true);
+    expect(isProofBackedBitAssetsUtxo(missingProof)).toBe(false);
+    expect(summarizeBitAssetsProofState([backed, missingProof, mempool])).toEqual({
+      confirmed: 2,
+      proofBacked: 1,
+      missingProofs: 1,
+      label: '1/2 confirmed',
+    });
+    expect(summarizeBitAssetsProofState([mempool]).label).toBe('No confirmed UTXOs');
   });
 
   it('serializes every native constructor payload and parses txids', async () => {
