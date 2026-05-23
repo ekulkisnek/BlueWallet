@@ -149,7 +149,9 @@ export class BitAssetsWallet extends LegacyWallet {
       try {
         await client.clear();
       } catch (e) {
-        console.warn('[BitAssetsWallet] native clear failed (non-fatal)', e);
+        if (__DEV__) {
+          console.warn('[BitAssetsWallet] native clear failed (non-fatal)', e);
+        }
       }
     }
   }

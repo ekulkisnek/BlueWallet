@@ -455,7 +455,9 @@ const WalletsAdd: React.FC = () => {
       await wallet.generate(validateBitAssetsRpcUrl(bitAssetsRpcUrl));
     } catch (Err: any) {
       setIsLoading(false);
-      console.warn('bitassets create failure', Err);
+      if (__DEV__) {
+        console.warn('bitassets create failure', Err);
+      }
       return presentAlert({ message: Err.message ?? 'Could not create BitAssets wallet' });
     }
 

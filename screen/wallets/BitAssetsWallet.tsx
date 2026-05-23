@@ -212,7 +212,9 @@ const BitAssetsWallet: React.FC = () => {
         }
       }
       const params = buildBitAssetsOperationParams(submitOperation, submitForm);
-      console.debug('[BitAssetsWallet] submit begin', submitOperation);
+      if (__DEV__) {
+        console.debug('[BitAssetsWallet] submit begin', submitOperation);
+      }
       let txid: string;
       switch (submitOperation) {
         case 'transfer':
@@ -251,14 +253,22 @@ const BitAssetsWallet: React.FC = () => {
           e2eLastRegisterTxid.current = txid;
         }
       }
-      console.debug('[BitAssetsWallet] submit ok', submitOperation, txid);
+      if (__DEV__) {
+        console.debug('[BitAssetsWallet] submit ok', submitOperation, txid);
+      }
       setResult(JSON.stringify({ operation: submitOperation, txid }, null, 2));
       setIsLoading(false);
       // Broadcast success should be visible immediately. The refresh can be slow
       // while local signet mines, so keep it off the submit critical path.
-      sync(true).catch(error => console.warn('[BitAssetsWallet] post-broadcast sync failed', error));
+      sync(true).catch(error => {
+        if (__DEV__) {
+          console.warn('[BitAssetsWallet] post-broadcast sync failed', error);
+        }
+      });
     } catch (error: any) {
-      console.debug('[BitAssetsWallet] submit error', operationOverride ?? operationRef.current, error);
+      if (__DEV__) {
+        console.debug('[BitAssetsWallet] submit error', operationOverride ?? operationRef.current, error);
+      }
       const normalizedError = normalizeBitAssetsError(error);
       setErrorMessage(normalizedError);
     } finally {
