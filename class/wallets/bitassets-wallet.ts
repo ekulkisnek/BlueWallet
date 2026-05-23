@@ -71,7 +71,11 @@ export class BitAssetsWallet extends LegacyWallet {
   }
 
   weOwnAddress(address: string): boolean {
-    return this._address === address;
+    if (typeof address !== 'string') return false;
+    const normalizedAddress = address.trim();
+    if (normalizedAddress.length === 0) return false;
+    if (this._address === normalizedAddress) return true;
+    return this.bitassetsUtxos.some(utxo => utxo.address === normalizedAddress);
   }
 
   weOwnTransaction(): boolean {

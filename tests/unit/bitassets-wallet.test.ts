@@ -97,6 +97,7 @@ describe('BitAssets mobile wallet bridge', () => {
           {
             txid: 'a',
             vout: 0,
+            address: 'bitassets-change-address',
             asset_id: 'asset_a',
             amount: 25,
             confirmed: true,
@@ -115,6 +116,7 @@ describe('BitAssets mobile wallet bridge', () => {
           {
             txid: 'b',
             vout: 1,
+            address: 'bitassets-mempool-address',
             asset_id: 'asset_b',
             amount: 3,
             confirmed: false,
@@ -182,6 +184,10 @@ describe('BitAssets mobile wallet bridge', () => {
     expect(info.balances.asset_a).toBe(25);
     expect(wallet.getBalance()).toBe(25);
     expect(wallet.bitassetsUtxos.map((utxo: { txid?: string }) => utxo.txid)).toEqual(['a', 'b']);
+    expect(wallet.weOwnAddress('bitassets-change-address')).toBe(true);
+    expect(wallet.weOwnAddress('bitassets-mempool-address')).toBe(true);
+    expect(wallet.weOwnAddress('bitassets-foreign-address')).toBe(false);
+    expect(wallet.weOwnAddress(false as any)).toBe(false);
   });
 
   it('persists proof-backed BitAssets UTXOs across wallet JSON round trips', async () => {
