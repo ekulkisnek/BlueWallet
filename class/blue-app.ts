@@ -207,7 +207,7 @@ export class BlueApp {
     if (password === this.cachedPassword) {
       this.cachedPassword = undefined;
       await this.saveToDisk();
-      await this.clearBitAssetsNativeSignerIfPresent();
+      await this.clearBitAssetsNativeSignerState(this.wallets);
       this.wallets = [];
       this.tx_metadata = {};
       this.counterparty_metadata = {};
@@ -237,7 +237,7 @@ export class BlueApp {
    * Encrypts the bucket and saves it storage
    */
   createFakeStorage = async (fakePassword: string): Promise<boolean> => {
-    await this.clearBitAssetsNativeSignerIfPresent();
+    await this.clearBitAssetsNativeSignerState(this.wallets);
     usedBucketNum = false; // resetting currently used bucket so we wont overwrite it
     this.wallets = [];
     this.tx_metadata = {};
@@ -258,11 +258,11 @@ export class BlueApp {
     return (await this.getItem('data')) === bucketsString;
   };
 
-  private clearBitAssetsNativeSignerIfPresent = async (): Promise<void> => {
-    const bitAssetsWallet = this.wallets.find(wallet => wallet instanceof BitAssetsWallet) as BitAssetsWallet | undefined;
-    if (bitAssetsWallet) {
-      await bitAssetsWallet.clearNativeSigner();
-    }
+  private clearBitAssetsNativeSignerState = async (wallets: TWallet[], clearOrphanState = false): Promise<void> => {
+    const bitAssetsWallet = wallets.find(wallet => wallet instanceof BitAssetsWallet) as BitAssetsWallet | undefined;
+    if (!bitAssetsWallet && !clearOrphanState) return;
+    const walletWithSigner = bitAssetsWallet ?? new BitAssetsWallet();
+    await walletWithSigner.clearNativeSigner();
   };
 
   hashIt = (s: string): string => {
@@ -512,6 +512,9 @@ export class BlueApp {
         }
       }
       if (realm) realm.close();
+      if (!this.wallets.some(wallet => wallet instanceof BitAssetsWallet)) {
+        await this.clearBitAssetsNativeSignerState([], true);
+      }
       return true;
     } else {
       return false; // failed loading data or loading/decryptin data
