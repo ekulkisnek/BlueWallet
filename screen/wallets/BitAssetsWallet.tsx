@@ -6,6 +6,7 @@ import { BlueCard, BlueFormLabel, BlueText } from '../../BlueComponents';
 import {
   BITASSETS_OPERATION_DEFINITIONS,
   BitAssetsOperation,
+  applyBitAssetsE2ETestDefaults,
   buildBitAssetsOperationParams,
   initialBitAssetsFormState,
   normalizeBitAssetsError,
@@ -20,6 +21,11 @@ import { DetailViewStackParamList } from '../../navigation/DetailViewStackParamL
 type RouteProps = RouteProp<DetailViewStackParamList, 'BitAssetsWallet'>;
 
 const SYNC_INTERVAL_MS = 30000;
+const BITASSETS_E2E_CONTROLS_ENABLED = __DEV__;
+
+type BitAssetsSubmitOptions = {
+  applyTestDefaults?: boolean;
+};
 
 const BitAssetsWallet: React.FC = () => {
   const { colors } = useTheme();
@@ -180,7 +186,7 @@ const BitAssetsWallet: React.FC = () => {
     });
   };
 
-  const submit = async (operationOverride?: BitAssetsOperation) => {
+  const submit = async (operationOverride?: BitAssetsOperation, options: BitAssetsSubmitOptions = {}) => {
     if (submitInFlight.current) {
       setErrorMessage('BitAssets transaction is already in progress.');
       return;
@@ -192,24 +198,17 @@ const BitAssetsWallet: React.FC = () => {
     Keyboard.dismiss();
     try {
       const submitOperation = operationOverride ?? operationRef.current;
-      const submitForm = { ...formsRef.current[submitOperation] };
-      if (__DEV__) {
-        if (submitOperation === 'reserve' && !submitForm.name) {
-          submitForm.name = `e2e-${Date.now()}`;
-        }
-        if (submitOperation === 'register') {
-          submitForm.name = submitForm.name || e2eLastReserveName.current;
-          submitForm.initialSupply = submitForm.initialSupply || '25';
-          submitForm.bitassetData = submitForm.bitassetData || '{}';
-        }
-        if (submitOperation === 'transfer') {
-          const spendableAssetId = Object.entries(wallet.bitassetsInfo?.balances ?? {}).find(
-            ([assetId, amount]) => !assetId.startsWith('control:') && !assetId.startsWith('lp:') && Number(amount) > 0,
-          )?.[0];
-          submitForm.destinationAddress = submitForm.destinationAddress || wallet.getAddress() || '';
-          submitForm.assetId = submitForm.assetId || spendableAssetId || e2eLastRegisterTxid.current;
-          submitForm.amount = submitForm.amount || '1';
-        }
+      let submitForm = { ...formsRef.current[submitOperation] };
+      if (BITASSETS_E2E_CONTROLS_ENABLED && options.applyTestDefaults === true) {
+        const spendableAssetId = Object.entries(wallet.bitassetsInfo?.balances ?? {}).find(
+          ([assetId, amount]) => !assetId.startsWith('control:') && !assetId.startsWith('lp:') && Number(amount) > 0,
+        )?.[0];
+        submitForm = applyBitAssetsE2ETestDefaults(submitOperation, submitForm, {
+          walletAddress: wallet.getAddress() || '',
+          spendableAssetId,
+          lastReserveName: e2eLastReserveName.current,
+          lastRegisterTxid: e2eLastRegisterTxid.current,
+        });
       }
       const params = buildBitAssetsOperationParams(submitOperation, submitForm);
       if (__DEV__) {
@@ -298,7 +297,7 @@ const BitAssetsWallet: React.FC = () => {
           <StatusItem label="Mempool UTXOs" value={String(mempoolCount)} />
           <StatusItem label="Proof-backed" value={String(proofBackedCount)} testID="BitAssetsProofBackedUtxoCount" />
         </View>
-        {__DEV__ && (
+        {BITASSETS_E2E_CONTROLS_ENABLED && (
           <View style={styles.e2eOperationGrid} testID="BitAssetsE2ETopSubmitGrid">
             <Pressable
               testID="BitAssetsE2ETopSyncButton"
@@ -316,7 +315,7 @@ const BitAssetsWallet: React.FC = () => {
                 accessibilityRole="button"
                 accessibilityLabel={`E2E top submit ${item.label}`}
                 style={styles.e2eOperationPill}
-                onPress={() => submit(item.key)}
+                onPress={() => submit(item.key, { applyTestDefaults: true })}
               >
                 <BlueText>{`Submit ${item.label}`}</BlueText>
               </Pressable>
@@ -327,7 +326,7 @@ const BitAssetsWallet: React.FC = () => {
 
       <View style={styles.buttons}>
         <Button testID="BitAssetsSyncButton" title={isLoading ? 'Working...' : 'Sync'} onPress={() => sync(false)} disabled={isLoading} />
-        {__DEV__ ? (
+        {BITASSETS_E2E_CONTROLS_ENABLED ? (
           <View style={styles.e2eButtons}>
             <Button
               testID="BitAssetsE2ESyncButton"
@@ -340,14 +339,14 @@ const BitAssetsWallet: React.FC = () => {
               testID="BitAssetsE2ESubmitButton"
               accessibilityLabel="Submit BitAssets operation"
               title="Submit operation"
-              onPress={() => submit()}
+              onPress={() => submit(undefined, { applyTestDefaults: true })}
               disabled={false}
             />
           </View>
         ) : null}
       </View>
 
-      {__DEV__ ? (
+      {BITASSETS_E2E_CONTROLS_ENABLED ? (
         <>
           <View style={styles.e2eOperationGrid} testID="BitAssetsE2EOperationGrid">
             {BITASSETS_OPERATION_DEFINITIONS.map(item => (
@@ -382,7 +381,7 @@ const BitAssetsWallet: React.FC = () => {
                 accessibilityRole="button"
                 accessibilityLabel={`E2E submit ${item.label}`}
                 style={styles.e2eOperationPill}
-                onPress={() => submit(item.key)}
+                onPress={() => submit(item.key, { applyTestDefaults: true })}
               >
                 <BlueText>{`Submit ${item.label}`}</BlueText>
               </Pressable>
@@ -524,13 +523,13 @@ const BitAssetsWallet: React.FC = () => {
             onPress={() => submit()}
             disabled={isLoading}
           />
-          {__DEV__ && (
+          {BITASSETS_E2E_CONTROLS_ENABLED && (
             <Pressable
               testID={`BitAssetsE2ESubmitCurrent-${operation}`}
               accessibilityRole="button"
               accessibilityLabel={`E2E submit current ${definition.label}`}
               style={styles.e2eOperationPill}
-              onPress={() => submit(operation)}
+              onPress={() => submit(operation, { applyTestDefaults: true })}
             >
               <BlueText>{`Submit current ${definition.label}`}</BlueText>
             </Pressable>

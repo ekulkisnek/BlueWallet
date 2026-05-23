@@ -57,6 +57,7 @@ const { BitAssetsWallet } = require('../../class/wallets/bitassets-wallet');
 const { EmbeddedBitAssetsWalletClient, JsonRpcBitAssetsWalletClient } = require('../../blue_modules/BitAssetsWallet');
 const {
   BITASSETS_OPERATION_DEFINITIONS,
+  applyBitAssetsE2ETestDefaults,
   buildBitAssetsOperationParams,
   initialBitAssetsFormState,
   normalizeBitAssetsError,
@@ -516,6 +517,25 @@ describe('BitAssets mobile wallet bridge', () => {
     expect(() => buildBitAssetsOperationParams('register', { name: 'BAD', initialSupply: '1', bitassetData: '{' })).toThrow(
       'Asset metadata JSON must be valid JSON',
     );
+  });
+
+  it('keeps BitAssets test defaults explicit and outside production form parsing', () => {
+    expect(() => buildBitAssetsOperationParams('transfer', initialBitAssetsFormState().transfer)).toThrow(
+      'Destination address is required',
+    );
+    expect(() => buildBitAssetsOperationParams('register', initialBitAssetsFormState().register)).toThrow('Reserved name is required');
+
+    expect(applyBitAssetsE2ETestDefaults('reserve', { name: '' }, { now: 123 })).toEqual({ name: 'e2e-123' });
+    expect(
+      applyBitAssetsE2ETestDefaults('register', { name: '', initialSupply: '', bitassetData: '' }, { lastReserveName: 'RESERVED' }),
+    ).toEqual({ name: 'RESERVED', initialSupply: '25', bitassetData: '{}' });
+    expect(
+      applyBitAssetsE2ETestDefaults(
+        'transfer',
+        { destinationAddress: '', assetId: '', amount: '', memo: '' },
+        { walletAddress: 'wallet-address', spendableAssetId: 'asset-a', lastRegisterTxid: 'tx-register' },
+      ),
+    ).toEqual({ destinationAddress: 'wallet-address', assetId: 'asset-a', amount: '1', memo: '' });
   });
 
   it('defines a production form for every native constructor and normalizes common errors', () => {

@@ -222,6 +222,38 @@ export function buildBitAssetsOperationParams(operation: BitAssetsOperation, val
   return params as unknown as BitAssetsOperationParams;
 }
 
+export type BitAssetsE2ETestDefaults = {
+  walletAddress?: string;
+  spendableAssetId?: string;
+  lastReserveName?: string;
+  lastRegisterTxid?: string;
+  now?: number;
+};
+
+export function applyBitAssetsE2ETestDefaults(
+  operation: BitAssetsOperation,
+  values: Record<string, string>,
+  defaults: BitAssetsE2ETestDefaults,
+): Record<string, string> {
+  const nextValues = { ...values };
+
+  if (operation === 'reserve' && !nextValues.name) {
+    nextValues.name = `e2e-${defaults.now ?? Date.now()}`;
+  }
+  if (operation === 'register') {
+    nextValues.name = nextValues.name || defaults.lastReserveName || '';
+    nextValues.initialSupply = nextValues.initialSupply || '25';
+    nextValues.bitassetData = nextValues.bitassetData || '{}';
+  }
+  if (operation === 'transfer') {
+    nextValues.destinationAddress = nextValues.destinationAddress || defaults.walletAddress || '';
+    nextValues.assetId = nextValues.assetId || defaults.spendableAssetId || defaults.lastRegisterTxid || '';
+    nextValues.amount = nextValues.amount || '1';
+  }
+
+  return nextValues;
+}
+
 function isLocalBitAssetsRpcHost(hostname: string): boolean {
   const host = hostname.toLowerCase().replace(/^\[|\]$/g, '');
   if (host === 'localhost' || host === '::1') return true;
