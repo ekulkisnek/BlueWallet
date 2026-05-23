@@ -236,6 +236,7 @@ export class BlueApp {
    * Encrypts the bucket and saves it storage
    */
   createFakeStorage = async (fakePassword: string): Promise<boolean> => {
+    await this.clearBitAssetsNativeSignerIfPresent();
     usedBucketNum = false; // resetting currently used bucket so we wont overwrite it
     this.wallets = [];
     this.tx_metadata = {};
@@ -254,6 +255,13 @@ export class BlueApp {
     const bucketsString = JSON.stringify(buckets);
     await this.setItem('data', bucketsString);
     return (await this.getItem('data')) === bucketsString;
+  };
+
+  private clearBitAssetsNativeSignerIfPresent = async (): Promise<void> => {
+    const bitAssetsWallet = this.wallets.find(wallet => wallet instanceof BitAssetsWallet) as BitAssetsWallet | undefined;
+    if (bitAssetsWallet) {
+      await bitAssetsWallet.clearNativeSigner();
+    }
   };
 
   hashIt = (s: string): string => {

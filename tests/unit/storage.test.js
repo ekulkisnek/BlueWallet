@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import assert from 'assert';
 
-import { BlueApp, HDSegwitBech32Wallet, SegwitP2SHWallet, WatchOnlyWallet } from '../../class';
+import { BitAssetsWallet, BlueApp, HDSegwitBech32Wallet, SegwitP2SHWallet, WatchOnlyWallet } from '../../class';
 
 jest.mock('../../blue_modules/BlueElectrum', () => {
   return {
@@ -46,6 +46,20 @@ it('Appstorage - loadFromDisk works', async () => {
   const Storage3 = new BlueApp();
   isEncrypted = await Storage3.storageIsEncrypted();
   assert.ok(isEncrypted);
+});
+
+it('Appstorage - createFakeStorage purges BitAssets native signer state before reset', async () => {
+  await AsyncStorage.setItem('data', JSON.stringify([]));
+  const Storage = new BlueApp();
+  const wallet = new BitAssetsWallet();
+  const clearNativeSigner = jest.spyOn(wallet, 'clearNativeSigner').mockResolvedValue(undefined);
+  Storage.wallets.push(wallet);
+
+  const createFakeStorageResult = await Storage.createFakeStorage('fakePassword');
+
+  assert.ok(createFakeStorageResult);
+  expect(clearNativeSigner).toHaveBeenCalledTimes(1);
+  assert.strictEqual(Storage.wallets.length, 0);
 });
 
 it('Appstorage - loadFromDisk works with ambiguous descriptor in watch-only wallet', async () => {
