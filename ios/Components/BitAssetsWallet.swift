@@ -73,7 +73,8 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
             let responseData = try JSONSerialization.data(withJSONObject: ["configured": true, "rpcUrl": rpcUrl])
             resolve(String(data: responseData, encoding: .utf8) ?? "{\"configured\":true}")
         } catch {
-            reject("BITASSETS_WALLET_CONFIG_ERROR", error.localizedDescription, error)
+            let sanitized = sanitizedError(error)
+            reject("BITASSETS_WALLET_CONFIG_ERROR", sanitized.localizedDescription, sanitized)
         }
     }
 
@@ -339,8 +340,33 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
 
     private func debugLog(_ message: String) {
         #if DEBUG
-        NSLog("[BitAssetsWallet] %@", message)
+        NSLog("[BitAssetsWallet] %@", sanitizeSensitiveDetails(message))
         #endif
+    }
+
+    private func sanitizeSensitiveDetails(_ message: String) -> String {
+        var sanitized = message
+        let keyedSeedPatterns = [
+            #"(?i)(seed_hex["'\s:=]+)[0-9a-f]{128}"#,
+            #"(?i)(seedHex["'\s:=]+)[0-9a-f]{128}"#,
+        ]
+        for pattern in keyedSeedPatterns {
+            sanitized = sanitized.replacingOccurrences(
+                of: pattern,
+                with: "$1[redacted]",
+                options: .regularExpression
+            )
+        }
+        return sanitized.replacingOccurrences(
+            of: #"\b[0-9a-fA-F]{128}\b"#,
+            with: "[redacted-seed]",
+            options: .regularExpression
+        )
+    }
+
+    private func sanitizedError(_ error: Error) -> NSError {
+        let message = sanitizeSensitiveDetails(error.localizedDescription)
+        return NSError(domain: "BitAssetsWallet", code: (error as NSError).code, userInfo: [NSLocalizedDescriptionKey: message])
     }
 
     private func callJson(
@@ -371,8 +397,9 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
                 self.debugLog("\(operation) ok")
                 resolve(value)
             } catch {
-                self.debugLog("\(operation) error: \(error.localizedDescription)")
-                reject("BITASSETS_WALLET_ERROR", error.localizedDescription, error)
+                let sanitized = self.sanitizedError(error)
+                self.debugLog("\(operation) error: \(sanitized.localizedDescription)")
+                reject("BITASSETS_WALLET_ERROR", sanitized.localizedDescription, sanitized)
             }
         }
     }
@@ -381,7 +408,7 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
         let value = result.value.map { String(cString: $0) } ?? ""
         floresta_bitassets_string_free(result.value)
         if result.ok { return value }
-        throw NSError(domain: "BitAssetsWallet", code: 1, userInfo: [NSLocalizedDescriptionKey: value])
+        throw NSError(domain: "BitAssetsWallet", code: 1, userInfo: [NSLocalizedDescriptionKey: sanitizeSensitiveDetails(value)])
     }
 
     deinit {

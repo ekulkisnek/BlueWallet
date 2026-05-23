@@ -53,7 +53,7 @@ class BitAssetsWalletModule(private val reactContext: ReactApplicationContext) :
                 promise.resolve(JSONObject().put("configured", true).put("rpcUrl", rpcUrl).toString())
             }
         } catch (error: Throwable) {
-            promise.reject("BITASSETS_WALLET_CONFIG_ERROR", error.message, error)
+            rejectSanitized(promise, "BITASSETS_WALLET_CONFIG_ERROR", error)
         }
     }
 
@@ -265,15 +265,27 @@ class BitAssetsWalletModule(private val reactContext: ReactApplicationContext) :
         try {
             promise.resolve(synchronized(walletLock) { unwrap(call()) })
         } catch (error: Throwable) {
-            promise.reject("BITASSETS_WALLET_ERROR", error.message, error)
+            rejectSanitized(promise, "BITASSETS_WALLET_ERROR", error)
         }
+    }
+
+    private fun rejectSanitized(promise: Promise, code: String, error: Throwable) {
+        val message = sanitizeSensitiveDetails(error.message ?: error.toString())
+        promise.reject(code, message, IllegalStateException(message))
+    }
+
+    private fun sanitizeSensitiveDetails(message: String): String {
+        return message
+            .replace(Regex("""(?i)(seed_hex["'\s:=]+)[0-9a-f]{128}"""), "\$1[redacted]")
+            .replace(Regex("""(?i)(seedHex["'\s:=]+)[0-9a-f]{128}"""), "\$1[redacted]")
+            .replace(Regex("""\b[0-9a-fA-F]{128}\b"""), "[redacted-seed]")
     }
 
     private fun unwrap(resultJson: String): String {
         val envelope = JSONObject(resultJson)
         val value = envelope.optString("value")
         if (!envelope.optBoolean("ok")) {
-            throw IllegalStateException(value.ifBlank { "BitAssets wallet call failed" })
+            throw IllegalStateException(sanitizeSensitiveDetails(value.ifBlank { "BitAssets wallet call failed" }))
         }
         return value
     }
