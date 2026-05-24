@@ -345,8 +345,9 @@ describe('BitAssets mobile wallet bridge', () => {
       confirmed: 2,
       proofBacked: 1,
       missingProofs: 1,
-      label: '1/2 confirmed',
+      label: '1/2 proof-backed; sync incomplete',
     });
+    expect(summarizeBitAssetsProofState([backed]).label).toBe('1/1 proof-backed');
     expect(summarizeBitAssetsProofState([mempool]).label).toBe('No confirmed UTXOs');
   });
 
@@ -641,6 +642,12 @@ describe('BitAssets mobile wallet bridge', () => {
     );
     expect(normalizeBitAssetsError(new Error('Network request failed'))).toBe(
       'Could not reach the BitAssets RPC endpoint. Check the RPC URL and local signet stack.',
+    );
+    expect(normalizeBitAssetsError(new Error('native wallet rejected unproven Utreexo proof input'))).toBe(
+      'BitAssets state is not proof-backed yet. Sync the wallet and wait for confirmed proof data before spending.',
+    );
+    expect(normalizeBitAssetsError(new Error('from_block_hash is no longer active; resync from snapshot'))).toBe(
+      'BitAssets wallet state is stale or only partially synced. Sync again before creating a transaction.',
     );
   });
 

@@ -317,5 +317,11 @@ export function normalizeBitAssetsError(error: unknown): string {
   if (/not enough funds/i.test(message)) {
     return 'Not enough BitAssets wallet funds for this operation.';
   }
+  if (/stale|resync from snapshot|tip height regressed|tip hash changed|partially synced|partial sync/i.test(message)) {
+    return 'BitAssets wallet state is stale or only partially synced. Sync again before creating a transaction.';
+  }
+  if (/utreexo|proof|unproven/i.test(message)) {
+    return 'BitAssets state is not proof-backed yet. Sync the wallet and wait for confirmed proof data before spending.';
+  }
   return message;
 }

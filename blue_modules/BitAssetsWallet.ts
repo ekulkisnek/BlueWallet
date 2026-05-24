@@ -74,7 +74,12 @@ export function summarizeBitAssetsProofState(utxos: BitAssetsUtxo[]): BitAssetsP
     confirmed,
     proofBacked,
     missingProofs,
-    label: confirmed === 0 ? 'No confirmed UTXOs' : `${proofBacked}/${confirmed} confirmed`,
+    label:
+      confirmed === 0
+        ? 'No confirmed UTXOs'
+        : missingProofs > 0
+          ? `${proofBacked}/${confirmed} proof-backed; sync incomplete`
+          : `${proofBacked}/${confirmed} proof-backed`,
   };
 }
 
