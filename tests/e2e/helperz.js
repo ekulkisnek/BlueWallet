@@ -194,9 +194,24 @@ export async function tapAndTapAgainIfElementIsNotVisible(idToTap, idToCheckVisi
   try {
     await waitFor(element(by.id(idToCheckVisible)))
       .toBeVisible()
-      .withTimeout(3_000);
+      .withTimeout(8_000);
     return; // did not throw? its visible, return
   } catch (_) {}
+
+  try {
+    await waitFor(element(by.id(idToTap)))
+      .toBeVisible()
+      .withTimeout(1_000);
+  } catch (_) {
+    try {
+      await waitFor(element(by.id(idToCheckVisible)))
+        .toBeVisible()
+        .withTimeout(8_000);
+      return;
+    } catch (err) {
+      rethrowWithCallsite(err, callsite);
+    }
+  }
 
   // did not return so its not visible, lets tap again
   await element(by.id(idToTap)).tap();
@@ -205,7 +220,7 @@ export async function tapAndTapAgainIfElementIsNotVisible(idToTap, idToCheckVisi
   try {
     await waitFor(element(by.id(idToCheckVisible)))
       .toBeVisible()
-      .withTimeout(3_000);
+      .withTimeout(8_000);
   } catch (err) {
     rethrowWithCallsite(err, callsite);
   }

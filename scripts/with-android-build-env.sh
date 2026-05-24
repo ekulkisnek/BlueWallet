@@ -32,8 +32,8 @@ export PATH="$JAVA_HOME/bin:$PATH"
 if [[ -z "${ANDROID_HOME:-}" || ! -d "$ANDROID_HOME/platforms" ]]; then
   for candidate in \
     "$HOME/Library/Android/sdk" \
-    /Volumes/T705/code/android-commandlinetools \
     /Volumes/T705/code/android-sdk \
+    /Volumes/T705/code/android-commandlinetools \
     /opt/homebrew/share/android-commandlinetools
   do
     if [[ -d "$candidate/platforms" && -d "$candidate/platform-tools" ]]; then
@@ -48,6 +48,6 @@ if [[ -z "${ANDROID_HOME:-}" || ! -d "$ANDROID_HOME/platforms" ]]; then
   exit 1
 fi
 export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
-export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
 
 exec "$@"
