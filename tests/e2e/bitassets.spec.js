@@ -464,13 +464,16 @@ async function expectProofBackedUtxos(minimum = 1) {
   for (let i = 0; i < 6; i++) {
     await scrollToProofBackedCount();
     const rawCount = await extractTextFromElementById('BitAssetsProofBackedUtxoCount');
-    const count = Number(String(rawCount).replace(/[^\d]/g, ''));
-    if (Number.isFinite(count) && count >= minimum) return;
+    const count = parseStrictInteger(rawCount);
+    const rawStatus = await extractTextFromElementById('BitAssetsProofBackedUtxoStatus');
+    const status = parseProofStatus(rawStatus);
+    if (count >= minimum && status.proofBacked >= minimum && status.proofBacked === status.confirmed) return;
     await tapSyncButton();
     await sleep(3000);
   }
   await scrollToProofBackedCount();
   await expect(element(by.id('BitAssetsProofBackedUtxoCount'))).toHaveText(String(minimum));
+  await expect(element(by.id('BitAssetsProofBackedUtxoStatus'))).toHaveText(`${minimum}/${minimum} confirmed`);
 }
 
 function extractTxid(text) {
@@ -481,6 +484,22 @@ function extractTxid(text) {
 
 function shellQuote(value) {
   return `'${String(value).replace(/'/g, "'\\''")}'`;
+}
+
+function parseStrictInteger(value) {
+  const text = String(value).trim();
+  if (!/^\d+$/.test(text)) throw new Error(`Expected integer text, got: ${text}`);
+  return Number(text);
+}
+
+function parseProofStatus(value) {
+  const text = String(value).trim();
+  const match = text.match(/^(\d+)\/(\d+) confirmed$/);
+  if (!match) throw new Error(`Expected proof status "backed/confirmed confirmed", got: ${text}`);
+  return {
+    proofBacked: Number(match[1]),
+    confirmed: Number(match[2]),
+  };
 }
 
 async function scrollToProofBackedCount() {

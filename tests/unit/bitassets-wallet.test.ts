@@ -458,6 +458,17 @@ describe('BitAssets mobile wallet bridge', () => {
     await expect(client.reserve({ name: 'ASSET', feeSats: 0 })).rejects.toThrow('expected 64-character hex txid');
   });
 
+  it('rejects malformed JSON-RPC constructor txids before surfacing broadcast success', async () => {
+    global.fetch = jest.fn(async () => ({
+      ok: true,
+      json: async () => ({ result: { txid: 'not-a-txid' } }),
+    })) as any;
+
+    const client = new JsonRpcBitAssetsWalletClient('http://127.0.0.1:18443');
+
+    await expect(client.reserve({ name: 'ASSET', feeSats: 0 })).rejects.toThrow('expected 64-character hex txid');
+  });
+
   it('maps JSON-RPC fallback methods to the Floresta API', async () => {
     const calls: any[] = [];
     const fetchMock = jest.fn(async (_url, init: any) => {

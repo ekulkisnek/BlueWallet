@@ -306,16 +306,16 @@ export class JsonRpcBitAssetsWalletClient implements BitAssetsWalletClient {
       params.amount,
       params.feeSats ?? 0,
       params.memo ?? null,
-    ]).then(result => requireString(result));
+    ]).then(result => parseTxid(result));
   }
 
   reserve(params: ReserveParams): Promise<Txid> {
-    return this.rpc('bitassets_reserve', [params.name, params.feeSats ?? 0]).then(result => requireString(result));
+    return this.rpc('bitassets_reserve', [params.name, params.feeSats ?? 0]).then(result => parseTxid(result));
   }
 
   register(params: RegisterParams): Promise<Txid> {
     return this.rpc('bitassets_register', [params.name, params.initialSupply, params.bitassetData, params.feeSats ?? 0]).then(result =>
-      requireString(result),
+      parseTxid(result),
     );
   }
 
@@ -327,7 +327,7 @@ export class JsonRpcBitAssetsWalletClient implements BitAssetsWalletClient {
       params.amount1,
       params.lpTokenMint,
       params.feeSats ?? 0,
-    ]).then(result => requireString(result));
+    ]).then(result => parseTxid(result));
   }
 
   ammSwap(params: AmmSwapParams): Promise<Txid> {
@@ -337,7 +337,7 @@ export class JsonRpcBitAssetsWalletClient implements BitAssetsWalletClient {
       params.amountSpend,
       params.amountReceive,
       params.feeSats ?? 0,
-    ]).then(result => requireString(result));
+    ]).then(result => parseTxid(result));
   }
 
   ammBurn(params: AmmBurnParams): Promise<Txid> {
@@ -348,11 +348,11 @@ export class JsonRpcBitAssetsWalletClient implements BitAssetsWalletClient {
       params.amount1,
       params.lpTokenBurn,
       params.feeSats ?? 0,
-    ]).then(result => requireString(result));
+    ]).then(result => parseTxid(result));
   }
 
   dutchAuctionCreate(params: DutchAuctionCreateParams): Promise<Txid> {
-    return this.rpc('bitassets_dutch_auction_create', [params, params.feeSats ?? 0]).then(result => requireString(result));
+    return this.rpc('bitassets_dutch_auction_create', [params, params.feeSats ?? 0]).then(result => parseTxid(result));
   }
 
   dutchAuctionBid(params: DutchAuctionBidParams): Promise<Txid> {
@@ -363,7 +363,7 @@ export class JsonRpcBitAssetsWalletClient implements BitAssetsWalletClient {
       params.bidSize,
       params.receiveQuantity,
       params.feeSats ?? 0,
-    ]).then(result => requireString(result));
+    ]).then(result => parseTxid(result));
   }
 
   dutchAuctionCollect(params: DutchAuctionCollectParams): Promise<Txid> {
@@ -374,7 +374,7 @@ export class JsonRpcBitAssetsWalletClient implements BitAssetsWalletClient {
       params.amountBase,
       params.amountQuote,
       params.feeSats ?? 0,
-    ]).then(result => requireString(result));
+    ]).then(result => parseTxid(result));
   }
 
   private async rpc(method: string, params: unknown[] = []): Promise<unknown> {
@@ -417,13 +417,18 @@ function parseJson<T>(value: string): T {
   return JSON.parse(value) as T;
 }
 
-function parseTxid(value: string): Txid {
+function parseTxid(value: unknown): Txid {
   let txid: string;
-  try {
-    const parsed = JSON.parse(value);
-    txid = requireString(typeof parsed === 'string' ? parsed : parsed.txid);
-  } catch {
-    txid = requireString(value);
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      txid = requireString(typeof parsed === 'string' ? parsed : parsed.txid);
+    } catch {
+      txid = requireString(value);
+    }
+  } else {
+    const record = value as { txid?: unknown };
+    txid = requireString(record?.txid ?? value);
   }
   if (!/^[0-9a-f]{64}$/i.test(txid)) {
     throw new Error('expected 64-character hex txid');
