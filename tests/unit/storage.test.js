@@ -103,6 +103,40 @@ it('Appstorage - loadFromDisk purges stale BitAssets native signer state when st
   clearNativeSigner.mockRestore();
 });
 
+it('Appstorage - saveToDisk does not persist BitAssets UTXO cache outside native Floresta state', async () => {
+  const Storage = new BlueApp();
+  const wallet = new BitAssetsWallet();
+  wallet.secret = 'bitassets://persisted-address';
+  wallet.bitassetsRpcUrl = 'http://127.0.0.1:6004';
+  wallet.bitassetsInfo = {
+    enabled: true,
+    address_count: 1,
+    confirmed_utxo_count: 1,
+    mempool_utxo_count: 0,
+    balances: { asset_a: 1 },
+  };
+  wallet.bitassetsUtxos = [
+    {
+      txid: 'a'.repeat(64),
+      vout: 0,
+      address: 'persisted-address',
+      asset_id: 'asset_a',
+      amount: 1,
+      confirmed: true,
+      utreexo_leaf_hash: 'leaf-a',
+      proof_refs: [{ sidechain_block_height: 1, bmm_inclusions: ['bmm-a'], best_main_verification: 'verified' }],
+    },
+  ];
+  Storage.wallets.push(wallet);
+
+  await Storage.saveToDisk();
+
+  const saved = JSON.parse(await AsyncStorage.getItem('data'));
+  const savedWallet = JSON.parse(saved.wallets[0]);
+  expect(savedWallet.bitassetsInfo).toBeUndefined();
+  expect(savedWallet.bitassetsUtxos).toBeUndefined();
+});
+
 it('Appstorage - loadFromDisk works with ambiguous descriptor in watch-only wallet', async () => {
   let Storage = new BlueApp();
   // Test that wpkh() descriptors are identified by script type, not path

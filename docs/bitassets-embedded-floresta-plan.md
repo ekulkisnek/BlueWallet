@@ -103,9 +103,9 @@ Generated mobile libraries are ignored by git. Production CI must run the wrappe
 
 - **Native BitAssets bridge status (Utreexo proof-backed)**: Full Utreexo + proof data path is implemented and verified:
   - Rust side (floresta-bitassets-wallet + floresta-node bitassets_wallet.rs) uses rustreexo Stump/Proof, returns WalletUtxo with `utreexo_leaf_hash` + `proof_refs` (sidechain_block_height, bmm_inclusions, best_main_verification) after real sync/validation against a Floresta node.
-  - TS types (`BitAssetsUtxo` in blue_modules/BitAssetsWallet.ts) + listUtxos parsing already carry the fields for mobile UI, asset creation/transfer/receive/change, and restart persistence (stored inside the wallet.json alongside addresses/UTXOs).
-  - Unit test (`tests/unit/bitassets-wallet.test.ts`) now feeds full proof payloads through both EmbeddedBitAssetsWalletClient and JsonRpcBitAssetsWalletClient and asserts round-trip of `utreexo_leaf_hash` + complete proof_refs. 10/10 tests pass.
-  - Persistence production fixes (clear API, sandbox-safe writes, group defaults, delete-on-wallet-remove) also cover the proof data (wallet.json stores the Utreexo refs; clear purges them so no orphan proofs after delete).
+  - TS types (`BitAssetsUtxo` in blue_modules/BitAssetsWallet.ts) + listUtxos parsing carry the fields for mobile UI after explicit Floresta sync. RedWallet treats this as a runtime view, not the durable UTXO source of truth.
+  - Unit test (`tests/unit/bitassets-wallet.test.ts`) now feeds full proof payloads through both EmbeddedBitAssetsWalletClient and JsonRpcBitAssetsWalletClient, proves malformed JS wallet JSON cannot restore stale UTXO/proof state, and proves receive/change proofs are reloaded from native Floresta state after asset creation/transfer flows.
+  - Persistence production fixes (clear API, sandbox-safe writes, group defaults, delete-on-wallet-remove) cover native Floresta wallet/proof state. RedWallet JS wallet storage intentionally strips BitAssets UTXO/proof caches so all durable UTXO state is managed by Floresta/Utreexo.
   - The "native wallet smoke" (e2e bitassets.spec.js + manual) exercises asset reserve/register/ops + restart via the native module; full proof assertions on live populated data require a Utreexo-enabled test node (see blocker below).
 
 - **Safe verification executed in this pass**:
@@ -159,7 +159,7 @@ Docker-backed funded UI smoke is currently blocked because Docker Desktop is not
 - Native signer wallet persistence is 100% production-ready: sandbox-safe writes (removed interfering file-protection attr), consistent app-group RPC storage, full lifecycle clear/purge API (TS → iOS Keychain + dir, Android Keystore + dir), wired to RedWallet deleteWallet so no orphan seeds or Utreexo proof data remain after wallet removal or app reset.
 - Full Utreexo/proof-backed path is wired and unit-proven:
   - Floresta Rust (crates/floresta-bitassets-wallet + floresta-node bitassets_wallet.rs) performs real rustreexo Stump/Proof validation on sync and returns WalletUtxo carrying `utreexo_leaf_hash` + `proof_refs` (sidechain_block_height, bmm_inclusions, best_main_verification) — exactly the fields required by the hard requirement.
-  - RedWallet TS (`blue_modules/BitAssetsWallet.ts`, `class/wallets/bitassets-wallet.ts`, Embedded/JsonRpc clients) round-trips the proof data; the unit test now feeds complete payloads and asserts the fields for asset creation/transfer/receive/change + restart persistence flows.
+  - RedWallet TS (`blue_modules/BitAssetsWallet.ts`, `class/wallets/bitassets-wallet.ts`, Embedded/JsonRpc clients) exposes proof data only as a post-sync runtime view; JS wallet persistence strips UTXO/proof caches and reloads them from native Floresta state.
   - `npm run lint` (tsc + eslint + unused-loc) → clean.
   - `npx jest tests/unit/bitassets-wallet.test.ts --runInBand` → 10/10 PASS with the Utreexo assertions.
 

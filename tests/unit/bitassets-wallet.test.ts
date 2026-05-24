@@ -222,7 +222,7 @@ describe('BitAssets mobile wallet bridge', () => {
     expect(wallet.weOwnAddress(false as any)).toBe(false);
   });
 
-  it('persists proof-backed BitAssets UTXOs across wallet JSON round trips', async () => {
+  it('does not restore BitAssets UTXO state from JS wallet JSON', async () => {
     const wallet = new BitAssetsWallet();
     wallet.secret = 'bitassets://persisted-address';
     wallet.bitassetsRpcUrl = 'http://127.0.0.1:6004';
@@ -234,16 +234,11 @@ describe('BitAssets mobile wallet bridge', () => {
     await restored.init();
 
     expect(restored.getAddress()).toBe('persisted-address');
-    expect(restored.bitassetsUtxos).toEqual(wallet.bitassetsUtxos);
-    expect(restored.bitassetsUtxos[0].utreexo_leaf_hash).toBe('leaf-a-utreexo');
-    expect(restored.bitassetsUtxos[0].proof_refs?.[0]).toMatchObject({
-      sidechain_block_height: 123,
-      bmm_inclusions: ['bmm-incl-xyz'],
-      best_main_verification: 'best-main-ok',
-    });
+    expect(restored.bitassetsInfo).toBeUndefined();
+    expect(restored.bitassetsUtxos).toEqual([]);
   });
 
-  it('keeps proof-backed receive and change UTXOs after native asset creation and send flow', async () => {
+  it('reloads proof-backed receive and change UTXOs from native Floresta state after asset creation and send flow', async () => {
     const wallet = new BitAssetsWallet();
     wallet.secret = 'bitassets://persisted-address';
     wallet.bitassetsRpcUrl = 'http://127.0.0.1:6004';
@@ -313,6 +308,11 @@ describe('BitAssets mobile wallet bridge', () => {
     const persisted = JSON.stringify({ ...wallet, type: wallet.type });
     const restored = BitAssetsWallet.fromJson(persisted) as typeof wallet;
     await restored.init();
+
+    expect(restored.bitassetsInfo).toBeUndefined();
+    expect(restored.bitassetsUtxos).toEqual([]);
+
+    await restored.syncBitAssets();
 
     expect(restored.bitassetsInfo?.last_tip_height).toBe(125);
     expect(restored.bitassetsUtxos).toHaveLength(2);

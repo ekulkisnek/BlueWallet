@@ -707,6 +707,11 @@ export class BlueApp {
           delete keyCloned._bip47_instance; // since it wont be restored into a proper class instance
         }
 
+        if (key instanceof BitAssetsWallet) {
+          delete (keyCloned as Partial<BitAssetsWallet>).bitassetsInfo;
+          delete (keyCloned as Partial<BitAssetsWallet>).bitassetsUtxos;
+        }
+
         walletsToSave.push(JSON.stringify({ ...keyCloned, type: keyCloned.type }));
       }
       if (realm) realm.close();

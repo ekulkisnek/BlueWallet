@@ -34,6 +34,16 @@ export class BitAssetsWallet extends LegacyWallet {
   bitassetsInfo?: BitAssetsWalletInfo;
   bitassetsUtxos: BitAssetsUtxo[] = [];
 
+  static fromJson(obj: string): BitAssetsWallet {
+    const parsed = JSON.parse(obj);
+    const wallet = new BitAssetsWallet();
+    for (const key of Object.keys(parsed)) {
+      if (key === 'bitassetsInfo' || key === 'bitassetsUtxos') continue;
+      (wallet as unknown as Record<string, unknown>)[key] = parsed[key];
+    }
+    return wallet;
+  }
+
   async init() {
     if (!this._address && this.secret.startsWith('bitassets://')) {
       this._address = this.secret.slice('bitassets://'.length);
