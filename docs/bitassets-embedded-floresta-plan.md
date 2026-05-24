@@ -59,7 +59,41 @@ xcodebuild -workspace ios/BlueWallet.xcworkspace -scheme BlueWallet -configurati
 
 After moving the checkout, run `pod install` or pass `HERMES_CLI_PATH` as above if generated CocoaPods xcconfigs still point at the previous repo path. In this local pass, Release simulator compile/link/bundling succeeded with the correct Hermes path, then stopped at Bugsnag source-map upload because `BUGSNAG_API_KEY=dummy` is not accepted by Bugsnag.
 
-Docker-backed live signet mobile sync/broadcast remains blocked on Docker Desktop availability in this local environment. Once Docker is running, use the existing signet stack and point iOS at `http://127.0.0.1:6004`; Android emulator should use `http://10.0.2.2:6004`.
+Docker-backed local signet is now available through the Colima/local-dev stack. The non-mobile proof-backed Floresta smoke passed end-to-end with sidechain ID 4 activation, reserve/register, transfer, Floresta wallet transfer, Electrum proof views, and persisted Floresta cache reload after restart. For iOS simulator, point RedWallet at `http://127.0.0.1:6004`; for Android emulator, use `http://10.0.2.2:6004`.
+
+Latest local proof run:
+
+```sh
+cd /Volumes/T705/code/drivechain-wallet-dev/local-dev
+DOCKER_BUILDKIT=0 \
+BITASSETS_PLATFORM=linux/arm64 \
+BITASSETS_BUILD_PLATFORM=linux/arm64 \
+RESET_STACK=1 \
+RESET_VOLUMES=1 \
+REBUILD_BITASSETS=0 \
+BITASSETS_IMAGE=local/plain-bitassets:codex-proof \
+./scripts/pr-ready-bitassets-smoke.sh
+```
+
+Evidence from that run:
+
+```json
+{
+  "mainchain_height": 113,
+  "bitassets_sidechain_height": 5,
+  "sidechain_activation_height": 108,
+  "asset_id": "1f7d29cb94f4678610ce298f1d91f07ed1b36201de54e9e43ac67a2d546e287e",
+  "reserve_tx": "fc15abb51d0c503a7f47cedc8b8e84be367f5230426bc4b283abd5b132799afd",
+  "register_tx": "7f8ff6a7e5e5d0ecd2ad37dfcde0deb58205138d06a3b2cf84fc2e765a4b4d17",
+  "transfer_tx": "6cba6f2825f7253ca82b49c3ab7747c701497abcb00131fb9feccfa1daf3883a",
+  "floresta_wallet_transfer_tx": "b65d4d890f7693ebd947efe49292a8f5ece0f66753afb75f4c4db189b8b980cb",
+  "checks": [
+    {"mode": "rpc-refresh", "balance": 1000, "utxos": 2, "history": 2},
+    {"mode": "rpc-refresh-wallet-transfer", "balance": 1000, "utxos": 3, "history": 3},
+    {"mode": "persisted-cache", "balance": 1000, "utxos": 3, "history": 3}
+  ]
+}
+```
 
 ## Build Assets
 
