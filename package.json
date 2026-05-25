@@ -87,7 +87,7 @@
     "e2e:test:ios-release": "detox test -c ios.release",
     "e2e:bitassets:android:build": "./scripts/with-android-build-env.sh ./android/gradlew -p android :app:assembleDebug :app:assembleDebugAndroidTest -DtestBuildType=debug",
     "e2e:bitassets:android": "./scripts/with-android-build-env.sh ./scripts/run-bitassets-android-e2e.sh",
-    "e2e:bitassets:ios": "BITASSETS_E2E=1 detox test -c ios.debug tests/e2e/bitassets.spec.js --loglevel info --reuse",
+    "e2e:bitassets:ios": "./scripts/run-bitassets-ios-e2e.sh",
     "tslint": "tsc",
     "lint": " npm run tslint && node scripts/find-unused-loc.js && eslint --ext .js,.ts,.tsx '*.@(js|ts|tsx)' screen 'blue_modules/*.@(js|ts|tsx)' class models loc tests components navigation typings",
     "lint:fix": "npm run lint -- --fix",
