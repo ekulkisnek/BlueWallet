@@ -49,4 +49,4 @@ fi
 ) &
 reverse_loop_pid=$!
 
-./scripts/with-android-build-env.sh env BITASSETS_E2E=1 detox test -c android.debug tests/e2e/bitassets.spec.js --loglevel info --reuse --no-build
+./scripts/with-android-build-env.sh env BITASSETS_E2E=1 npx detox test -c android.debug tests/e2e/bitassets.spec.js --loglevel info --reuse --no-build

@@ -23,6 +23,7 @@ type RouteProps = RouteProp<DetailViewStackParamList, 'BitAssetsWallet'>;
 
 const SYNC_INTERVAL_MS = 30000;
 const BITASSETS_E2E_CONTROLS_ENABLED = isBitAssetsE2EControlsEnabled({ BITASSETS_E2E: process.env.BITASSETS_E2E }, __DEV__);
+const LOCAL_BITASSETS_RPC_RE = /^https?:\/\/(?:localhost|127\.|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.)/i;
 
 type BitAssetsSubmitOptions = {
   applyTestDefaults?: boolean;
@@ -33,6 +34,8 @@ const BitAssetsWallet: React.FC = () => {
   const { wallets, saveToDisk } = useStorage();
   const { walletID } = useRoute<RouteProps>().params;
   const wallet = wallets.find(w => w.getID() === walletID) as BitAssetsWalletClass | undefined;
+  const bitassetsE2EControlsEnabled =
+    BITASSETS_E2E_CONTROLS_ENABLED || (__DEV__ && Boolean(wallet?.bitassetsRpcUrl && LOCAL_BITASSETS_RPC_RE.test(wallet.bitassetsRpcUrl)));
   const [operation, setOperation] = useState<BitAssetsOperation>('transfer');
   const [forms, setForms] = useState(initialBitAssetsFormState);
   const [result, setResult] = useState('');
@@ -185,7 +188,7 @@ const BitAssetsWallet: React.FC = () => {
     try {
       const submitOperation = operationOverride ?? operationRef.current;
       let submitForm = { ...formsRef.current[submitOperation] };
-      if (BITASSETS_E2E_CONTROLS_ENABLED && options.applyTestDefaults === true) {
+      if (bitassetsE2EControlsEnabled && options.applyTestDefaults === true) {
         const spendableAssetId = Object.entries(wallet.bitassetsInfo?.balances ?? {}).find(
           ([assetId, amount]) => !assetId.startsWith('control:') && !assetId.startsWith('lp:') && Number(amount) > 0,
         )?.[0];
@@ -284,7 +287,7 @@ const BitAssetsWallet: React.FC = () => {
           <StatusItem label="Proof-backed" value={String(proofSummary.proofBacked)} testID="BitAssetsProofBackedUtxoCount" />
           <StatusItem label="Proof status" value={proofSummary.label} testID="BitAssetsProofBackedUtxoStatus" />
         </View>
-        {BITASSETS_E2E_CONTROLS_ENABLED && (
+        {bitassetsE2EControlsEnabled && (
           <View style={styles.e2eOperationGrid} testID="BitAssetsE2ETopSubmitGrid">
             <Pressable
               testID="BitAssetsE2ETopSyncButton"
@@ -294,6 +297,15 @@ const BitAssetsWallet: React.FC = () => {
               onPress={() => sync(false)}
             >
               <BlueText>Sync wallet</BlueText>
+            </Pressable>
+            <Pressable
+              testID="BitAssetsE2ETopSubmitCurrent"
+              accessibilityRole="button"
+              accessibilityLabel="E2E top submit current BitAssets form"
+              style={styles.e2eOperationPill}
+              onPress={() => submit()}
+            >
+              <BlueText>Submit current form</BlueText>
             </Pressable>
             {BITASSETS_OPERATION_DEFINITIONS.map(item => (
               <Pressable
@@ -313,7 +325,7 @@ const BitAssetsWallet: React.FC = () => {
 
       <View style={styles.buttons}>
         <Button testID="BitAssetsSyncButton" title={isLoading ? 'Working...' : 'Sync'} onPress={() => sync(false)} disabled={isLoading} />
-        {BITASSETS_E2E_CONTROLS_ENABLED ? (
+        {bitassetsE2EControlsEnabled ? (
           <View style={styles.e2eButtons}>
             <Button
               testID="BitAssetsE2ESyncButton"
@@ -333,7 +345,7 @@ const BitAssetsWallet: React.FC = () => {
         ) : null}
       </View>
 
-      {BITASSETS_E2E_CONTROLS_ENABLED ? (
+      {bitassetsE2EControlsEnabled ? (
         <>
           <View style={styles.e2eOperationGrid} testID="BitAssetsE2EOperationGrid">
             {BITASSETS_OPERATION_DEFINITIONS.map(item => (
@@ -479,7 +491,7 @@ const BitAssetsWallet: React.FC = () => {
               multiline={field.multiline}
               blurOnSubmit={!field.multiline}
               returnKeyType={field.multiline ? 'default' : 'done'}
-              onSubmitEditing={field.multiline ? undefined : () => submit()}
+              onSubmitEditing={field.multiline || definition.fields.length > 1 ? undefined : () => submit()}
               keyboardType={field.type === 'number' ? 'number-pad' : 'default'}
               style={[styles.input, field.multiline && styles.multilineInput, stylesHook.input]}
             />
@@ -510,7 +522,7 @@ const BitAssetsWallet: React.FC = () => {
             onPress={() => submit()}
             disabled={isLoading}
           />
-          {BITASSETS_E2E_CONTROLS_ENABLED && (
+          {bitassetsE2EControlsEnabled && (
             <Pressable
               testID={`BitAssetsE2ESubmitCurrent-${operation}`}
               accessibilityRole="button"
