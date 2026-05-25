@@ -23,6 +23,20 @@ Run the full pre-device readiness sweep:
 scripts/prepare-redwallet-real-device-run.sh
 ```
 
+Attempt a legitimate local device build/install preparation:
+
+```sh
+scripts/run-redwallet-ios-device-install.sh 00008020-0011204911F3002E
+```
+
+If a development team is available locally, use:
+
+```sh
+REDWALLET_IOS_TEAM_ID=<team id> \
+REDWALLET_IOS_BUNDLE_ID=<optional local bundle id> \
+scripts/run-redwallet-ios-device-install.sh 00008020-0011204911F3002E
+```
+
 ## Network Plan
 
 Prefer Tailscale when both iPhones can join the tailnet. Otherwise use the same
@@ -50,6 +64,12 @@ paths below:
 
 Do not change code signing secrets in the repo. Use local Xcode signing settings
 or Apple developer portal provisioning as needed.
+
+The repository currently has manual iPhone signing settings pointing at the
+profile `match AppStore com.layertwolabs.bluewallet`. A local dev install cannot
+complete until the Mac has a valid Apple signing identity and a matching
+provisioning profile, or until `REDWALLET_IOS_TEAM_ID` points at a team that can
+create/use a development profile for the selected device.
 
 ## Evidence Rules
 
