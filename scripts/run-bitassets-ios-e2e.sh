@@ -49,11 +49,14 @@ export BITASSETS_RPC_URL="${BITASSETS_RPC_URL:-http://127.0.0.1:6004}"
 export BITASSETS_E2E_LOCAL_DEV_DIR="${BITASSETS_E2E_LOCAL_DEV_DIR:-/Volumes/T705/code/drivechain-wallet-dev/local-dev}"
 export BITASSETS_E2E_COMPOSE_FILE="${BITASSETS_E2E_COMPOSE_FILE:-docker-compose.local-minimal.yml}"
 export BITASSETS_IMAGE="${BITASSETS_IMAGE:-local/plain-bitassets:codex-proof}"
+export BITASSETS_PLATFORM="${BITASSETS_PLATFORM:-linux/arm64}"
 
 start_metro_if_needed
 
 echo "run_dir=$RUN_DIR"
 echo "metro_log=$METRO_LOG"
 echo "bitassets_rpc_url=$BITASSETS_RPC_URL"
+echo "bitassets_image=$BITASSETS_IMAGE"
+echo "bitassets_platform=$BITASSETS_PLATFORM"
 
 npx detox test -c ios.debug tests/e2e/bitassets.spec.js --loglevel "${DETOX_LOGLEVEL:-info}" --reuse "$@"

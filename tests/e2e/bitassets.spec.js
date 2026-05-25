@@ -503,6 +503,7 @@ function mineBitAssetsTx(txid) {
     `COMPOSE_FILE=${shellQuote(composeFile)}`,
     `BITASSETS_CONFIRM_TXID=${shellQuote(txid)}`,
     `BITASSETS_IMAGE=${shellQuote(process.env.BITASSETS_IMAGE || 'local/plain-bitassets:codex-proof')}`,
+    `BITASSETS_PLATFORM=${shellQuote(process.env.BITASSETS_PLATFORM || 'linux/arm64')}`,
     `BMM_MINE_ATTEMPTS=${shellQuote(process.env.BMM_MINE_ATTEMPTS || '8')}`,
     `BMM_REQUEST_SETTLE_SECS=${shellQuote(process.env.BMM_REQUEST_SETTLE_SECS || '40')}`,
     `BITASSETS_MINE_TIMEOUT=${shellQuote(process.env.BITASSETS_MINE_TIMEOUT || '120')}`,

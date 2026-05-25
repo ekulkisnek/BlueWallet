@@ -7,6 +7,8 @@ STAMP="$(date +%Y%m%d-%H%M%S)"
 OUT_DIR="${OUTPUT_ROOT%/}/signet-endpoints-${STAMP}"
 LOCAL_DEV="${LOCAL_DEV:-/Volumes/T705/code/drivechain-wallet-dev/local-dev}"
 COMPOSE_FILE="${COMPOSE_FILE:-$LOCAL_DEV/docker-compose.local-minimal.yml}"
+BITASSETS_IMAGE="${BITASSETS_IMAGE:-local/plain-bitassets:codex-proof}"
+BITASSETS_PLATFORM="${BITASSETS_PLATFORM:-linux/arm64}"
 
 mkdir -p "$OUT_DIR"
 
@@ -47,13 +49,15 @@ PHONE_HOST="${REDWALLET_PHONE_HOST:-${PRIMARY_TAILSCALE_IP:-${PRIMARY_LAN_IP:-12
 cat > "$OUT_DIR/redwallet-signet.env" <<EOF
 # Source this from local scripts, or copy the URL into RedWallet's BitAssets RPC field.
 # Prefer Tailscale if both Mac and phones are on the same tailnet; otherwise use same Wi-Fi/LAN.
-REDWALLET_PHONE_HOST=$PHONE_HOST
-BITASSETS_RPC_URL=http://$PHONE_HOST:6004
-MAINCHAIN_RPC_URL=http://$PHONE_HOST:38332
-METRO_URL=http://$PHONE_HOST:8081
-REDWALLET_LOG_ROOT=$OUTPUT_ROOT
-LOCAL_DEV=$LOCAL_DEV
-COMPOSE_FILE=$COMPOSE_FILE
+export REDWALLET_PHONE_HOST=$PHONE_HOST
+export BITASSETS_RPC_URL=http://$PHONE_HOST:6004
+export MAINCHAIN_RPC_URL=http://$PHONE_HOST:38332
+export METRO_URL=http://$PHONE_HOST:8081
+export REDWALLET_LOG_ROOT=$OUTPUT_ROOT
+export LOCAL_DEV=$LOCAL_DEV
+export COMPOSE_FILE=$COMPOSE_FILE
+export BITASSETS_IMAGE=$BITASSETS_IMAGE
+export BITASSETS_PLATFORM=$BITASSETS_PLATFORM
 EOF
 
 {
@@ -67,6 +71,8 @@ EOF
   echo "bitassets_rpc_url=http://$PHONE_HOST:6004"
   echo "mainchain_rpc_url=http://$PHONE_HOST:38332"
   echo "metro_url=http://$PHONE_HOST:8081"
+  echo "bitassets_image=$BITASSETS_IMAGE"
+  echo "bitassets_platform=$BITASSETS_PLATFORM"
   echo
   probe_url "bitassets_host_probe" "http://127.0.0.1:6004"
   probe_url "bitassets_phone_probe" "http://$PHONE_HOST:6004"
