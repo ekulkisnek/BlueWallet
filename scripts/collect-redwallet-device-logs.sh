@@ -79,7 +79,9 @@ run_capture "$OUT_DIR/host/listening-ports.txt" lsof -nP -iTCP -sTCP:LISTEN
 run_capture "$OUT_DIR/host/redwallet-signet-endpoints.txt" "$ROOT_DIR/scripts/redwallet-signet-endpoints.sh" "$OUT_DIR/host"
 run_capture "$OUT_DIR/ios/xctrace-devices.txt" xcrun xctrace list devices
 run_capture "$OUT_DIR/ios/devicectl-devices.txt" xcrun devicectl list devices
+run_capture "$OUT_DIR/ios/devicectl-devices-all-columns.txt" xcrun devicectl list devices --columns '*'
 run_capture "$OUT_DIR/ios/devicectl-json.txt" xcrun devicectl list devices --json-output -
+run_capture "$OUT_DIR/ios/usb-devices-iphone.txt" sh -c "system_profiler SPUSBDataType 2>/dev/null | rg -i -C 3 'iphone|apple mobile|coredevice|00008020|LiPhone' || true"
 run_capture "$OUT_DIR/simulators/simctl-list.txt" xcrun simctl list devices
 run_capture "$OUT_DIR/android/adb-devices.txt" adb devices -l
 run_capture "$OUT_DIR/metro/metro-processes.txt" pgrep -af "react-native|metro|node.*8081"
@@ -114,6 +116,42 @@ if command -v xcrun >/dev/null 2>&1; then
   # Best-effort physical iOS diagnostics. Missing/locked/untrusted devices are
   # captured as output; this script must remain non-blocking for unattended runs.
   xcrun devicectl list devices --json-output - > "$OUT_DIR/ios/devicectl-devices.raw.json" 2>/dev/null || true
+  python3 - "$OUT_DIR/ios/devicectl-devices.raw.json" > "$OUT_DIR/ios/coredevice-hostname-reachability.txt" <<'PY' || true
+import json, subprocess, sys
+
+def timed_getaddrinfo(name, seconds=3):
+    try:
+        result = subprocess.run(
+            ["dscacheutil", "-q", "host", "-a", "name", name],
+            capture_output=True,
+            text=True,
+            timeout=seconds,
+        )
+    except subprocess.TimeoutExpired:
+        return f"resolve_timeout after {seconds}s"
+    output = result.stdout.strip()
+    if output:
+        lines = " ".join(line.strip() for line in output.splitlines() if line.strip())
+        return f"resolves {lines}"
+    return f"resolve_failed exit:{result.returncode} {result.stderr.strip()}"
+
+try:
+    data = json.load(open(sys.argv[1]))
+except Exception as exc:
+    print(f"devicectl_json_unreadable: {type(exc).__name__}: {exc}")
+    sys.exit(0)
+
+for device in data.get("result", {}).get("devices", []):
+    name = device.get("deviceProperties", {}).get("name") or device.get("name") or "unknown"
+    identifier = device.get("identifier", "")
+    state = device.get("state", "")
+    connection = device.get("connectionProperties", {})
+    tunnel = connection.get("tunnelState", "")
+    pairing = connection.get("pairingState", "")
+    print(f"device={name} identifier={identifier} state={state} pairingState={pairing} tunnelState={tunnel}")
+    for host in connection.get("potentialHostnames", []):
+        print(f"{host}: {timed_getaddrinfo(host)}")
+PY
   while read -r device_id; do
     [[ -z "$device_id" ]] && continue
     safe_device="${device_id//[^A-Za-z0-9._-]/_}"
@@ -129,12 +167,14 @@ try:
 except Exception:
     sys.exit(0)
 for device in data.get("result", {}).get("devices", []):
-    props=device.get("properties", {})
+    props=device.get("properties", device)
     hw=props.get("hardwareProperties", {})
-    if hw.get("platform") == "iOS" and props.get("connectionProperties", {}).get("transportType") != "localNetwork":
+    connection=props.get("connectionProperties", {})
+    if hw.get("platform") == "iOS" and connection.get("transportType") != "localNetwork":
         identifier=device.get("identifier") or props.get("identifier")
-        availability=str(props.get("availability", "")).lower()
-        if identifier and "available" in availability and "unavailable" not in availability:
+        availability=str(props.get("availability", device.get("state", ""))).lower()
+        tunnel=str(connection.get("tunnelState", "")).lower()
+        if identifier and (("available" in availability and "unavailable" not in availability) or tunnel == "available"):
             print(identifier)
 PY
 )
