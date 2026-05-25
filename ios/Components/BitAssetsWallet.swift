@@ -63,6 +63,7 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
             }
             let rpcUrl = ((config["rpcUrl"] ?? config["rpc_url"]) as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             try validateRpcUrl(rpcUrl)
+            eventLog("configure", "begin", ["rpcUrl": rpcUrl])
             let groupDefaults = UserDefaults(suiteName: "group.com.layertwolabs.bluewallet") ?? UserDefaults.standard
             groupDefaults.set(rpcUrl, forKey: "bitassetsRpcUrl")
             groupDefaults.synchronize()
@@ -71,9 +72,11 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
                 handle = 0
             }
             let responseData = try JSONSerialization.data(withJSONObject: ["configured": true, "rpcUrl": rpcUrl])
+            eventLog("configure", "ok", ["rpcUrl": rpcUrl])
             resolve(String(data: responseData, encoding: .utf8) ?? "{\"configured\":true}")
         } catch {
             let sanitized = sanitizedError(error)
+            eventLog("configure", "error", ["error": sanitized.localizedDescription])
             reject("BITASSETS_WALLET_CONFIG_ERROR", sanitized.localizedDescription, sanitized)
         }
     }
@@ -187,11 +190,13 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
         ]
         let configData = try JSONSerialization.data(withJSONObject: config)
         let configJson = String(data: configData, encoding: .utf8)!
+        eventLog("openWallet", "begin", ["rpcUrl": rpcUrl, "walletPath": walletFile.path])
         let opened = try configJson.withCString { try unwrap(floresta_bitassets_wallet_open($0)) }
         guard let parsed = UInt(opened) else {
             throw NSError(domain: "BitAssetsWallet", code: 2, userInfo: [NSLocalizedDescriptionKey: "invalid wallet handle"])
         }
         handle = parsed
+        eventLog("openWallet", "ok", ["rpcUrl": rpcUrl, "walletPath": walletFile.path])
         return parsed
     }
 
@@ -352,6 +357,28 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
         #endif
     }
 
+    private func eventLog(_ operation: String, _ status: String, _ fields: [String: Any] = [:]) {
+        var payload: [String: Any] = [
+            "component": "ios.native.BitAssetsWallet",
+            "operation": operation,
+            "status": status,
+            "time": ISO8601DateFormatter().string(from: Date()),
+        ]
+        for (key, value) in fields {
+            if let text = value as? String {
+                payload[key] = sanitizeSensitiveDetails(text)
+            } else {
+                payload[key] = value
+            }
+        }
+        if let data = try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]),
+           let line = String(data: data, encoding: .utf8) {
+            NSLog("REDWALLET_EVENT %@", line)
+        } else {
+            NSLog("REDWALLET_EVENT {\"component\":\"ios.native.BitAssetsWallet\",\"operation\":\"%@\",\"status\":\"%@\"}", operation, status)
+        }
+    }
+
     private func sanitizeSensitiveDetails(_ message: String) -> String {
         var sanitized = message
         let keyedSeedPatterns = [
@@ -398,18 +425,41 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
     ) {
         BitAssetsWalletModule.bitAssetsQueue.async {
             self.debugLog("\(operation) begin")
+            self.eventLog(operation, "begin")
             do {
                 self.walletLock.lock()
                 defer { self.walletLock.unlock() }
                 let value = try self.unwrap(f())
                 self.debugLog("\(operation) ok")
+                self.eventLog(operation, "ok", self.resultFields(value))
                 resolve(value)
             } catch {
                 let sanitized = self.sanitizedError(error)
                 self.debugLog("\(operation) error: \(sanitized.localizedDescription)")
+                self.eventLog(operation, "error", ["error": sanitized.localizedDescription])
                 reject("BITASSETS_WALLET_ERROR", sanitized.localizedDescription, sanitized)
             }
         }
+    }
+
+    private func resultFields(_ value: String) -> [String: Any] {
+        var fields: [String: Any] = ["resultBytes": value.utf8.count]
+        if value.range(of: #"^[0-9a-fA-F]{64}$"#, options: .regularExpression) != nil {
+            fields["txid"] = value
+        }
+        if let data = value.data(using: .utf8),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            if let address = json["address"] as? String {
+                fields["address"] = address
+            }
+            if let sidechainHeight = json["sidechain_height"] ?? json["sidechainBlockHeight"] {
+                fields["sidechainHeight"] = sidechainHeight
+            }
+            if let balances = json["balances"] as? [String: Any] {
+                fields["balanceAssetCount"] = balances.count
+            }
+        }
+        return fields
     }
 
     private func unwrap(_ result: FlorestaBitAssetsFfiResult) throws -> String {

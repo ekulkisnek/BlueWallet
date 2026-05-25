@@ -31,6 +31,37 @@ echo "[4/4] Checking JS/unit readiness..."
 npx jest tests/unit/bitassets-wallet.test.ts --runInBand \
   > "$OUT_DIR/bitassets-unit.log" 2>&1 || true
 
+cat > "$OUT_DIR/TWO_IPHONE_SIGNING_AND_NETWORK.txt" <<EOF
+RedWallet two-iPhone legitimate deployment checklist
+
+Network:
+1. Prefer Tailscale when the phones are not on the exact same Wi-Fi as this Mac.
+2. Otherwise put both phones and the Mac on the same Wi-Fi/VLAN.
+3. Use the endpoint from the generated env file:
+     ${BITASSETS_RPC_URL:-not discovered}
+4. The phone must be able to reach the Mac on BitAssets RPC port 6004 and Metro
+   port 8081 for dev builds. A simulator may keep using localhost/127.0.0.1.
+
+Signing:
+1. LiPhone on Luke's Apple account can use Xcode direct deploy if the device is
+   trusted, online, and included in the selected development team profile.
+2. The second iPhone on a different Apple account cannot be installed by
+   bypassing Apple's signing model. Use one of:
+   - add the device UDID to the Apple Developer team provisioning profile,
+   - TestFlight/internal distribution from App Store Connect,
+   - an Ad Hoc profile that includes that UDID,
+   - direct Xcode deploy only if that Apple account/team can sign the bundle.
+3. If either phone is only visible as offline/unavailable, unlock it, trust this
+   Mac, enable Developer Mode if prompted, and rerun the collector.
+
+Required proof before FLEET_DONE:
+1. Bundle from before install.
+2. Bundle after install/launch on each phone.
+3. Bundle after sync/receive/send/balance/restart on each phone.
+4. Bundle containing desktop wallet interop txids and BitAssets proof-backed
+   state from Luke's signet.
+EOF
+
 cat > "$OUT_DIR/NEXT_STEPS.txt" <<EOF
 RedWallet real-device readiness bundle
 
@@ -45,14 +76,19 @@ When the iPhones are present:
 2. Run:
      source "${ENV_FILE:-$OUT_DIR/redwallet-signet.env}"
      scripts/collect-redwallet-device-logs.sh /Volumes/T705/redwallet-logs 20
-3. Open ios/BlueWallet.xcworkspace in Xcode.
-4. Select the BlueWallet scheme and the connected iPhone target.
-5. Use the chosen BITASSETS_RPC_URL from the env file in the BitAssets wallet setup screen.
-6. After every install/sync/send attempt, run:
+3. Read:
+     $OUT_DIR/TWO_IPHONE_SIGNING_AND_NETWORK.txt
+4. Open ios/BlueWallet.xcworkspace in Xcode.
+5. Select the BlueWallet scheme and each connected iPhone target in turn.
+6. Use the chosen BITASSETS_RPC_URL from the env file in the BitAssets wallet setup screen.
+7. After every install/sync/send/restart attempt, run:
      scripts/collect-redwallet-device-logs.sh /Volumes/T705/redwallet-logs 30
 
 Current phone-ready BitAssets RPC candidate:
   ${BITASSETS_RPC_URL:-not discovered}
+
+Structured current-bundle symlink:
+  /Volumes/T705/redwallet-logs/current-device-proof
 
 Codex should inspect this bundle first:
   $OUT_DIR

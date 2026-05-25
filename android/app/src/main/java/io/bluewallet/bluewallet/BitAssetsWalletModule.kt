@@ -16,6 +16,7 @@ import javax.crypto.spec.GCMParameterSpec
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import android.util.Log
 
 @ReactModule(name = BitAssetsWalletModule.NAME)
 class BitAssetsWalletModule(private val reactContext: ReactApplicationContext) : NativeBitAssetsWalletSpec(reactContext) {
@@ -44,60 +45,63 @@ class BitAssetsWalletModule(private val reactContext: ReactApplicationContext) :
                 val config = JSONObject(configJson)
                 val rpcUrl = config.optString("rpcUrl", config.optString("rpc_url", "")).trim()
                 validateRpcUrl(rpcUrl)
+                eventLog("configure", "begin", mapOf("rpcUrl" to rpcUrl))
                 val sharedPref = reactContext.getSharedPreferences("group.com.layertwolabs.bluewallet", android.content.Context.MODE_PRIVATE)
                 sharedPref.edit().putString("bitassetsRpcUrl", rpcUrl).apply()
                 if (walletHandle != 0L) {
                     nativeFree(walletHandle)
                     walletHandle = 0
                 }
+                eventLog("configure", "ok", mapOf("rpcUrl" to rpcUrl))
                 promise.resolve(JSONObject().put("configured", true).put("rpcUrl", rpcUrl).toString())
             }
         } catch (error: Throwable) {
+            eventLog("configure", "error", mapOf("error" to (error.message ?: error.toString())))
             rejectSanitized(promise, "BITASSETS_WALLET_CONFIG_ERROR", error)
         }
     }
 
     @ReactMethod
-    override fun getNewAddress(promise: Promise) = resolve(promise) { nativeGetNewAddress(openWallet()) }
+    override fun getNewAddress(promise: Promise) = resolve("getNewAddress", promise) { nativeGetNewAddress(openWallet()) }
 
     @ReactMethod
-    override fun walletInfo(promise: Promise) = resolve(promise) { nativeWalletInfo(openWallet()) }
+    override fun walletInfo(promise: Promise) = resolve("walletInfo", promise) { nativeWalletInfo(openWallet()) }
 
     @ReactMethod
-    override fun sync(promise: Promise) = resolve(promise) { nativeSync(openWallet()) }
+    override fun sync(promise: Promise) = resolve("sync", promise) { nativeSync(openWallet()) }
 
     @ReactMethod
-    override fun listUtxos(promise: Promise) = resolve(promise) { nativeListUtxos(openWallet()) }
+    override fun listUtxos(promise: Promise) = resolve("listUtxos", promise) { nativeListUtxos(openWallet()) }
 
     @ReactMethod
-    override fun getBalance(assetId: String?, promise: Promise) = resolve(promise) { nativeGetBalance(openWallet(), assetId ?: "") }
+    override fun getBalance(assetId: String?, promise: Promise) = resolve("getBalance", promise) { nativeGetBalance(openWallet(), assetId ?: "") }
 
     @ReactMethod
-    override fun transfer(paramsJson: String, promise: Promise) = resolve(promise) { nativeTransfer(openWallet(), paramsJson) }
+    override fun transfer(paramsJson: String, promise: Promise) = resolve("transfer", promise) { nativeTransfer(openWallet(), paramsJson) }
 
     @ReactMethod
-    override fun reserve(paramsJson: String, promise: Promise) = resolve(promise) { nativeReserve(openWallet(), paramsJson) }
+    override fun reserve(paramsJson: String, promise: Promise) = resolve("reserve", promise) { nativeReserve(openWallet(), paramsJson) }
 
     @ReactMethod
-    override fun register(paramsJson: String, promise: Promise) = resolve(promise) { nativeRegister(openWallet(), paramsJson) }
+    override fun register(paramsJson: String, promise: Promise) = resolve("register", promise) { nativeRegister(openWallet(), paramsJson) }
 
     @ReactMethod
-    override fun ammMint(paramsJson: String, promise: Promise) = resolve(promise) { nativeAmmMint(openWallet(), paramsJson) }
+    override fun ammMint(paramsJson: String, promise: Promise) = resolve("ammMint", promise) { nativeAmmMint(openWallet(), paramsJson) }
 
     @ReactMethod
-    override fun ammSwap(paramsJson: String, promise: Promise) = resolve(promise) { nativeAmmSwap(openWallet(), paramsJson) }
+    override fun ammSwap(paramsJson: String, promise: Promise) = resolve("ammSwap", promise) { nativeAmmSwap(openWallet(), paramsJson) }
 
     @ReactMethod
-    override fun ammBurn(paramsJson: String, promise: Promise) = resolve(promise) { nativeAmmBurn(openWallet(), paramsJson) }
+    override fun ammBurn(paramsJson: String, promise: Promise) = resolve("ammBurn", promise) { nativeAmmBurn(openWallet(), paramsJson) }
 
     @ReactMethod
-    override fun dutchAuctionCreate(paramsJson: String, promise: Promise) = resolve(promise) { nativeDutchAuctionCreate(openWallet(), paramsJson) }
+    override fun dutchAuctionCreate(paramsJson: String, promise: Promise) = resolve("dutchAuctionCreate", promise) { nativeDutchAuctionCreate(openWallet(), paramsJson) }
 
     @ReactMethod
-    override fun dutchAuctionBid(paramsJson: String, promise: Promise) = resolve(promise) { nativeDutchAuctionBid(openWallet(), paramsJson) }
+    override fun dutchAuctionBid(paramsJson: String, promise: Promise) = resolve("dutchAuctionBid", promise) { nativeDutchAuctionBid(openWallet(), paramsJson) }
 
     @ReactMethod
-    override fun dutchAuctionCollect(paramsJson: String, promise: Promise) = resolve(promise) { nativeDutchAuctionCollect(openWallet(), paramsJson) }
+    override fun dutchAuctionCollect(paramsJson: String, promise: Promise) = resolve("dutchAuctionCollect", promise) { nativeDutchAuctionCollect(openWallet(), paramsJson) }
 
     @ReactMethod
     override fun clear(promise: Promise) {
@@ -143,8 +147,10 @@ class BitAssetsWalletModule(private val reactContext: ReactApplicationContext) :
             .put("persist_seed", false)
             .toString()
 
+        eventLog("openWallet", "begin", mapOf("rpcUrl" to rpcUrl, "walletPath" to walletFile.absolutePath))
         val result = unwrap(nativeOpen(config))
         walletHandle = java.lang.Long.parseUnsignedLong(result)
+        eventLog("openWallet", "ok", mapOf("rpcUrl" to rpcUrl, "walletPath" to walletFile.absolutePath))
         return walletHandle
     }
 
@@ -261,10 +267,14 @@ class BitAssetsWalletModule(private val reactContext: ReactApplicationContext) :
         return secondOctet in 16..31
     }
 
-    private fun resolve(promise: Promise, call: () -> String) {
+    private fun resolve(operation: String, promise: Promise, call: () -> String) {
         try {
-            promise.resolve(synchronized(walletLock) { unwrap(call()) })
+            eventLog(operation, "begin")
+            val value = synchronized(walletLock) { unwrap(call()) }
+            eventLog(operation, "ok", resultFields(value))
+            promise.resolve(value)
         } catch (error: Throwable) {
+            eventLog(operation, "error", mapOf("error" to (error.message ?: error.toString())))
             rejectSanitized(promise, "BITASSETS_WALLET_ERROR", error)
         }
     }
@@ -279,6 +289,33 @@ class BitAssetsWalletModule(private val reactContext: ReactApplicationContext) :
             .replace(Regex("""(?i)(seed_hex["'\s:=]+)[0-9a-f]{128}"""), "\$1[redacted]")
             .replace(Regex("""(?i)(seedHex["'\s:=]+)[0-9a-f]{128}"""), "\$1[redacted]")
             .replace(Regex("""\b[0-9a-fA-F]{128}\b"""), "[redacted-seed]")
+    }
+
+    private fun eventLog(operation: String, status: String, fields: Map<String, Any?> = emptyMap()) {
+        val payload = JSONObject()
+            .put("component", "android.native.BitAssetsWallet")
+            .put("operation", operation)
+            .put("status", status)
+            .put("timeUnixMs", System.currentTimeMillis())
+        fields.forEach { (key, value) ->
+            payload.put(key, if (value is String) sanitizeSensitiveDetails(value) else value)
+        }
+        Log.i("REDWALLET_EVENT", payload.toString())
+    }
+
+    private fun resultFields(value: String): Map<String, Any> {
+        val fields = mutableMapOf<String, Any>("resultBytes" to value.toByteArray(Charsets.UTF_8).size)
+        if (Regex("""^[0-9a-fA-F]{64}$""").matches(value)) {
+            fields["txid"] = value
+        }
+        runCatching {
+            val json = JSONObject(value)
+            if (json.has("address")) fields["address"] = json.getString("address")
+            if (json.has("sidechain_height")) fields["sidechainHeight"] = json.get("sidechain_height")
+            if (json.has("sidechainBlockHeight")) fields["sidechainHeight"] = json.get("sidechainBlockHeight")
+            if (json.has("balances")) fields["balanceAssetCount"] = json.getJSONObject("balances").length()
+        }
+        return fields
     }
 
     private fun unwrap(resultJson: String): String {

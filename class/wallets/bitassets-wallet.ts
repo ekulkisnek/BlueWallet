@@ -52,10 +52,13 @@ export class BitAssetsWallet extends LegacyWallet {
 
   async generate(rpcUrl?: string): Promise<void> {
     this.bitassetsRpcUrl = validateBitAssetsRpcUrl(rpcUrl ?? this.bitassetsRpcUrl);
-    const client = await this.getConfiguredClient();
-    const address = await client.getNewAddress();
-    this._address = address;
-    this.secret = `bitassets://${address}`;
+    await this.withBitAssetsEvent('generate', { rpcUrl: this.bitassetsRpcUrl }, async () => {
+      const client = await this.getConfiguredClient();
+      const address = await client.getNewAddress();
+      this._address = address;
+      this.secret = `bitassets://${address}`;
+      return { address };
+    });
   }
 
   getAddress(): string | false {
@@ -91,63 +94,87 @@ export class BitAssetsWallet extends LegacyWallet {
   }
 
   async fetchBalance(): Promise<void> {
-    const info = await (await this.getConfiguredClient()).walletInfo();
-    this.bitassetsInfo = info;
-    this.balance = Object.values(info.balances ?? {}).reduce((sum, amount) => sum + amount, 0);
-    this.unconfirmed_balance = 0;
-    this._lastBalanceFetch = +new Date();
+    await this.withBitAssetsEvent('fetchBalance', {}, async () => {
+      const info = await (await this.getConfiguredClient()).walletInfo();
+      this.bitassetsInfo = info;
+      this.balance = Object.values(info.balances ?? {}).reduce((sum, amount) => sum + amount, 0);
+      this.unconfirmed_balance = 0;
+      this._lastBalanceFetch = +new Date();
+      return info;
+    });
   }
 
   async fetchTransactions(): Promise<void> {
-    this.bitassetsUtxos = await (await this.getConfiguredClient()).listUtxos();
-    this._lastTxFetch = +new Date();
+    await this.withBitAssetsEvent('fetchTransactions', {}, async () => {
+      this.bitassetsUtxos = await (await this.getConfiguredClient()).listUtxos();
+      this._lastTxFetch = +new Date();
+      return { utxoCount: this.bitassetsUtxos.length };
+    });
   }
 
   async syncBitAssets(): Promise<BitAssetsWalletInfo> {
-    const client = await this.getConfiguredClient();
-    const info = await client.sync();
-    this.bitassetsUtxos = await client.listUtxos();
-    this.bitassetsInfo = info;
-    this.balance = Object.values(info.balances ?? {}).reduce((sum, amount) => sum + amount, 0);
-    this._lastBalanceFetch = +new Date();
-    this._lastTxFetch = +new Date();
-    return info;
+    return this.withBitAssetsEvent('syncBitAssets', {}, async () => {
+      const client = await this.getConfiguredClient();
+      const info = await client.sync();
+      this.bitassetsUtxos = await client.listUtxos();
+      this.bitassetsInfo = info;
+      this.balance = Object.values(info.balances ?? {}).reduce((sum, amount) => sum + amount, 0);
+      this._lastBalanceFetch = +new Date();
+      this._lastTxFetch = +new Date();
+      return info;
+    });
   }
 
   async transferBitAssets(params: TransferParams): Promise<string> {
-    return (await this.getConfiguredClient()).transfer(params);
+    return this.withBitAssetsEvent('transferBitAssets', { assetId: params.assetId, amount: params.amount }, async () =>
+      (await this.getConfiguredClient()).transfer(params),
+    );
   }
 
   async reserveBitAsset(params: ReserveParams): Promise<string> {
-    return (await this.getConfiguredClient()).reserve(params);
+    return this.withBitAssetsEvent('reserveBitAsset', { name: params.name }, async () => (await this.getConfiguredClient()).reserve(params));
   }
 
   async registerBitAsset(params: RegisterParams): Promise<string> {
-    return (await this.getConfiguredClient()).register(params);
+    return this.withBitAssetsEvent('registerBitAsset', { name: params.name, initialSupply: params.initialSupply }, async () =>
+      (await this.getConfiguredClient()).register(params),
+    );
   }
 
   async ammMint(params: AmmMintParams): Promise<string> {
-    return (await this.getConfiguredClient()).ammMint(params);
+    return this.withBitAssetsEvent('ammMint', { asset0: params.asset0, asset1: params.asset1 }, async () =>
+      (await this.getConfiguredClient()).ammMint(params),
+    );
   }
 
   async ammSwap(params: AmmSwapParams): Promise<string> {
-    return (await this.getConfiguredClient()).ammSwap(params);
+    return this.withBitAssetsEvent('ammSwap', { assetSpend: params.assetSpend, assetReceive: params.assetReceive }, async () =>
+      (await this.getConfiguredClient()).ammSwap(params),
+    );
   }
 
   async ammBurn(params: AmmBurnParams): Promise<string> {
-    return (await this.getConfiguredClient()).ammBurn(params);
+    return this.withBitAssetsEvent('ammBurn', { asset0: params.asset0, asset1: params.asset1 }, async () =>
+      (await this.getConfiguredClient()).ammBurn(params),
+    );
   }
 
   async dutchAuctionCreate(params: DutchAuctionCreateParams): Promise<string> {
-    return (await this.getConfiguredClient()).dutchAuctionCreate(params);
+    return this.withBitAssetsEvent('dutchAuctionCreate', { baseAsset: params.baseAsset, quoteAsset: params.quoteAsset }, async () =>
+      (await this.getConfiguredClient()).dutchAuctionCreate(params),
+    );
   }
 
   async dutchAuctionBid(params: DutchAuctionBidParams): Promise<string> {
-    return (await this.getConfiguredClient()).dutchAuctionBid(params);
+    return this.withBitAssetsEvent('dutchAuctionBid', { auctionId: params.auctionId }, async () =>
+      (await this.getConfiguredClient()).dutchAuctionBid(params),
+    );
   }
 
   async dutchAuctionCollect(params: DutchAuctionCollectParams): Promise<string> {
-    return (await this.getConfiguredClient()).dutchAuctionCollect(params);
+    return this.withBitAssetsEvent('dutchAuctionCollect', { auctionId: params.auctionId }, async () =>
+      (await this.getConfiguredClient()).dutchAuctionCollect(params),
+    );
   }
 
   /**
@@ -180,6 +207,46 @@ export class BitAssetsWallet extends LegacyWallet {
       await client.configure({ rpcUrl });
     }
     return client;
+  }
+
+  private async withBitAssetsEvent<T>(operation: string, fields: Record<string, unknown>, run: () => Promise<T>): Promise<T> {
+    this.logBitAssetsEvent(operation, 'begin', fields);
+    try {
+      const result = await run();
+      this.logBitAssetsEvent(operation, 'ok', this.resultFields(result));
+      return result;
+    } catch (error) {
+      this.logBitAssetsEvent(operation, 'error', { error: normalizeBitAssetsError(error) });
+      throw error;
+    }
+  }
+
+  private logBitAssetsEvent(operation: string, status: string, fields: Record<string, unknown> = {}): void {
+    const payload = {
+      component: 'js.BitAssetsWallet',
+      operation,
+      status,
+      walletID: this.getID?.(),
+      address: this._address || undefined,
+      rpcUrl: this.bitassetsRpcUrl || undefined,
+      time: new Date().toISOString(),
+      ...fields,
+    };
+    console.log(`REDWALLET_EVENT ${JSON.stringify(payload)}`);
+  }
+
+  private resultFields(result: unknown): Record<string, unknown> {
+    if (typeof result === 'string') {
+      return /^[0-9a-fA-F]{64}$/.test(result) ? { txid: result } : { resultBytes: result.length };
+    }
+    if (result && typeof result === 'object') {
+      const maybeInfo = result as Partial<BitAssetsWalletInfo>;
+      return {
+        balanceAssetCount: maybeInfo.balances ? Object.keys(maybeInfo.balances).length : undefined,
+        utxoCount: Array.isArray(result) ? result.length : this.bitassetsUtxos.length,
+      };
+    }
+    return {};
   }
 }
 
