@@ -37,21 +37,14 @@ Never use `127.0.0.1` on physical phones.
 ### A. iPhone 12 mini (fastest path)
 
 1. USB connected, **unlock screen**, keep RedWallet foreground.
-2. In three terminals on the Mac (or tmux panes):
+2. Check which support services are up and print start commands:
 
 ```sh
 cd /Volumes/T705/code/work-on-something-to-do-with/redwallet
-source "$(ls -t /Volumes/T705/redwallet-logs/signet-endpoints-*/redwallet-signet.env | head -1)"
-npx react-native start --host 0.0.0.0 --port 8081
+scripts/start-redwallet-real-device-support.sh
 ```
 
-```sh
-node scripts/redwallet-log-collector-server.js
-```
-
-```sh
-BITASSETS_RPC_URL="$BITASSETS_RPC_URL" node scripts/redwallet-bitassets-command-server.js
-```
+Start any service marked `DOWN` in its own terminal (Metro, collector, command server).
 
 3. Bounded automated retry (preflight + launch + evidence):
 

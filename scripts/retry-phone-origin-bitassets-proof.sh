@@ -52,6 +52,16 @@ fi
 probe devicectl xcrun devicectl list devices --columns '*'
 probe xctrace xcrun xctrace list devices
 
+# Support services (always probe — useful even when phones are unavailable).
+probe metro-status curl -sS -m 5 "${METRO_URL:-http://100.76.117.106:8081}/status"
+probe collector-health curl -sS -m 5 http://192.168.1.50:6123/health
+probe command-health curl -sS -m 5 http://192.168.1.50:6124/health
+{
+  echo "metro=$(grep -q 'packager-status:running' "$RUN_DIR/probes/metro-status.txt" 2>/dev/null && echo up || echo down)"
+  echo "collector=$(grep -qE '"ok":true|^ok$' "$RUN_DIR/probes/collector-health.txt" 2>/dev/null && echo up || echo down)"
+  echo "command=$(grep -qE '"ok":true|^ok$' "$RUN_DIR/probes/command-health.txt" 2>/dev/null && echo up || echo down)"
+} >"$RUN_DIR/support-services.txt"
+
 device_state() {
   local udid="$1"
   xcrun devicectl list devices --columns '*' 2>/dev/null | awk -v u="$udid" '$0 ~ u { print $0 }'
@@ -80,8 +90,11 @@ pick_launch_udid() {
 
 if ! LAUNCH_UDID="$(pick_launch_udid)"; then
   log "BLOCKER no connected iPhone (both unavailable or missing). USB + trust + unlock required."
-  log "NEXT unlock iPhone 12 mini or reconnect LiPhone, then re-run this script."
+  log "NEXT: scripts/start-redwallet-real-device-support.sh then re-run this script."
   echo "blocker=no_connected_device" >"$RUN_DIR/BLOCKER.txt"
+  if [[ "$SKIP_LAUNCH" == "1" ]]; then
+    echo "status=preflight_blocked" >"$RUN_DIR/RESULT.txt"
+  fi
   exit 2
 fi
 
@@ -91,11 +104,6 @@ probe device-details xcrun devicectl device info details --device "$LAUNCH_UDID"
 if grep -q 'passcodeRequired: true' "$RUN_DIR/probes/device-details.txt" 2>/dev/null; then
   log "NOTE passcodeRequired=true on device; SpringBoard may still deny launch unless actively unlocked."
 fi
-
-# Support services (short probes only — do not start long-lived daemons in this script).
-probe metro-status curl -sS -m 5 "${METRO_URL:-http://100.76.117.106:8081}/status"
-probe collector-health curl -sS -m 5 http://192.168.1.50:6123/health
-probe command-health curl -sS -m 5 http://192.168.1.50:6124/health
 
 if [[ "$SKIP_LAUNCH" == "1" ]]; then
   log "SKIP_LAUNCH=1 preflight only"
@@ -107,13 +115,11 @@ if ! grep -q 'packager-status:running' "$RUN_DIR/probes/metro-status.txt" 2>/dev
   log "WARN Metro not running at ${METRO_URL:-http://100.76.117.106:8081}; start in another terminal:"
   log "  cd '$ROOT_DIR' && npx react-native start --host 0.0.0.0 --port 8081"
 fi
-if ! grep -q '"ok":true' "$RUN_DIR/probes/collector-health.txt" 2>/dev/null; then
-  log "WARN JS collector not healthy; start:"
-  log "  node '$ROOT_DIR/scripts/redwallet-log-collector-server.js'"
+if ! grep -qE '"ok":true|^ok$' "$RUN_DIR/probes/collector-health.txt" 2>/dev/null; then
+  log "WARN JS collector not healthy; run: scripts/start-redwallet-real-device-support.sh"
 fi
-if ! grep -q '"ok":true' "$RUN_DIR/probes/command-health.txt" 2>/dev/null; then
-  log "WARN BitAssets command server not healthy; start:"
-  log "  BITASSETS_RPC_URL='${BITASSETS_RPC_URL}' node '$ROOT_DIR/scripts/redwallet-bitassets-command-server.js'"
+if ! grep -qE '"ok":true|^ok$' "$RUN_DIR/probes/command-health.txt" 2>/dev/null; then
+  log "WARN BitAssets command server not healthy; run: scripts/start-redwallet-real-device-support.sh"
 fi
 
 log "MONITOR_START seconds=$MONITOR_SECONDS udid=$LAUNCH_UDID"
