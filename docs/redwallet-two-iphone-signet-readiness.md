@@ -88,9 +88,28 @@ Codex should be able to inspect:
 - repo status and latest commits;
 - host network/Tailscale state.
 
+## Phone unlock handoff
+
+When CoreDevice reports `unavailable` or SpringBoard denies launch because the
+device is locked, follow:
+
+`docs/redwallet-phone-unlock-handoff.md`
+
+Bounded retry script (preflight + launch + evidence):
+
+```sh
+scripts/retry-phone-origin-bitassets-proof.sh
+```
+
+Preflight only (no launch):
+
+```sh
+REDWALLET_PHONE_SKIP_LAUNCH=1 scripts/retry-phone-origin-bitassets-proof.sh
+```
+
 ## Current Proof Status
 
-Existing evidence proves substantial simulator/emulator/native-signing work, but
-does not yet prove a completed real-device round trip between Android, iPhone,
-desktop wallet, and Luke's signet. That final proof requires the real phones to
-be connected and reachable.
+Headless signet, Floresta smoke, iOS simulator E2E, and Android emulator E2E are
+complete (commits `9c069a8ba`, `dc72b431f`). Real-phone BitAssets/QUIC origin
+proof and BitWindow `local-signet` GUI sync remain open; see the handoff doc and
+`/Volumes/T705/redwallet-logs/orchestration/PRODUCTION_MASTER_CHECKLIST.md`.
