@@ -71,6 +71,13 @@ class AppDelegate: RCTAppDelegate, UNUserNotificationCenterDelegate {
 
     override func bundleURL() -> URL? {
         #if DEBUG
+        #if !targetEnvironment(simulator)
+        if let bundledURL = Bundle.main.url(forResource: "main", withExtension: "jsbundle") {
+            NSLog("[AppDelegate] Using bundled real-device JS bundle: \(bundledURL.absoluteString)")
+            return bundledURL
+        }
+        NSLog("[AppDelegate] Missing bundled real-device JS bundle; falling back to Metro provider")
+        #endif
         return RCTBundleURLProvider.sharedSettings().jsBundleURL(forBundleRoot: "index")
         #else
         return Bundle.main.url(forResource: "main", withExtension: "jsbundle")

@@ -17,6 +17,8 @@ import { normalizeBitAssetsError, validateBitAssetsRpcUrl } from '../../blue_mod
 import { BitcoinUnit, Chain } from '../../models/bitcoinUnits';
 import { LegacyWallet } from './legacy-wallet';
 import { Transaction } from './types';
+import { Platform } from 'react-native';
+import { isEmulatorSync } from 'react-native-device-info';
 
 export class BitAssetsWallet extends LegacyWallet {
   static readonly type = 'bitassetsWallet';
@@ -202,7 +204,10 @@ export class BitAssetsWallet extends LegacyWallet {
 
   private async getConfiguredClient(): Promise<BitAssetsWalletClient> {
     const client = this.getClient();
-    const rpcUrl = validateBitAssetsRpcUrl(this.bitassetsRpcUrl);
+    const rpcUrl = normalizeBitAssetsRpcUrlForRuntime(validateBitAssetsRpcUrl(this.bitassetsRpcUrl));
+    if (this.bitassetsRpcUrl !== rpcUrl) {
+      this.bitassetsRpcUrl = rpcUrl;
+    }
     if (client.configure) {
       await client.configure({ rpcUrl });
     }
@@ -252,4 +257,17 @@ export class BitAssetsWallet extends LegacyWallet {
 
 export function hasBitAssetsWallet(wallets: Array<{ type?: string }>): boolean {
   return wallets.some(wallet => wallet.type === BitAssetsWallet.type);
+}
+
+export function normalizeBitAssetsRpcUrlForRuntime(rpcUrl: string): string {
+  if (Platform.OS !== 'ios' || !__DEV__) return rpcUrl;
+  try {
+    if (isEmulatorSync()) return rpcUrl;
+  } catch {
+    return rpcUrl;
+  }
+  return rpcUrl.replace(
+    /^(https?:\/\/)(?:localhost|\[::1\]|127(?:\.\d{1,3}){3}|100\.76\.117\.106)(:\d+)?(\/.*)?$/i,
+    (_match, protocol: string, port = '', path = '') => `${protocol}192.168.1.236${port}${path}`.replace(/\/$/, ''),
+  );
 }

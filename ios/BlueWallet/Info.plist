@@ -159,6 +159,16 @@
 				<key>NSExceptionAllowsInsecureHTTPLoads</key>
 				<true/>
 			</dict>
+			<key>100.76.117.106</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
+			<key>192.168.1.236</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
 			<key>onion</key>
 			<dict>
 				<key>NSExceptionAllowsInsecureHTTPLoads</key>
@@ -186,6 +196,8 @@
 	<string>In order to quickly scan the recipient's address, we need your permission to use the camera to scan their QR Code.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>In order to use FaceID for authentication when performing sensitive actions, we need your permission.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>RedWallet connects to Luke's local signet services on this network for development testing.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Your authorization is required to save this image.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

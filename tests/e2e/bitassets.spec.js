@@ -510,6 +510,36 @@ function mineBitAssetsTx(txid) {
     './scripts/mine-bitassets-block.sh',
   ].join(' ');
   execFileSync('bash', ['-lc', command], { stdio: 'inherit', timeout: Number(process.env.BITASSETS_E2E_MINE_TIMEOUT_MS || 900000) });
+  let parsedProof = readBitAssetsTxProof(localDevDir, composeFile, txid);
+  const minimumConfirmations = Number(process.env.BITASSETS_E2E_MIN_PROOF_CONFIRMATIONS || 1);
+  for (let attempt = 1; Number(parsedProof?.confirmations ?? 0) < minimumConfirmations && attempt <= 2; attempt++) {
+    console.log(
+      `[BitAssets E2E] tx ${txid} proof has ${Number(parsedProof?.confirmations ?? 0)} confirmations; mining maturity block ${attempt}/2`,
+    );
+    const maturityCommand = [
+      `cd ${shellQuote(localDevDir)} &&`,
+      `COMPOSE_FILE=${shellQuote(composeFile)}`,
+      `BITASSETS_IMAGE=${shellQuote(process.env.BITASSETS_IMAGE || 'local/plain-bitassets:codex-proof')}`,
+      `BITASSETS_PLATFORM=${shellQuote(process.env.BITASSETS_PLATFORM || 'linux/arm64')}`,
+      `BMM_MINE_ATTEMPTS=${shellQuote(process.env.BMM_MINE_ATTEMPTS || '8')}`,
+      `BMM_REQUEST_SETTLE_SECS=${shellQuote(process.env.BMM_REQUEST_SETTLE_SECS || '40')}`,
+      `BITASSETS_MINE_TIMEOUT=${shellQuote(process.env.BITASSETS_MINE_TIMEOUT || '120')}`,
+      './scripts/mine-bitassets-block.sh',
+    ].join(' ');
+    execFileSync('bash', ['-lc', maturityCommand], { stdio: 'inherit', timeout: Number(process.env.BITASSETS_E2E_MINE_TIMEOUT_MS || 900000) });
+    parsedProof = readBitAssetsTxProof(localDevDir, composeFile, txid);
+  }
+  if (typeof parsedProof?.sidechain_block_height !== 'number') {
+    throw new Error(`BitAssets tx ${txid} was not confirmed after mining: ${JSON.stringify(parsedProof)}`);
+  }
+  console.log(
+    `[BitAssets E2E] confirmed tx ${txid} at sidechain height ${parsedProof.sidechain_block_height} with ${Number(
+      parsedProof.confirmations ?? 0,
+    )} confirmations`,
+  );
+}
+
+function readBitAssetsTxProof(localDevDir, composeFile, txid) {
   const proof = execFileSync(
     'bash',
     [
@@ -521,11 +551,7 @@ function mineBitAssetsTx(txid) {
     ],
     { encoding: 'utf8', timeout: 60000 },
   );
-  const parsedProof = JSON.parse(proof);
-  if (typeof parsedProof?.sidechain_block_height !== 'number') {
-    throw new Error(`BitAssets tx ${txid} was not confirmed after mining: ${proof}`);
-  }
-  console.log(`[BitAssets E2E] confirmed tx ${txid} at sidechain height ${parsedProof.sidechain_block_height}`);
+  return JSON.parse(proof);
 }
 
 function latestBitAssetId() {
@@ -562,6 +588,7 @@ async function expectProofBackedUtxos(minimum = 1) {
     const rawStatus = await extractTextFromElementById('BitAssetsProofBackedUtxoStatus');
     const status = parseProofStatus(rawStatus);
     if (count >= minimum && status.proofBacked >= minimum && status.proofBacked === status.confirmed) return;
+    console.log(`[BitAssets E2E] proof-backed wait ${i + 1}/6: count=${rawCount}, status=${rawStatus}`);
     await tapSyncButton();
     await sleep(3000);
   }

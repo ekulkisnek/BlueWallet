@@ -191,6 +191,12 @@ done < <(adb devices -l 2>/dev/null || true)
 
 if [[ -d /Volumes/T705/redwallet-logs ]]; then
   run_capture "$OUT_DIR/desktop/recent-proof-logs.txt" find /Volumes/T705/redwallet-logs -maxdepth 2 -type f -mtime -3
+  run_capture "$OUT_DIR/ios/recent-real-device-monitor-logs.txt" sh -c "find /Volumes/T705/redwallet-logs -maxdepth 3 -path '*ios-run-monitor-*' -type f -mtime -3 | sort"
+  if [[ -e /Volumes/T705/redwallet-logs/current-ios-real-device-app-monitor ]]; then
+    run_capture "$OUT_DIR/ios/current-real-device-app-monitor-files.txt" find -L /Volumes/T705/redwallet-logs/current-ios-real-device-app-monitor -maxdepth 3 -type f
+    run_capture "$OUT_DIR/ios/current-real-device-app-monitor-summary.txt" cat /Volumes/T705/redwallet-logs/current-ios-real-device-app-monitor/SUMMARY.txt
+    run_capture "$OUT_DIR/ios/current-real-device-app-monitor-events.ndjson" cat /Volumes/T705/redwallet-logs/current-ios-real-device-app-monitor/events.ndjson
+  fi
 fi
 
 cat > "$OUT_DIR/README.md" <<EOF
@@ -209,6 +215,7 @@ Start with:
 - \`android/adb-devices.txt\`
 - \`signet/docker-compose-ps.txt\`
 - \`signet/bitassets-logs.txt\`
+- \`ios/recent-real-device-monitor-logs.txt\`
 - \`repo/git-status.txt\`
 
 This bundle intentionally records missing phones/simulators as command output
@@ -216,6 +223,9 @@ instead of failing, so Codex can compare before/after phone attachment.
 
 Real-device iOS logging notes:
 - App/native logs use the \`REDWALLET_EVENT\` and \`[BitAssetsWallet]\` markers.
+- Live physical-phone app console captures are written by
+  \`scripts/monitor-redwallet-ios-real-devices.sh\` under
+  \`/Volumes/T705/redwallet-logs/current-ios-run-monitor\`.
 - If devicectl cannot pull live logs on this Xcode version, use Console.app with
   the physical device selected and filter those markers, then save the log into
   this bundle or rerun this collector after the app action.

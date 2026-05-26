@@ -32,6 +32,9 @@ import { HDTaprootWallet } from './wallets/hd-taproot-wallet';
 
 let usedBucketNum: boolean | number = false;
 let savingInProgress = 0; // its both a flag and a counter of attempts to write to disk
+let loggedRealmFallbackRead = false;
+let loggedRealmFallbackKey = false;
+let loggedSecureStoreFallbackSave = false;
 
 export type TTXMetadata = {
   [txid: string]: {
@@ -145,8 +148,10 @@ export class BlueApp {
     try {
       return await this.getItem(key);
     } catch (error: any) {
-      console.warn('error reading', key, error.message);
-      console.warn('fallback to realm');
+      if (!loggedRealmFallbackRead) {
+        console.log('SecureKeyStore read unavailable; using Realm fallback', { key, message: error.message });
+        loggedRealmFallbackRead = true;
+      }
       const realmKeyValue = await this.openRealmKeyValue();
       const obj = realmKeyValue.objectForPrimaryKey('KeyValue', key); // search for a realm object with a primary key
       value = obj?.value;
@@ -322,7 +327,10 @@ export class BlueApp {
         await Keychain.setGenericPassword(service, password, { service });
       }
     } catch (error) {
-      console.warn('Keychain unavailable for Realm fallback; using local fallback key', error);
+      if (!loggedRealmFallbackKey) {
+        console.log('Keychain unavailable for Realm fallback; using local fallback key', error);
+        loggedRealmFallbackKey = true;
+      }
       const fallbackPassword = this.hashIt('bluewallet-keyvalue-realm-fallback');
       password = fallbackPassword + fallbackPassword;
     }
@@ -776,7 +784,10 @@ export class BlueApp {
         await this.setItem(BlueApp.FLAG_ENCRYPTED, encryptedFlag);
       } catch (error) {
         if (!realmBackupSaved) throw error;
-        console.warn('SecureKeyStore save failed; data was saved to Realm fallback', error);
+        if (!loggedSecureStoreFallbackSave) {
+          console.log('SecureKeyStore save failed; data was saved to Realm fallback', error);
+          loggedSecureStoreFallbackSave = true;
+        }
       }
     } catch (error: any) {
       console.error('save to disk exception:', error.message);

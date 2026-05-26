@@ -61,9 +61,14 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
                   let config = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
                 throw NSError(domain: "BitAssetsWallet", code: 4, userInfo: [NSLocalizedDescriptionKey: "Invalid BitAssets wallet config"])
             }
-            let rpcUrl = ((config["rpcUrl"] ?? config["rpc_url"]) as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let requestedRpcUrl = ((config["rpcUrl"] ?? config["rpc_url"]) as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let rpcUrl = normalizeRpcUrlForCurrentRuntime(requestedRpcUrl)
             try validateRpcUrl(rpcUrl)
-            eventLog("configure", "begin", ["rpcUrl": rpcUrl])
+            var configureFields: [String: Any] = ["rpcUrl": rpcUrl]
+            if requestedRpcUrl != rpcUrl {
+                configureFields["requestedRpcUrl"] = requestedRpcUrl
+            }
+            eventLog("configure", "begin", configureFields)
             let groupDefaults = UserDefaults(suiteName: "group.com.layertwolabs.bluewallet") ?? UserDefaults.standard
             groupDefaults.set(rpcUrl, forKey: "bitassetsRpcUrl")
             groupDefaults.synchronize()
@@ -72,7 +77,7 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
                 handle = 0
             }
             let responseData = try JSONSerialization.data(withJSONObject: ["configured": true, "rpcUrl": rpcUrl])
-            eventLog("configure", "ok", ["rpcUrl": rpcUrl])
+            eventLog("configure", "ok", configureFields)
             resolve(String(data: responseData, encoding: .utf8) ?? "{\"configured\":true}")
         } catch {
             let sanitized = sanitizedError(error)
@@ -90,7 +95,25 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
     }
 
     @objc func sync(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
-        call("sync", resolve, reject) { floresta_bitassets_wallet_sync(try self.openWallet()) }
+        call("sync", resolve, reject) {
+            let wallet = try self.openWallet()
+            let first = floresta_bitassets_wallet_sync(wallet)
+            if first.ok {
+                return first
+            }
+            let errorText = first.value.map { String(cString: $0) } ?? ""
+            floresta_bitassets_string_free(first.value)
+            guard self.isSnapshotResyncError(errorText) else {
+                return FlorestaBitAssetsFfiResult(ok: false, value: strdup(self.sanitizeSensitiveDetails(errorText)))
+            }
+            self.eventLog("sync", "snapshotResync", ["error": errorText])
+            try self.resetWalletSnapshotPreservingAddresses()
+            if self.handle != 0 {
+                floresta_bitassets_wallet_free(self.handle)
+                self.handle = 0
+            }
+            return floresta_bitassets_wallet_sync(try self.openWallet())
+        }
     }
 
     @objc func listUtxos(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
@@ -208,6 +231,33 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
         resourceValues.isExcludedFromBackup = true
         try walletDirectory.setResourceValues(resourceValues)
         return walletDirectory
+    }
+
+    private func resetWalletSnapshotPreservingAddresses() throws {
+        let walletDirectory = try prepareWalletDirectory()
+        let walletFile = walletDirectory.appendingPathComponent("wallet.json")
+        guard FileManager.default.fileExists(atPath: walletFile.path) else {
+            return
+        }
+        let data = try Data(contentsOf: walletFile)
+        guard var json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw NSError(domain: "BitAssetsWallet", code: 11, userInfo: [NSLocalizedDescriptionKey: "Could not parse BitAssets wallet snapshot for resync"])
+        }
+        json["confirmed_utxos"] = []
+        json["mempool_utxos"] = []
+        json["spent_outpoints"] = []
+        json["last_tip_hash"] = NSNull()
+        json["last_tip_height"] = NSNull()
+        let resetData = try JSONSerialization.data(withJSONObject: json, options: [.sortedKeys])
+        try resetData.write(to: walletFile, options: .atomic)
+        eventLog("sync", "snapshotReset", ["walletPath": walletFile.path])
+    }
+
+    private func isSnapshotResyncError(_ message: String) -> Bool {
+        let normalized = message.lowercased()
+        return normalized.contains("resync from snapshot")
+            || normalized.contains("no longer on the active sidechain")
+            || normalized.contains("from_block_hash")
     }
 
     private func getOrCreateSeedHex(walletFile: URL) throws -> String {
@@ -336,6 +386,24 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
         }
     }
 
+    private func normalizeRpcUrlForCurrentRuntime(_ rpcUrl: String) -> String {
+        #if DEBUG
+        #if targetEnvironment(simulator)
+        return rpcUrl
+        #else
+        guard var components = URLComponents(string: rpcUrl),
+              let host = components.host?.lowercased(),
+              host == "localhost" || host == "::1" || host.hasPrefix("127.") || host == "100.76.117.106" else {
+            return rpcUrl
+        }
+        components.host = "192.168.1.236"
+        return components.url?.absoluteString ?? rpcUrl
+        #endif
+        #else
+        return rpcUrl
+        #endif
+    }
+
     private func isLocalRpcHost(_ host: String) -> Bool {
         let normalized = host.lowercased()
         if normalized == "localhost" || normalized == "::1" || normalized.hasPrefix("127.") {
@@ -345,6 +413,9 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
             return true
         }
         let parts = normalized.split(separator: ".")
+        if parts.count >= 2, parts[0] == "100", let secondOctet = Int(parts[1]), secondOctet >= 64 && secondOctet <= 127 {
+            return true
+        }
         guard parts.count >= 2, parts[0] == "172", let secondOctet = Int(parts[1]) else {
             return false
         }

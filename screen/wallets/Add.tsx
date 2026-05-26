@@ -22,6 +22,7 @@ import { useExtendedNavigation } from '../../hooks/useExtendedNavigation';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AddWalletStackParamList } from '../../navigation/AddWalletStack';
 import { RouteProp, useRoute } from '@react-navigation/native';
+import { isEmulatorSync } from 'react-native-device-info';
 import SafeAreaScrollView from '../../components/SafeAreaScrollView';
 import { BlueSpacing20, BlueSpacing40 } from '../../components/BlueSpacing';
 import { hexToUint8Array, uint8ArrayToHex } from '../../blue_modules/uint8array-extras';
@@ -30,10 +31,17 @@ import { resetScanWasBBQR } from '../../helpers/scan-qr.ts';
 import { BitAssetsWallet, hasBitAssetsWallet } from '../../class/wallets/bitassets-wallet';
 import { validateBitAssetsRpcUrl } from '../../blue_modules/BitAssetsWalletForms';
 
-const DEFAULT_BITASSETS_RPC_URL = Platform.select({
-  android: 'http://10.0.2.2:6004',
-  default: 'http://127.0.0.1:6004',
-});
+const DEFAULT_BITASSETS_RPC_URL = (() => {
+  if (Platform.OS === 'android') return 'http://10.0.2.2:6004';
+  if (Platform.OS === 'ios') {
+    try {
+      if (__DEV__ && !isEmulatorSync()) return 'http://192.168.1.236:6004';
+    } catch {
+      // Fall through to the simulator/local default if device detection is unavailable.
+    }
+  }
+  return 'http://127.0.0.1:6004';
+})();
 
 enum ButtonSelected {
   // @ts-ignore: Return later to update
