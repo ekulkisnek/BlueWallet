@@ -8,9 +8,14 @@ OUT_DIR="${OUTPUT_ROOT%/}/signet-endpoints-${STAMP}"
 LOCAL_DEV="${LOCAL_DEV:-/Volumes/T705/code/drivechain-wallet-dev/local-dev}"
 COMPOSE_FILE="${COMPOSE_FILE:-$LOCAL_DEV/docker-compose.local-minimal.yml}"
 BITASSETS_IMAGE="${BITASSETS_IMAGE:-local/plain-bitassets:codex-proof}"
-BITASSETS_PLATFORM="${BITASSETS_PLATFORM:-linux/arm64}"
+BITASSETS_PLATFORM="${BITASSETS_PLATFORM:-linux/amd64}"
 
 mkdir -p "$OUT_DIR"
+
+# LMDB services fail without Colima vm.overcommit_memory=1 on this Mac.
+if [[ -x "${LOCAL_DEV}/scripts/ensure-colima-overcommit.sh" ]]; then
+  "${LOCAL_DEV}/scripts/ensure-colima-overcommit.sh" || true
+fi
 
 host_ipv4s() {
   ifconfig 2>/dev/null | awk '

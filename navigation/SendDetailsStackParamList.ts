@@ -44,6 +44,9 @@ export type TNavigationWrapper = {
 
 export type SendDetailsStackParamList = {
   SendDetails: SendDetailsParams;
+  BitAssetsSendDetails: {
+    walletID: string;
+  };
   CoinControlOutput: {
     walletID: string;
     utxo: Utxo;
@@ -108,7 +111,7 @@ export type SendDetailsStackParamList = {
   Success: {
     fee?: number;
     amount: number;
-    amountUnit?: BitcoinUnit;
+    amountUnit?: BitcoinUnit | string;
     txid?: string;
     invoiceDescription?: string;
   };

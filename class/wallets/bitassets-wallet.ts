@@ -21,6 +21,19 @@ import { Transaction } from './types';
 import { Platform } from 'react-native';
 import { isEmulatorSync } from 'react-native-device-info';
 
+export function normalizeBitAssetsRpcUrlForRuntime(rpcUrl: string): string {
+  if (Platform.OS !== 'ios' || !__DEV__) return rpcUrl;
+  try {
+    if (isEmulatorSync()) return rpcUrl;
+  } catch {
+    return rpcUrl;
+  }
+  return rpcUrl.replace(
+    /^(https?:\/\/)(?:localhost|\[::1\]|127(?:\.\d{1,3}){3}|100\.76\.117\.106)(:\d+)?(\/.*)?$/i,
+    (_match, protocol: string, port = '', path = '') => `${protocol}192.168.1.50${port}${path}`.replace(/\/$/, ''),
+  );
+}
+
 export class BitAssetsWallet extends LegacyWallet {
   static readonly type = 'bitassetsWallet';
   static readonly typeReadable = 'BitAssets';
@@ -57,7 +70,9 @@ export class BitAssetsWallet extends LegacyWallet {
   async generate(rpcUrl?: string, bitassetsLiteWalletQuicUrl?: string | null): Promise<void> {
     this.bitassetsRpcUrl = validateBitAssetsRpcUrl(rpcUrl ?? this.bitassetsRpcUrl);
     this.bitassetsLiteWalletQuicUrl =
-      bitassetsLiteWalletQuicUrl === undefined ? deriveBitAssetsLiteWalletQuicUrl(this.bitassetsRpcUrl) ?? '' : bitassetsLiteWalletQuicUrl ?? '';
+      bitassetsLiteWalletQuicUrl === undefined
+        ? (deriveBitAssetsLiteWalletQuicUrl(this.bitassetsRpcUrl) ?? '')
+        : (bitassetsLiteWalletQuicUrl ?? '');
     await this.withBitAssetsEvent('generate', { rpcUrl: this.bitassetsRpcUrl }, async () => {
       const client = await this.getConfiguredClient();
       const address = await client.getNewAddress();
@@ -138,7 +153,9 @@ export class BitAssetsWallet extends LegacyWallet {
   }
 
   async reserveBitAsset(params: ReserveParams): Promise<string> {
-    return this.withBitAssetsEvent('reserveBitAsset', { name: params.name }, async () => (await this.getConfiguredClient()).reserve(params));
+    return this.withBitAssetsEvent('reserveBitAsset', { name: params.name }, async () =>
+      (await this.getConfiguredClient()).reserve(params),
+    );
   }
 
   async registerBitAsset(params: RegisterParams): Promise<string> {
@@ -266,17 +283,4 @@ export class BitAssetsWallet extends LegacyWallet {
 
 export function hasBitAssetsWallet(wallets: Array<{ type?: string }>): boolean {
   return wallets.some(wallet => wallet.type === BitAssetsWallet.type);
-}
-
-export function normalizeBitAssetsRpcUrlForRuntime(rpcUrl: string): string {
-  if (Platform.OS !== 'ios' || !__DEV__) return rpcUrl;
-  try {
-    if (isEmulatorSync()) return rpcUrl;
-  } catch {
-    return rpcUrl;
-  }
-  return rpcUrl.replace(
-    /^(https?:\/\/)(?:localhost|\[::1\]|127(?:\.\d{1,3}){3}|100\.76\.117\.106)(:\d+)?(\/.*)?$/i,
-    (_match, protocol: string, port = '', path = '') => `${protocol}192.168.1.236${port}${path}`.replace(/\/$/, ''),
-  );
 }

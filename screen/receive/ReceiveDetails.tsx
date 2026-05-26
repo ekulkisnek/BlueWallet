@@ -32,6 +32,7 @@ import { SuccessView } from '../send/success';
 import { BlueSpacing40 } from '../../components/BlueSpacing';
 import { BlueLoading } from '../../components/BlueLoading';
 import SafeAreaScrollView from '../../components/SafeAreaScrollView';
+import { BitAssetsWallet } from '../../class/wallets/bitassets-wallet';
 
 const segmentControlValues = [loc.wallets.details_address, loc.bip47.payment_code];
 const HORIZONTAL_PADDING = 20;
@@ -100,16 +101,22 @@ const ReceiveDetails = () => {
     label: {
       color: colors.foregroundColor,
     },
+    chainLabel: {
+      color: colors.alternativeTextColor,
+      fontSize: 14,
+      fontWeight: '600',
+      marginBottom: 12,
+    },
   });
 
   const setAddressBIP21Encoded = useCallback(
     (addr: string) => {
-      const newBip21encoded = DeeplinkSchemaMatch.bip21encode(addr);
+      const newBip21encoded = wallet?.type === BitAssetsWallet.type ? addr : DeeplinkSchemaMatch.bip21encode(addr);
       setParams({ address: addr });
       setBip21encoded(newBip21encoded);
       setShowAddress(true);
     },
-    [setParams],
+    [setParams, wallet],
   );
 
   const obtainWalletAddress = useCallback(async () => {
@@ -211,11 +218,20 @@ const ReceiveDetails = () => {
   );
 
   useEffect(() => {
-    wallet?.allowBIP47() &&
+    if (wallet) {
+      setOptions({
+        title: wallet.type === BitAssetsWallet.type ? 'Receive BitAssets' : loc.receive.header,
+      });
+    }
+  }, [wallet, setOptions]);
+
+  useEffect(() => {
+    if (wallet?.allowBIP47()) {
       setOptions({
         headerRight: () => HeaderRight,
       });
-  }, [HeaderRight, colors.foregroundColor, setOptions, wallet]);
+    }
+  }, [HeaderRight, setOptions, wallet]);
 
   // re-fetching address balance periodically
   useEffect(() => {
@@ -223,8 +239,10 @@ const ReceiveDetails = () => {
 
     const intervalId = setInterval(async () => {
       try {
+        if (wallet?.type === BitAssetsWallet.type) return;
         const decoded = DeeplinkSchemaMatch.bip21decode(bip21encoded);
         const addressToUse = address || decoded.address;
+
         if (!addressToUse) return;
 
         console.debug('checking address', addressToUse, 'for balance...');
@@ -296,7 +314,7 @@ const ReceiveDetails = () => {
     }, intervalMs);
 
     return () => clearInterval(intervalId);
-  }, [bip21encoded, address, initialConfirmed, initialUnconfirmed, intervalMs, fetchAndSaveWalletTransactions, walletID]);
+  }, [bip21encoded, address, initialConfirmed, initialUnconfirmed, intervalMs, fetchAndSaveWalletTransactions, walletID, wallet?.type]);
 
   useEffect(() => {
     const handleBackButton = () => {
@@ -381,6 +399,9 @@ const ReceiveDetails = () => {
                   )}
                 </>
               )}
+              <BlueText style={[styles.chainLabel, stylesHook.chainLabel]}>
+                {wallet?.type === BitAssetsWallet.type ? 'BitAssets Sidechain Address' : 'Bitcoin Address'}
+              </BlueText>
               <View style={styles.qrCodeContainer}>
                 <QRCodeComponent value={bip21encoded} size={qrCodeSize} />
               </View>
@@ -575,7 +596,7 @@ const ReceiveDetails = () => {
 
         <View style={styles.share}>
           <BlueCard>
-            {showAddress && currentTab === loc.wallets.details_address && (
+            {showAddress && currentTab === loc.wallets.details_address && wallet?.type !== BitAssetsWallet.type && (
               <BlueButtonLink
                 style={styles.link}
                 testID="SetCustomAmountButton"
@@ -583,6 +604,7 @@ const ReceiveDetails = () => {
                 onPress={showCustomAmountModal}
               />
             )}
+
             <Button
               onPress={handleShareButtonPressed}
               title={loc.receive.details_share}
@@ -633,6 +655,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
     paddingBottom: 12,
+  },
+  chainLabel: {
+    textAlign: 'center',
   },
   container: {
     flex: 1,

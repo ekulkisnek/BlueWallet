@@ -11,6 +11,12 @@ mkdir -p "$OUT_DIR"
 
 cd "$ROOT_DIR"
 
+# LMDB-backed signet services need Colima vm.overcommit_memory=1 on this Mac.
+LOCAL_DEV="${LOCAL_DEV:-/Volumes/T705/code/drivechain-wallet-dev/local-dev}"
+if [[ -x "${LOCAL_DEV}/scripts/ensure-colima-overcommit.sh" ]]; then
+  "${LOCAL_DEV}/scripts/ensure-colima-overcommit.sh" || true
+fi
+
 echo "[1/4] Discovering signet endpoints..."
 scripts/redwallet-signet-endpoints.sh "$OUT_DIR" > "$OUT_DIR/endpoints.out" 2>&1 || true
 ENV_FILE="$(awk -F= '/^env_file=/{print $2}' "$OUT_DIR/endpoints.out" | tail -1)"

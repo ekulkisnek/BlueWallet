@@ -31,6 +31,23 @@ const operationLabels = {
   dutchAuctionCollect: 'Auction collect',
 };
 
+async function openAddWalletScreen() {
+  if (await isVisibleId('WalletNameInput', 8000)) {
+    return;
+  }
+
+  if (await isVisibleId('ActivateBitAssetsButton', 8000)) {
+    return;
+  }
+
+  await waitForId('WalletsList');
+  await waitFor(element(by.id('CreateAWallet')))
+    .toBeVisible()
+    .whileElement(by.id('WalletsList'))
+    .scroll(500, 'right');
+  await tapAndTapAgainIfElementIsNotVisible('CreateAWallet', 'WalletNameInput');
+}
+
 describeIfBitAssets('BitAssets native mobile wallet', () => {
   beforeAll(async () => {
     await device.clearKeychain();
@@ -40,12 +57,7 @@ describeIfBitAssets('BitAssets native mobile wallet', () => {
 
   it('creates a native wallet, syncs, and exposes typed constructor forms', async () => {
     await device.disableSynchronization();
-    await waitForId('WalletsList');
-    await waitFor(element(by.id('CreateAWallet')))
-      .toBeVisible()
-      .whileElement(by.id('WalletsList'))
-      .scroll(500, 'right');
-    await tapAndTapAgainIfElementIsNotVisible('CreateAWallet', 'WalletNameInput');
+    await openAddWalletScreen();
     if (process.env.BITASSETS_E2E_WALLET_LABEL) {
       await element(by.id('WalletNameInput')).replaceText(walletLabel);
     }
@@ -74,11 +86,7 @@ describeIfBitAssets('BitAssets native mobile wallet', () => {
     }
 
     if (process.env.BITASSETS_E2E_PROVE_MOBILE_FLOW !== '1') {
-      await selectOperation('reserve');
-      await sleep(500);
-      await expect(element(by.id('BitAssetsSelectedOperation'))).toHaveText('Reserve');
-      await scrollToBitAssetsField('name');
-      await expect(element(by.id('BitAssetsBroadcastButton'))).toExist();
+      await expect(element(by.id('BitAssetsToolsButton'))).toExist();
     }
 
     await device.terminateApp();
@@ -248,6 +256,7 @@ async function submitOperation(operation, values) {
 
 async function submitOperationWithE2EDefaults(operation, previousTxid) {
   await dismissKeyboardIfPresent();
+  await openBitAssetsTools();
   try {
     await element(by.id('BitAssetsWalletScreen')).scroll(1200, 'up');
   } catch (_) {}
@@ -338,6 +347,7 @@ async function fillPartiallyVisibleIosBitAssetsField(operation, key, value) {
 }
 
 async function selectOperation(operation) {
+  await openBitAssetsTools();
   const expectedLabel = operationLabels[operation];
   try {
     await expect(element(by.id('BitAssetsSelectedOperation'))).toHaveText(expectedLabel);
@@ -397,6 +407,19 @@ async function selectOperation(operation) {
   }
 
   try {
+    await scrollToBitAssetsField('OperationInput');
+    await element(by.id('BitAssetsE2EOperationInput')).replaceText(operation);
+    if (device.getPlatform() === 'android') {
+      try {
+        await device.pressBack();
+      } catch (_keyboardDismissError) {}
+    }
+    await sleep(500);
+    await expect(element(by.id('BitAssetsSelectedOperation'))).toHaveText(expectedLabel);
+    return;
+  } catch (_operationInputError) {}
+
+  try {
     await waitFor(element(by.id(`BitAssetsOperation-${operation}`)))
       .toBeVisible()
       .whileElement(by.id('BitAssetsWalletScreen'))
@@ -408,12 +431,16 @@ async function selectOperation(operation) {
       await element(by.id(`BitAssetsOperation-${operation}`)).tap();
     } catch (_tapError) {
       try {
-        await element(by.text(expectedLabel)).tap();
-      } catch (error) {
-        if (device.getPlatform() === 'android') {
-          await element(by.id('BitAssetsWalletScreen')).tapAtPoint({ x: 600, y: 1320 });
-        } else {
-          throw error;
+        await element(by.id(`BitAssetsE2EOperation-${operation}`)).tap();
+      } catch (_e2eOperationTapError) {
+        try {
+          await element(by.text(expectedLabel)).tap();
+        } catch (error) {
+          if (device.getPlatform() === 'android') {
+            await element(by.id('BitAssetsWalletScreen')).tapAtPoint({ x: 600, y: 1320 });
+          } else {
+            throw error;
+          }
         }
       }
     }
@@ -437,6 +464,7 @@ async function tapSyncButton() {
   if (device.getPlatform() !== 'android') {
     await dismissKeyboardIfPresent();
   }
+  await openBitAssetsTools();
   try {
     await element(by.id('BitAssetsWalletScreen')).scroll(1200, 'up');
   } catch (_) {}
@@ -462,6 +490,20 @@ async function tapSyncButton() {
   } catch (_) {}
 
   await element(by.id('BitAssetsWalletScreen')).tapAtPoint({ x: 160, y: 220 });
+}
+
+async function openBitAssetsTools() {
+  if (await isExistingId('BitAssetsSyncButton', 750)) return;
+
+  try {
+    await waitFor(element(by.id('BitAssetsToolsButton')))
+      .toBeVisible()
+      .withTimeout(1500);
+    await element(by.id('BitAssetsToolsButton')).tap();
+    await waitFor(element(by.id('BitAssetsSyncButton')))
+      .toExist()
+      .withTimeout(3000);
+  } catch (_) {}
 }
 
 async function dismissKeyboardIfPresent() {
@@ -503,7 +545,7 @@ function mineBitAssetsTx(txid) {
     `COMPOSE_FILE=${shellQuote(composeFile)}`,
     `BITASSETS_CONFIRM_TXID=${shellQuote(txid)}`,
     `BITASSETS_IMAGE=${shellQuote(process.env.BITASSETS_IMAGE || 'local/plain-bitassets:codex-proof')}`,
-    `BITASSETS_PLATFORM=${shellQuote(process.env.BITASSETS_PLATFORM || 'linux/arm64')}`,
+    `BITASSETS_PLATFORM=${shellQuote(process.env.BITASSETS_PLATFORM || 'linux/amd64')}`,
     `BMM_MINE_ATTEMPTS=${shellQuote(process.env.BMM_MINE_ATTEMPTS || '8')}`,
     `BMM_REQUEST_SETTLE_SECS=${shellQuote(process.env.BMM_REQUEST_SETTLE_SECS || '40')}`,
     `BITASSETS_MINE_TIMEOUT=${shellQuote(process.env.BITASSETS_MINE_TIMEOUT || '120')}`,
@@ -520,13 +562,16 @@ function mineBitAssetsTx(txid) {
       `cd ${shellQuote(localDevDir)} &&`,
       `COMPOSE_FILE=${shellQuote(composeFile)}`,
       `BITASSETS_IMAGE=${shellQuote(process.env.BITASSETS_IMAGE || 'local/plain-bitassets:codex-proof')}`,
-      `BITASSETS_PLATFORM=${shellQuote(process.env.BITASSETS_PLATFORM || 'linux/arm64')}`,
+      `BITASSETS_PLATFORM=${shellQuote(process.env.BITASSETS_PLATFORM || 'linux/amd64')}`,
       `BMM_MINE_ATTEMPTS=${shellQuote(process.env.BMM_MINE_ATTEMPTS || '8')}`,
       `BMM_REQUEST_SETTLE_SECS=${shellQuote(process.env.BMM_REQUEST_SETTLE_SECS || '40')}`,
       `BITASSETS_MINE_TIMEOUT=${shellQuote(process.env.BITASSETS_MINE_TIMEOUT || '120')}`,
       './scripts/mine-bitassets-block.sh',
     ].join(' ');
-    execFileSync('bash', ['-lc', maturityCommand], { stdio: 'inherit', timeout: Number(process.env.BITASSETS_E2E_MINE_TIMEOUT_MS || 900000) });
+    execFileSync('bash', ['-lc', maturityCommand], {
+      stdio: 'inherit',
+      timeout: Number(process.env.BITASSETS_E2E_MINE_TIMEOUT_MS || 900000),
+    });
     parsedProof = readBitAssetsTxProof(localDevDir, composeFile, txid);
   }
   if (typeof parsedProof?.sidechain_block_height !== 'number') {

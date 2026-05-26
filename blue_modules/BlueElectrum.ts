@@ -106,7 +106,7 @@ function getHardcodedPeersForNetwork(network: NetworkType): Peer[] {
       // this throws kCFStreamSSLPeerName with an error code indicating an
       // internal SSL error
       // Local dev iPhone builds use Luke's private signet Floresta bridge.
-      if (__DEV__) return [{ host: '192.168.1.236', tcp: 60101 }];
+      if (__DEV__) return [{ host: '192.168.1.50', tcp: 60101 }];
       return [{ host: 'node.signet.drivechain.info', tcp: 50001 }];
     case 'mainnet':
     default:

@@ -497,7 +497,7 @@
         <domain includeSubdomains="true">192.168.1.233</domain>
         <domain includeSubdomains="true">192.168.1.234</domain>
         <domain includeSubdomains="true">192.168.1.235</domain>
-        <domain includeSubdomains="true">192.168.1.236</domain>
+        <domain includeSubdomains="true">192.168.1.50</domain>
         <domain includeSubdomains="true">192.168.1.237</domain>
         <domain includeSubdomains="true">192.168.1.238</domain>
         <domain includeSubdomains="true">192.168.1.239</domain>

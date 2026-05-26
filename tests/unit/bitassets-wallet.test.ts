@@ -358,7 +358,7 @@ describe('BitAssets mobile wallet bridge', () => {
   });
 
   it('derives the private-signet BitAssets QUIC peer from the RPC endpoint', () => {
-    expect(deriveBitAssetsLiteWalletQuicUrl('http://192.168.1.236:6004')).toBe('192.168.1.236:6104');
+    expect(deriveBitAssetsLiteWalletQuicUrl('http://192.168.1.50:6004')).toBe('192.168.1.50:6104');
     expect(deriveBitAssetsLiteWalletQuicUrl('https://bitassets.local:18443/rpc')).toBe('bitassets.local:18543');
     expect(deriveBitAssetsLiteWalletQuicUrl('not a url')).toBeUndefined();
   });

@@ -423,7 +423,7 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
               host == "localhost" || host == "::1" || host.hasPrefix("127.") || host == "100.76.117.106" else {
             return rpcUrl
         }
-        components.host = "192.168.1.236"
+        components.host = "192.168.1.50"
         return components.url?.absoluteString ?? rpcUrl
         #endif
         #else

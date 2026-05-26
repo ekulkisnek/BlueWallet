@@ -26,11 +26,11 @@ import { redWalletEvent } from '../../helpers/redwalletDeviceLogger';
 const BlueApp = BlueAppClass.getInstance();
 const BITASSETS_REAL_DEVICE_SELFTEST_COMMAND = `${RNFS.DocumentDirectoryPath}/redwallet-bitassets-selftest-command.json`;
 const BITASSETS_REAL_DEVICE_SELFTEST_RESULT = `${RNFS.DocumentDirectoryPath}/redwallet-bitassets-selftest-result.json`;
-const BITASSETS_REAL_DEVICE_SELFTEST_COMMAND_URL = 'http://192.168.1.236:6124/command';
+const BITASSETS_REAL_DEVICE_SELFTEST_COMMAND_URL = 'http://192.168.1.50:6124/command';
 const BTC_REAL_DEVICE_COMMAND = `${RNFS.DocumentDirectoryPath}/redwallet-btc-selftest-command.json`;
 const BTC_REAL_DEVICE_RESULT = `${RNFS.DocumentDirectoryPath}/redwallet-btc-selftest-result.json`;
-const BTC_REAL_DEVICE_COMMAND_URL = 'http://192.168.1.236:6125/command';
-const BTC_REAL_DEVICE_RESULT_URL = 'http://192.168.1.236:6125/result';
+const BTC_REAL_DEVICE_COMMAND_URL = 'http://192.168.1.50:6125/command';
+const BTC_REAL_DEVICE_RESULT_URL = 'http://192.168.1.50:6125/result';
 
 // hashmap of timestamps we _started_ refetching some wallet
 const _lastTimeTriedToRefetchWallet: { [walletID: string]: number } = {};
@@ -63,6 +63,47 @@ async function probeBitAssetsRpc(rpcUrl: string): Promise<Record<string, unknown
       error: error?.message ?? String(error),
     };
   }
+}
+
+async function fetchBitAssetsRealDeviceCommand(walletID = ''): Promise<string> {
+  const exists = await RNFS.exists(BITASSETS_REAL_DEVICE_SELFTEST_COMMAND);
+  if (exists) {
+    const rawCommand = await RNFS.readFile(BITASSETS_REAL_DEVICE_SELFTEST_COMMAND, 'utf8');
+    await RNFS.unlink(BITASSETS_REAL_DEVICE_SELFTEST_COMMAND).catch(() => undefined);
+    return rawCommand;
+  }
+
+  if (__DEV__ && Platform.OS === 'ios' && !Platform.isPad) {
+    const startedAt = Date.now();
+    try {
+      const url = walletID
+        ? `${BITASSETS_REAL_DEVICE_SELFTEST_COMMAND_URL}?walletID=${encodeURIComponent(walletID)}`
+        : BITASSETS_REAL_DEVICE_SELFTEST_COMMAND_URL;
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: { accept: 'application/json' },
+      });
+      if (response.status === 204 || response.status === 404) return '';
+      const rawCommand = await response.text();
+      redWalletEvent('real_device_bitassets_selftest_command_fetch', {
+        walletID,
+        ok: response.ok,
+        status: response.status,
+        durationMs: Date.now() - startedAt,
+        responseBytes: rawCommand.length,
+      });
+      return response.ok ? rawCommand : '';
+    } catch (error: any) {
+      redWalletEvent('real_device_bitassets_selftest_command_fetch_error', {
+        walletID,
+        error: error?.message ?? String(error),
+        durationMs: Date.now() - startedAt,
+      });
+      return '';
+    }
+  }
+
+  return '';
 }
 
 async function runBitAssetsRealDeviceSelftestCommand(wallet: BitAssetsWalletClass): Promise<void> {
@@ -127,47 +168,6 @@ async function runBitAssetsRealDeviceSelftestCommand(wallet: BitAssetsWalletClas
       durationMs: Date.now() - startedAt,
     });
   }
-}
-
-async function fetchBitAssetsRealDeviceCommand(walletID = ''): Promise<string> {
-  const exists = await RNFS.exists(BITASSETS_REAL_DEVICE_SELFTEST_COMMAND);
-  if (exists) {
-    const rawCommand = await RNFS.readFile(BITASSETS_REAL_DEVICE_SELFTEST_COMMAND, 'utf8');
-    await RNFS.unlink(BITASSETS_REAL_DEVICE_SELFTEST_COMMAND).catch(() => undefined);
-    return rawCommand;
-  }
-
-  if (__DEV__ && Platform.OS === 'ios' && !Platform.isPad) {
-    const startedAt = Date.now();
-    try {
-      const url = walletID
-        ? `${BITASSETS_REAL_DEVICE_SELFTEST_COMMAND_URL}?walletID=${encodeURIComponent(walletID)}`
-        : BITASSETS_REAL_DEVICE_SELFTEST_COMMAND_URL;
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: { accept: 'application/json' },
-      });
-      if (response.status === 204 || response.status === 404) return '';
-      const rawCommand = await response.text();
-      redWalletEvent('real_device_bitassets_selftest_command_fetch', {
-        walletID,
-        ok: response.ok,
-        status: response.status,
-        durationMs: Date.now() - startedAt,
-        responseBytes: rawCommand.length,
-      });
-      return response.ok ? rawCommand : '';
-    } catch (error: any) {
-      redWalletEvent('real_device_bitassets_selftest_command_fetch_error', {
-        walletID,
-        error: error?.message ?? String(error),
-        durationMs: Date.now() - startedAt,
-      });
-      return '';
-    }
-  }
-
-  return '';
 }
 
 async function postBtcRealDeviceResult(result: Record<string, unknown>): Promise<void> {

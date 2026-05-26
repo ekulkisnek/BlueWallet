@@ -49,7 +49,7 @@
     "simulator": {
       "type": "ios.simulator",
       "device": {
-        "type": "iPhone 17"
+        "type": "iPhone 16e"
       }
     },
     "emulator": {

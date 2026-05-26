@@ -9,7 +9,7 @@ type ReactNativeErrorUtils = {
 
 const marker = 'REDWALLET_EVENT';
 const logFilePath = `${RNFS.DocumentDirectoryPath}/redwallet-device-events.ndjson`;
-const remoteCollectorUrl = 'http://192.168.1.236:6123/events';
+const remoteCollectorUrl = 'http://192.168.1.50:6123/events';
 const originalConsole = {
   debug: console.debug.bind(console),
   error: console.error.bind(console),

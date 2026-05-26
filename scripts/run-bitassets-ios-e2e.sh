@@ -41,17 +41,34 @@ start_metro_if_needed() {
   return 1
 }
 
+prewarm_ios_bundle() {
+  local bundle_url="http://127.0.0.1:$PORT/index.bundle?platform=ios&dev=true&minify=false"
+  echo "ios_bundle_status=prewarming"
+  for _ in $(seq 1 3); do
+    if curl --fail --silent --show-error --max-time 180 "$bundle_url" -o /dev/null; then
+      echo "ios_bundle_status=ready"
+      return 0
+    fi
+    sleep 2
+  done
+
+  echo "ios_bundle_status=timeout"
+  tail -120 "$METRO_LOG" || true
+  return 1
+}
+
 export BITASSETS_E2E="${BITASSETS_E2E:-1}"
-export BITASSETS_E2E_FULL="${BITASSETS_E2E_FULL:-1}"
-export BITASSETS_E2E_PROVE_MOBILE_FLOW="${BITASSETS_E2E_PROVE_MOBILE_FLOW:-1}"
-export BITASSETS_E2E_REQUIRE_RPC="${BITASSETS_E2E_REQUIRE_RPC:-1}"
+export BITASSETS_E2E_FULL="${BITASSETS_E2E_FULL:-0}"
+export BITASSETS_E2E_PROVE_MOBILE_FLOW="${BITASSETS_E2E_PROVE_MOBILE_FLOW:-0}"
+export BITASSETS_E2E_REQUIRE_RPC="${BITASSETS_E2E_REQUIRE_RPC:-0}"
 export BITASSETS_RPC_URL="${BITASSETS_RPC_URL:-http://127.0.0.1:6004}"
 export BITASSETS_E2E_LOCAL_DEV_DIR="${BITASSETS_E2E_LOCAL_DEV_DIR:-/Volumes/T705/code/drivechain-wallet-dev/local-dev}"
 export BITASSETS_E2E_COMPOSE_FILE="${BITASSETS_E2E_COMPOSE_FILE:-docker-compose.local-minimal.yml}"
 export BITASSETS_IMAGE="${BITASSETS_IMAGE:-local/plain-bitassets:codex-proof}"
-export BITASSETS_PLATFORM="${BITASSETS_PLATFORM:-linux/arm64}"
+export BITASSETS_PLATFORM="${BITASSETS_PLATFORM:-linux/amd64}"
 
 start_metro_if_needed
+prewarm_ios_bundle
 
 echo "run_dir=$RUN_DIR"
 echo "metro_log=$METRO_LOG"

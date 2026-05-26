@@ -38,6 +38,7 @@ export type DetailViewStackParamList = {
   WalletTransactions: { isLoading?: boolean; walletID: string; walletType: string; onBarScanned?: string };
   WalletDetails: { walletID: string };
   BitAssetsWallet: { walletID: string };
+  BitAssetsTools: { walletID: string };
   TransactionDetails: { tx: Transaction; hash: string; walletID: string };
   TransactionStatus: { hash: string; walletID?: string };
   CPFP: {

@@ -66,7 +66,7 @@ export default Success;
 
 interface SuccessViewParam {
   amount?: number;
-  amountUnit?: BitcoinUnit;
+  amountUnit?: BitcoinUnit | string;
   fee?: number;
   invoiceDescription?: string;
   shouldAnimate?: boolean;
@@ -81,6 +81,8 @@ export const SuccessView = ({ amount, amountUnit, fee, invoiceDescription, shoul
     case BitcoinUnit.SATS:
       unit = loc.units[amountUnit];
       break;
+    default:
+      unit = amountUnit as string;
   }
 
   const stylesHook = StyleSheet.create({
