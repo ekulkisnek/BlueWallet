@@ -29,12 +29,18 @@ cd /Volumes/T705/code/drivechain-wallet-dev/local-dev
 # Optional: quarantine corrupt host signet data
 ./scripts/prepare-bitwindow-local-signet-datadir.sh
 
-# Launch (headless verify + optional GUI)
+# Launch (orchestratord + local bitcoind 38335 + bitwindowd + verify)
 BITWINDOW_SKIP_GUI=1 ./scripts/launch-bitwindow-local-signet.sh
+
+# Or stepwise:
+./scripts/start-bitwindow-local-bitcoind.sh   # RPC 38335, syncs Docker via addnode :38333
 
 # Preflight only
 ./scripts/verify-bitwindow-local-signet.sh
 ```
+
+**Note:** `SwapNetwork` does not start L1 if bitcoind was not already running; the launch
+script explicitly starts local `bitcoind` before `bitwindowd`.
 
 v2 `bitcoin.conf` template (`scripts/bitwindow-local-signet-bitcoin.conf.template`):
 
