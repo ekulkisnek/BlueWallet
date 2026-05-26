@@ -14,9 +14,17 @@ json_out() {
   printf '%s\n' "$1"
 }
 
+say() {
+  if [[ "$JSON_MODE" == "1" ]]; then
+    echo "$*" >&2
+  else
+    echo "$*"
+  fi
+}
+
 if ! "$ROOT_DIR/scripts/start-redwallet-real-device-support.sh" >/dev/null 2>&1; then
   json_out '{"ready":false,"exit":1,"reason":"support_services_down"}'
-  echo "NOT_READY support_services_down — run: scripts/start-redwallet-real-device-support.sh"
+  say "NOT_READY support_services_down — run: scripts/start-redwallet-real-device-support.sh"
   exit 1
 fi
 
@@ -31,25 +39,25 @@ for udid in "$IPHONE12_UDID" "$LIPHONE_UDID"; do
     continue
   fi
   if [[ "$line" == *unavailable* ]]; then
-    echo "NOT_READY device_unavailable udid=$udid"
+    say "NOT_READY device_unavailable udid=$udid"
     continue
   fi
   if [[ "$line" == *connected* || "$line" == *available* ]]; then
     json_out "{\"ready\":true,\"exit\":0,\"udid\":\"$udid\"}"
-    echo "READY udid=$udid"
-    echo "$line"
+    say "READY udid=$udid"
+    say "$line"
     exit 0
   fi
-  echo "NOT_READY device_unknown_state udid=$udid line=$line"
+  say "NOT_READY device_unknown_state udid=$udid line=$line"
 done
 
 usb_hint=""
 if ! system_profiler SPUSBDataType 2>/dev/null | grep -qi iphone; then
   usb_hint=",\"usb_detected\":false"
-  echo "NOT_READY usb_not_detected — no iPhone in system_profiler SPUSBDataType; plug in USB cable."
+  say "NOT_READY usb_not_detected — no iPhone in system_profiler SPUSBDataType; plug in USB cable."
 else
   usb_hint=",\"usb_detected\":true"
 fi
 json_out "{\"ready\":false,\"exit\":2,\"reason\":\"no_launchable_device\"${usb_hint}}"
-echo "NOT_READY no_launchable_device — reconnect USB, trust Mac, unlock screen, then re-run."
+say "NOT_READY no_launchable_device — reconnect USB, trust Mac, unlock screen, then re-run."
 exit 2
