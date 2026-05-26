@@ -32,6 +32,15 @@ echo "$BITASSETS_RPC_URL"   # e.g. http://100.76.117.106:6004
 
 Never use `127.0.0.1` on physical phones.
 
+## AutoCode poll (exit codes)
+
+```sh
+scripts/check-redwallet-phone-ready.sh   # 0=phone ready, 1=support down, 2=no connected device
+scripts/start-redwallet-real-device-support.sh   # 0=all support up
+```
+
+When `check-redwallet-phone-ready.sh` prints `READY`, run `scripts/retry-phone-origin-bitassets-proof.sh`.
+
 ## Exact next actions (Luke / AutoCode)
 
 ### A. iPhone 12 mini (fastest path)
