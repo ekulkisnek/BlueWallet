@@ -43,6 +43,13 @@ for udid in "$IPHONE12_UDID" "$LIPHONE_UDID"; do
   echo "NOT_READY device_unknown_state udid=$udid line=$line"
 done
 
-json_out '{"ready":false,"exit":2,"reason":"no_launchable_device"}'
+usb_hint=""
+if ! system_profiler SPUSBDataType 2>/dev/null | grep -qi iphone; then
+  usb_hint=",\"usb_detected\":false"
+  echo "NOT_READY usb_not_detected — no iPhone in system_profiler SPUSBDataType; plug in USB cable."
+else
+  usb_hint=",\"usb_detected\":true"
+fi
+json_out "{\"ready\":false,\"exit\":2,\"reason\":\"no_launchable_device\"${usb_hint}}"
 echo "NOT_READY no_launchable_device — reconnect USB, trust Mac, unlock screen, then re-run."
 exit 2
