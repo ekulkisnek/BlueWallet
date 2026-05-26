@@ -45,15 +45,25 @@ class BitAssetsWalletModule(private val reactContext: ReactApplicationContext) :
                 val config = JSONObject(configJson)
                 val rpcUrl = config.optString("rpcUrl", config.optString("rpc_url", "")).trim()
                 validateRpcUrl(rpcUrl)
-                eventLog("configure", "begin", mapOf("rpcUrl" to rpcUrl))
+                val quicUrl = config.optString(
+                    "bitassetsLiteWalletQuicUrl",
+                    config.optString("bitassets_lite_wallet_quic_url", config.optString("quicUrl", ""))
+                ).trim()
+                if (quicUrl.isNotEmpty()) validateQuicUrl(quicUrl)
+                eventLog("configure", "begin", mapOf("rpcUrl" to rpcUrl, "bitassetsLiteWalletQuicUrl" to quicUrl.ifEmpty { null }))
                 val sharedPref = reactContext.getSharedPreferences("group.com.layertwolabs.bluewallet", android.content.Context.MODE_PRIVATE)
-                sharedPref.edit().putString("bitassetsRpcUrl", rpcUrl).apply()
+                sharedPref.edit()
+                    .putString("bitassetsRpcUrl", rpcUrl)
+                    .apply {
+                        if (quicUrl.isEmpty()) remove("bitassetsLiteWalletQuicUrl") else putString("bitassetsLiteWalletQuicUrl", quicUrl)
+                    }
+                    .apply()
                 if (walletHandle != 0L) {
                     nativeFree(walletHandle)
                     walletHandle = 0
                 }
-                eventLog("configure", "ok", mapOf("rpcUrl" to rpcUrl))
-                promise.resolve(JSONObject().put("configured", true).put("rpcUrl", rpcUrl).toString())
+                eventLog("configure", "ok", mapOf("rpcUrl" to rpcUrl, "bitassetsLiteWalletQuicUrl" to quicUrl.ifEmpty { null }))
+                promise.resolve(JSONObject().put("configured", true).put("rpcUrl", rpcUrl).put("bitassetsLiteWalletQuicUrl", quicUrl.ifEmpty { JSONObject.NULL }).toString())
             }
         } catch (error: Throwable) {
             eventLog("configure", "error", mapOf("error" to (error.message ?: error.toString())))
@@ -119,6 +129,7 @@ class BitAssetsWalletModule(private val reactContext: ReactApplicationContext) :
                 sharedPref.edit()
                     .remove(SEED_PREF)
                     .remove("bitassetsRpcUrl")
+                    .remove("bitassetsLiteWalletQuicUrl")
                     .apply()
                 deleteSecretKey()
             }
@@ -138,6 +149,7 @@ class BitAssetsWalletModule(private val reactContext: ReactApplicationContext) :
         val sharedPref = reactContext.getSharedPreferences("group.com.layertwolabs.bluewallet", android.content.Context.MODE_PRIVATE)
         val rpcUrl = sharedPref.getString("bitassetsRpcUrl", null)
             ?: throw IllegalStateException("BitAssets RPC URL is not configured")
+        val quicUrl = sharedPref.getString("bitassetsLiteWalletQuicUrl", null).orEmpty()
         val seedHex = getOrCreateSeedHex(walletFile, sharedPref)
         val config = JSONObject()
             .put("path", walletFile.absolutePath)
@@ -145,12 +157,15 @@ class BitAssetsWalletModule(private val reactContext: ReactApplicationContext) :
             .put("seed_hex", seedHex)
             .put("create", true)
             .put("persist_seed", false)
-            .toString()
+        if (quicUrl.isNotEmpty()) {
+            config.put("bitassets_lite_wallet_quic_url", quicUrl)
+        }
+        val configJson = config.toString()
 
-        eventLog("openWallet", "begin", mapOf("rpcUrl" to rpcUrl, "walletPath" to walletFile.absolutePath))
-        val result = unwrap(nativeOpen(config))
+        eventLog("openWallet", "begin", mapOf("rpcUrl" to rpcUrl, "bitassetsLiteWalletQuicUrl" to quicUrl.ifEmpty { null }, "walletPath" to walletFile.absolutePath))
+        val result = unwrap(nativeOpen(configJson))
         walletHandle = java.lang.Long.parseUnsignedLong(result)
-        eventLog("openWallet", "ok", mapOf("rpcUrl" to rpcUrl, "walletPath" to walletFile.absolutePath))
+        eventLog("openWallet", "ok", mapOf("rpcUrl" to rpcUrl, "bitassetsLiteWalletQuicUrl" to quicUrl.ifEmpty { null }, "walletPath" to walletFile.absolutePath))
         return walletHandle
     }
 
@@ -255,6 +270,13 @@ class BitAssetsWalletModule(private val reactContext: ReactApplicationContext) :
         }
         if (uri.scheme == "http" && !isLocalRpcHost(uri.host.lowercase())) {
             throw IllegalArgumentException("BitAssets RPC URL must use HTTPS unless it points to a local or private development host")
+        }
+    }
+
+    private fun validateQuicUrl(quicUrl: String) {
+        val parts = quicUrl.split(":")
+        if (parts.size != 2 || parts[0].isBlank() || parts[1].toIntOrNull()?.let { it in 1..65535 } != true) {
+            throw IllegalArgumentException("BitAssets QUIC peer must be host:port")
         }
     }
 

@@ -57,6 +57,7 @@ const { BitAssetsWallet, hasBitAssetsWallet } = require('../../class/wallets/bit
 const {
   EmbeddedBitAssetsWalletClient,
   JsonRpcBitAssetsWalletClient,
+  deriveBitAssetsLiteWalletQuicUrl,
   isProofBackedBitAssetsUtxo,
   summarizeBitAssetsProofState,
 } = require('../../blue_modules/BitAssetsWallet');
@@ -151,7 +152,9 @@ describe('BitAssets mobile wallet bridge', () => {
     await wallet.generate('http://127.0.0.1:6004');
     await wallet.fetchBalance();
 
-    expect(mockNativeModule.configure).toHaveBeenCalledWith(JSON.stringify({ rpcUrl: 'http://127.0.0.1:6004' }));
+    expect(mockNativeModule.configure).toHaveBeenCalledWith(
+      JSON.stringify({ rpcUrl: 'http://127.0.0.1:6004', bitassetsLiteWalletQuicUrl: '127.0.0.1:6104' }),
+    );
     expect(mockNativeModule.getNewAddress).toHaveBeenCalledTimes(1);
     expect(wallet.getAddress()).toBe('bitassets-address-1');
     expect(wallet.secret).toBe('bitassets://bitassets-address-1');
@@ -185,7 +188,9 @@ describe('BitAssets mobile wallet bridge', () => {
 
     expect(wallet.getAddress()).toBe('persisted-address');
     expect(mockNativeModule.configure).toHaveBeenCalledTimes(2);
-    expect(mockNativeModule.configure).toHaveBeenCalledWith(JSON.stringify({ rpcUrl: 'http://127.0.0.1:6004' }));
+    expect(mockNativeModule.configure).toHaveBeenCalledWith(
+      JSON.stringify({ rpcUrl: 'http://127.0.0.1:6004', bitassetsLiteWalletQuicUrl: '127.0.0.1:6104' }),
+    );
     expect(mockNativeModule.reserve).toHaveBeenCalledWith(JSON.stringify({ name: 'PERSISTED', feeSats: 0 }));
   });
 
@@ -197,6 +202,7 @@ describe('BitAssets mobile wallet bridge', () => {
 
     expect((wallet as any)._bitassetsConfiguredRpcUrl).toBeUndefined();
     expect(wallet.bitassetsRpcUrl).toBe('http://127.0.0.1:6004');
+    expect(wallet.bitassetsLiteWalletQuicUrl).toBe('127.0.0.1:6104');
   });
 
   it('purges native signer persistence through the embedded bridge', async () => {
@@ -349,6 +355,12 @@ describe('BitAssets mobile wallet bridge', () => {
     });
     expect(summarizeBitAssetsProofState([backed]).label).toBe('1/1 proof-backed');
     expect(summarizeBitAssetsProofState([mempool]).label).toBe('No confirmed UTXOs');
+  });
+
+  it('derives the private-signet BitAssets QUIC peer from the RPC endpoint', () => {
+    expect(deriveBitAssetsLiteWalletQuicUrl('http://192.168.1.236:6004')).toBe('192.168.1.236:6104');
+    expect(deriveBitAssetsLiteWalletQuicUrl('https://bitassets.local:18443/rpc')).toBe('bitassets.local:18543');
+    expect(deriveBitAssetsLiteWalletQuicUrl('not a url')).toBeUndefined();
   });
 
   it('serializes every native constructor payload and parses txids', async () => {

@@ -64,19 +64,34 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
             let requestedRpcUrl = ((config["rpcUrl"] ?? config["rpc_url"]) as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             let rpcUrl = normalizeRpcUrlForCurrentRuntime(requestedRpcUrl)
             try validateRpcUrl(rpcUrl)
+            let requestedQuicUrl = ((config["bitassetsLiteWalletQuicUrl"] ?? config["bitassets_lite_wallet_quic_url"] ?? config["quicUrl"]) as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             var configureFields: [String: Any] = ["rpcUrl": rpcUrl]
+            if !requestedQuicUrl.isEmpty {
+                try validateQuicUrl(requestedQuicUrl)
+                configureFields["bitassetsLiteWalletQuicUrl"] = requestedQuicUrl
+            }
             if requestedRpcUrl != rpcUrl {
                 configureFields["requestedRpcUrl"] = requestedRpcUrl
             }
             eventLog("configure", "begin", configureFields)
             let groupDefaults = UserDefaults(suiteName: "group.com.layertwolabs.bluewallet") ?? UserDefaults.standard
             groupDefaults.set(rpcUrl, forKey: "bitassetsRpcUrl")
+            if requestedQuicUrl.isEmpty {
+                groupDefaults.removeObject(forKey: "bitassetsLiteWalletQuicUrl")
+            } else {
+                groupDefaults.set(requestedQuicUrl, forKey: "bitassetsLiteWalletQuicUrl")
+            }
             groupDefaults.synchronize()
             if handle != 0 {
                 floresta_bitassets_wallet_free(handle)
                 handle = 0
             }
-            let responseData = try JSONSerialization.data(withJSONObject: ["configured": true, "rpcUrl": rpcUrl])
+            let configuredQuicUrl: Any = requestedQuicUrl.isEmpty ? NSNull() : requestedQuicUrl
+            let responseData = try JSONSerialization.data(withJSONObject: [
+                "configured": true,
+                "rpcUrl": rpcUrl,
+                "bitassetsLiteWalletQuicUrl": configuredQuicUrl,
+            ])
             eventLog("configure", "ok", configureFields)
             resolve(String(data: responseData, encoding: .utf8) ?? "{\"configured\":true}")
         } catch {
@@ -188,6 +203,7 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
         SecItemDelete(keychainQuery as CFDictionary)
         let groupDefaults = UserDefaults(suiteName: "group.com.layertwolabs.bluewallet") ?? UserDefaults.standard
         groupDefaults.removeObject(forKey: "bitassetsRpcUrl")
+        groupDefaults.removeObject(forKey: "bitassetsLiteWalletQuicUrl")
         groupDefaults.synchronize()
         resolve("{\"cleared\":true}")
     }
@@ -203,23 +219,27 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
         guard let rpcUrl = groupDefaults.string(forKey: "bitassetsRpcUrl"), !rpcUrl.isEmpty else {
             throw NSError(domain: "BitAssetsWallet", code: 3, userInfo: [NSLocalizedDescriptionKey: "BitAssets RPC URL is not configured"])
         }
+        let quicUrl = groupDefaults.string(forKey: "bitassetsLiteWalletQuicUrl") ?? ""
         let seedHex = try getOrCreateSeedHex(walletFile: walletFile)
-        let config: [String: Any] = [
+        var config: [String: Any] = [
             "path": walletFile.path,
             "rpc_url": rpcUrl,
             "seed_hex": seedHex,
             "create": true,
             "persist_seed": false,
         ]
+        if !quicUrl.isEmpty {
+            config["bitassets_lite_wallet_quic_url"] = quicUrl
+        }
         let configData = try JSONSerialization.data(withJSONObject: config)
         let configJson = String(data: configData, encoding: .utf8)!
-        eventLog("openWallet", "begin", ["rpcUrl": rpcUrl, "walletPath": walletFile.path])
+        eventLog("openWallet", "begin", ["rpcUrl": rpcUrl, "bitassetsLiteWalletQuicUrl": quicUrl.isEmpty ? NSNull() : quicUrl, "walletPath": walletFile.path])
         let opened = try configJson.withCString { try unwrap(floresta_bitassets_wallet_open($0)) }
         guard let parsed = UInt(opened) else {
             throw NSError(domain: "BitAssetsWallet", code: 2, userInfo: [NSLocalizedDescriptionKey: "invalid wallet handle"])
         }
         handle = parsed
-        eventLog("openWallet", "ok", ["rpcUrl": rpcUrl, "walletPath": walletFile.path])
+        eventLog("openWallet", "ok", ["rpcUrl": rpcUrl, "bitassetsLiteWalletQuicUrl": quicUrl.isEmpty ? NSNull() : quicUrl, "walletPath": walletFile.path])
         return parsed
     }
 
@@ -383,6 +403,13 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
         }
         if scheme == "http" && !isLocalRpcHost(host) {
             throw NSError(domain: "BitAssetsWallet", code: 6, userInfo: [NSLocalizedDescriptionKey: "BitAssets RPC URL must use HTTPS unless it points to a local or private development host"])
+        }
+    }
+
+    private func validateQuicUrl(_ quicUrl: String) throws {
+        let pieces = quicUrl.split(separator: ":", omittingEmptySubsequences: false)
+        guard pieces.count == 2, !pieces[0].isEmpty, UInt16(pieces[1]) != nil else {
+            throw NSError(domain: "BitAssetsWallet", code: 12, userInfo: [NSLocalizedDescriptionKey: "BitAssets QUIC peer must be host:port"])
         }
     }
 

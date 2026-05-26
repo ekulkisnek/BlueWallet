@@ -158,7 +158,7 @@ export interface DutchAuctionCollectParams {
 }
 
 export interface BitAssetsWalletClient {
-  configure?(params: { rpcUrl: string }): Promise<void>;
+  configure?(params: BitAssetsWalletConfig): Promise<void>;
   getNewAddress(): Promise<string>;
   walletInfo(): Promise<BitAssetsWalletInfo>;
   sync(): Promise<BitAssetsWalletInfo>;
@@ -176,10 +176,26 @@ export interface BitAssetsWalletClient {
   clear?(): Promise<void>;
 }
 
+export interface BitAssetsWalletConfig {
+  rpcUrl: string;
+  bitassetsLiteWalletQuicUrl?: string;
+}
+
+export function deriveBitAssetsLiteWalletQuicUrl(rpcUrl: string): string | undefined {
+  try {
+    const parsed = new URL(rpcUrl);
+    const port = parsed.port ? Number(parsed.port) : parsed.protocol === 'https:' ? 443 : 80;
+    if (!parsed.hostname || !Number.isInteger(port)) return undefined;
+    return `${parsed.hostname}:${port + 100}`;
+  } catch {
+    return undefined;
+  }
+}
+
 export class EmbeddedBitAssetsWalletClient implements BitAssetsWalletClient {
   private readonly timeoutMs = 45000;
 
-  async configure(params: { rpcUrl: string }): Promise<void> {
+  async configure(params: BitAssetsWalletConfig): Promise<void> {
     await withNativeTimeout(requireNative().configure(JSON.stringify(params)), 'configure', this.timeoutMs);
   }
 

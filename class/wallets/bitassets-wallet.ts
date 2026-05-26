@@ -2,6 +2,7 @@ import {
   AmmBurnParams,
   AmmMintParams,
   AmmSwapParams,
+  deriveBitAssetsLiteWalletQuicUrl,
   EmbeddedBitAssetsWalletClient,
   BitAssetsWalletClient,
   BitAssetsWalletInfo,
@@ -33,6 +34,7 @@ export class BitAssetsWallet extends LegacyWallet {
   chain = Chain.OFFCHAIN;
   _address: string | false = false;
   bitassetsRpcUrl = '';
+  bitassetsLiteWalletQuicUrl = '';
   bitassetsInfo?: BitAssetsWalletInfo;
   bitassetsUtxos: BitAssetsUtxo[] = [];
 
@@ -54,6 +56,7 @@ export class BitAssetsWallet extends LegacyWallet {
 
   async generate(rpcUrl?: string): Promise<void> {
     this.bitassetsRpcUrl = validateBitAssetsRpcUrl(rpcUrl ?? this.bitassetsRpcUrl);
+    this.bitassetsLiteWalletQuicUrl = deriveBitAssetsLiteWalletQuicUrl(this.bitassetsRpcUrl) ?? '';
     await this.withBitAssetsEvent('generate', { rpcUrl: this.bitassetsRpcUrl }, async () => {
       const client = await this.getConfiguredClient();
       const address = await client.getNewAddress();
@@ -208,8 +211,13 @@ export class BitAssetsWallet extends LegacyWallet {
     if (this.bitassetsRpcUrl !== rpcUrl) {
       this.bitassetsRpcUrl = rpcUrl;
     }
+    const quicUrl = this.bitassetsLiteWalletQuicUrl || deriveBitAssetsLiteWalletQuicUrl(rpcUrl);
+    this.bitassetsLiteWalletQuicUrl = quicUrl ?? '';
     if (client.configure) {
-      await client.configure({ rpcUrl });
+      await client.configure({
+        rpcUrl,
+        ...(quicUrl ? { bitassetsLiteWalletQuicUrl: quicUrl } : {}),
+      });
     }
     return client;
   }
