@@ -1,7 +1,14 @@
 import React, { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LayoutAnimation, Platform } from 'react-native';
 import RNFS from 'react-native-fs';
-import { BlueApp as BlueAppClass, LegacyWallet, TCounterpartyMetadata, TTXMetadata, WatchOnlyWallet } from '../../class';
+import {
+  BlueApp as BlueAppClass,
+  HDSegwitBech32Wallet,
+  LegacyWallet,
+  TCounterpartyMetadata,
+  TTXMetadata,
+  WatchOnlyWallet,
+} from '../../class';
 import { BitAssetsWallet as BitAssetsWalletClass, normalizeBitAssetsRpcUrlForRuntime } from '../../class/wallets/bitassets-wallet';
 import type { TWallet } from '../../class/wallets/types';
 import presentAlert from '../../components/Alert';
@@ -20,6 +27,10 @@ const BlueApp = BlueAppClass.getInstance();
 const BITASSETS_REAL_DEVICE_SELFTEST_COMMAND = `${RNFS.DocumentDirectoryPath}/redwallet-bitassets-selftest-command.json`;
 const BITASSETS_REAL_DEVICE_SELFTEST_RESULT = `${RNFS.DocumentDirectoryPath}/redwallet-bitassets-selftest-result.json`;
 const BITASSETS_REAL_DEVICE_SELFTEST_COMMAND_URL = 'http://192.168.1.236:6124/command';
+const BTC_REAL_DEVICE_COMMAND = `${RNFS.DocumentDirectoryPath}/redwallet-btc-selftest-command.json`;
+const BTC_REAL_DEVICE_RESULT = `${RNFS.DocumentDirectoryPath}/redwallet-btc-selftest-result.json`;
+const BTC_REAL_DEVICE_COMMAND_URL = 'http://192.168.1.236:6125/command';
+const BTC_REAL_DEVICE_RESULT_URL = 'http://192.168.1.236:6125/result';
 
 // hashmap of timestamps we _started_ refetching some wallet
 const _lastTimeTriedToRefetchWallet: { [walletID: string]: number } = {};
@@ -147,6 +158,56 @@ async function runBitAssetsRealDeviceSelftestCommand(wallet: BitAssetsWalletClas
       error: message,
       durationMs: Date.now() - startedAt,
     });
+  }
+}
+
+async function postBtcRealDeviceResult(result: Record<string, unknown>): Promise<void> {
+  if (!__DEV__ || Platform.OS !== 'ios') return;
+  try {
+    await fetch(BTC_REAL_DEVICE_RESULT_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(result),
+    });
+  } catch (error: any) {
+    redWalletEvent('real_device_btc_command_result_post_error', {
+      error: error?.message ?? String(error),
+      operation: result.operation,
+      commandId: result.commandId,
+    });
+  }
+}
+
+async function fetchBtcRealDeviceCommand(): Promise<string> {
+  const exists = await RNFS.exists(BTC_REAL_DEVICE_COMMAND);
+  if (exists) {
+    const rawCommand = await RNFS.readFile(BTC_REAL_DEVICE_COMMAND, 'utf8');
+    await RNFS.unlink(BTC_REAL_DEVICE_COMMAND).catch(() => undefined);
+    return rawCommand;
+  }
+
+  if (!__DEV__ || Platform.OS !== 'ios' || Platform.isPad) return '';
+  const startedAt = Date.now();
+  try {
+    const response = await fetch(BTC_REAL_DEVICE_COMMAND_URL, {
+      method: 'GET',
+      headers: { accept: 'application/json' },
+    });
+    if (response.status === 204 || response.status === 404) return '';
+    const rawCommand = await response.text();
+    redWalletEvent('real_device_btc_command_fetch', {
+      ok: response.ok,
+      status: response.status,
+      durationMs: Date.now() - startedAt,
+      responseBytes: rawCommand.length,
+    });
+    return response.ok ? rawCommand : '';
+  } catch (error: any) {
+    redWalletEvent('real_device_btc_command_fetch_error', {
+      error: error?.message ?? String(error),
+      durationMs: Date.now() - startedAt,
+    });
+    return '';
   }
 }
 
@@ -445,6 +506,7 @@ export const StorageProvider = ({ children }: { children: React.ReactNode }) => 
   // Add a refresh lock to prevent concurrent refreshes
   const refreshingRef = useRef<boolean>(false);
   const realDeviceSmokeRef = useRef<boolean>(false);
+  const realDeviceBtcCommandRef = useRef<boolean>(false);
 
   const refreshAllWalletTransactions = useCallback(
     async (lastSnappedTo?: number, showUpdateStatusIndicator: boolean = true) => {
@@ -610,6 +672,68 @@ export const StorageProvider = ({ children }: { children: React.ReactNode }) => 
       redWalletEvent('real_device_bitassets_smoke_done', { walletCount: bitAssetsWallets.length });
     })();
   }, [saveToDisk, wallets, walletsInitialized]);
+
+  useEffect(() => {
+    if (!__DEV__ || Platform.OS !== 'ios' || realDeviceBtcCommandRef.current || !walletsInitialized) return;
+    realDeviceBtcCommandRef.current = true;
+
+    (async () => {
+      const rawCommand = await fetchBtcRealDeviceCommand();
+      if (!rawCommand) return;
+
+      const startedAt = Date.now();
+      let operation = '';
+      let commandId = '';
+      try {
+        const command = JSON.parse(rawCommand);
+        operation = String(command.operation ?? '');
+        commandId = String(command.commandId ?? '');
+        redWalletEvent('real_device_btc_command_begin', { operation, commandId });
+
+        if (operation !== 'createWallet') {
+          throw new Error(`Unsupported BTC real-device command operation: ${operation}`);
+        }
+
+        const wallet = new HDSegwitBech32Wallet();
+        await wallet.generate();
+        wallet.setLabel(String(command.label ?? 'iPhone signet funding proof'));
+        wallet.setUserHasSavedExport(true);
+        const address = wallet._getExternalAddressByIndex(0);
+        addWallet(wallet);
+        await saveToDisk(true);
+
+        const result = {
+          ok: true,
+          operation,
+          commandId,
+          walletID: wallet.getID(),
+          label: wallet.getLabel(),
+          type: wallet.type,
+          typeReadable: wallet.typeReadable,
+          address,
+          xpub: wallet.getXpub(),
+          durationMs: Date.now() - startedAt,
+          ts: new Date().toISOString(),
+        };
+
+        await RNFS.writeFile(BTC_REAL_DEVICE_RESULT, JSON.stringify(result), 'utf8');
+        redWalletEvent('real_device_btc_wallet_created', result);
+        await postBtcRealDeviceResult(result);
+      } catch (error: any) {
+        const result = {
+          ok: false,
+          operation,
+          commandId,
+          error: error?.message ?? String(error),
+          durationMs: Date.now() - startedAt,
+          ts: new Date().toISOString(),
+        };
+        await RNFS.writeFile(BTC_REAL_DEVICE_RESULT, JSON.stringify(result), 'utf8').catch(() => undefined);
+        redWalletEvent('real_device_btc_command_error', result);
+        await postBtcRealDeviceResult(result);
+      }
+    })();
+  }, [addWallet, saveToDisk, walletsInitialized]);
 
   const addAndSaveWallet = useCallback(
     async (w: TWallet) => {
