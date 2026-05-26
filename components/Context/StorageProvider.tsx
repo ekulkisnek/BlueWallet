@@ -66,40 +66,8 @@ async function probeBitAssetsRpc(rpcUrl: string): Promise<Record<string, unknown
 }
 
 async function runBitAssetsRealDeviceSelftestCommand(wallet: BitAssetsWalletClass): Promise<void> {
-  const exists = await RNFS.exists(BITASSETS_REAL_DEVICE_SELFTEST_COMMAND);
-  let rawCommand = '';
-
-  if (exists) {
-    rawCommand = await RNFS.readFile(BITASSETS_REAL_DEVICE_SELFTEST_COMMAND, 'utf8');
-    await RNFS.unlink(BITASSETS_REAL_DEVICE_SELFTEST_COMMAND).catch(() => undefined);
-  } else if (__DEV__ && Platform.OS === 'ios' && !Platform.isPad) {
-    const startedAt = Date.now();
-    try {
-      const response = await fetch(`${BITASSETS_REAL_DEVICE_SELFTEST_COMMAND_URL}?walletID=${encodeURIComponent(wallet.getID?.() ?? '')}`, {
-        method: 'GET',
-        headers: { accept: 'application/json' },
-      });
-      if (response.status === 204 || response.status === 404) return;
-      rawCommand = await response.text();
-      redWalletEvent('real_device_bitassets_selftest_command_fetch', {
-        walletID: wallet.getID?.(),
-        ok: response.ok,
-        status: response.status,
-        durationMs: Date.now() - startedAt,
-        responseBytes: rawCommand.length,
-      });
-      if (!response.ok) return;
-    } catch (error: any) {
-      redWalletEvent('real_device_bitassets_selftest_command_fetch_error', {
-        walletID: wallet.getID?.(),
-        error: error?.message ?? String(error),
-        durationMs: Date.now() - startedAt,
-      });
-      return;
-    }
-  } else {
-    return;
-  }
+  const rawCommand = await fetchBitAssetsRealDeviceCommand(wallet.getID?.() ?? '');
+  if (!rawCommand) return;
 
   const command = JSON.parse(rawCommand);
   const operation = String(command.operation ?? '');
@@ -159,6 +127,47 @@ async function runBitAssetsRealDeviceSelftestCommand(wallet: BitAssetsWalletClas
       durationMs: Date.now() - startedAt,
     });
   }
+}
+
+async function fetchBitAssetsRealDeviceCommand(walletID = ''): Promise<string> {
+  const exists = await RNFS.exists(BITASSETS_REAL_DEVICE_SELFTEST_COMMAND);
+  if (exists) {
+    const rawCommand = await RNFS.readFile(BITASSETS_REAL_DEVICE_SELFTEST_COMMAND, 'utf8');
+    await RNFS.unlink(BITASSETS_REAL_DEVICE_SELFTEST_COMMAND).catch(() => undefined);
+    return rawCommand;
+  }
+
+  if (__DEV__ && Platform.OS === 'ios' && !Platform.isPad) {
+    const startedAt = Date.now();
+    try {
+      const url = walletID
+        ? `${BITASSETS_REAL_DEVICE_SELFTEST_COMMAND_URL}?walletID=${encodeURIComponent(walletID)}`
+        : BITASSETS_REAL_DEVICE_SELFTEST_COMMAND_URL;
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: { accept: 'application/json' },
+      });
+      if (response.status === 204 || response.status === 404) return '';
+      const rawCommand = await response.text();
+      redWalletEvent('real_device_bitassets_selftest_command_fetch', {
+        walletID,
+        ok: response.ok,
+        status: response.status,
+        durationMs: Date.now() - startedAt,
+        responseBytes: rawCommand.length,
+      });
+      return response.ok ? rawCommand : '';
+    } catch (error: any) {
+      redWalletEvent('real_device_bitassets_selftest_command_fetch_error', {
+        walletID,
+        error: error?.message ?? String(error),
+        durationMs: Date.now() - startedAt,
+      });
+      return '';
+    }
+  }
+
+  return '';
 }
 
 async function postBtcRealDeviceResult(result: Record<string, unknown>): Promise<void> {
@@ -507,6 +516,7 @@ export const StorageProvider = ({ children }: { children: React.ReactNode }) => 
   const refreshingRef = useRef<boolean>(false);
   const realDeviceSmokeRef = useRef<boolean>(false);
   const realDeviceBtcCommandRef = useRef<boolean>(false);
+  const realDeviceBitAssetsCommandRef = useRef<boolean>(false);
 
   const refreshAllWalletTransactions = useCallback(
     async (lastSnappedTo?: number, showUpdateStatusIndicator: boolean = true) => {
@@ -620,6 +630,73 @@ export const StorageProvider = ({ children }: { children: React.ReactNode }) => 
     },
     [saveToDisk, wallets],
   );
+
+  useEffect(() => {
+    if (!__DEV__ || Platform.OS !== 'ios' || realDeviceBitAssetsCommandRef.current || !walletsInitialized) return;
+    if (wallets.some(wallet => wallet.type === BitAssetsWalletClass.type)) return;
+    realDeviceBitAssetsCommandRef.current = true;
+
+    (async () => {
+      const rawCommand = await fetchBitAssetsRealDeviceCommand();
+      if (!rawCommand) return;
+
+      const startedAt = Date.now();
+      let operation = '';
+      let commandId = '';
+      try {
+        const command = JSON.parse(rawCommand);
+        operation = String(command.operation ?? '');
+        commandId = String(command.commandId ?? '');
+        redWalletEvent('real_device_bitassets_command_begin', { operation, commandId });
+
+        if (operation !== 'createWallet') {
+          return;
+        }
+
+        const wallet = new BitAssetsWalletClass();
+        wallet.setLabel(String(command.label ?? 'iPhone BitAssets'));
+        wallet.setUserHasSavedExport(true);
+        const quicUrl = command.bitassetsLiteWalletQuicUrl === undefined ? undefined : String(command.bitassetsLiteWalletQuicUrl ?? '');
+        await wallet.generate(String(command.rpcUrl ?? command.bitassetsRpcUrl ?? ''), quicUrl);
+        if (!command.skipSync) {
+          await wallet.syncBitAssets();
+        }
+        addWallet(wallet);
+        await saveToDisk(true);
+
+        const result = {
+          ok: true,
+          operation,
+          commandId,
+          walletID: wallet.getID(),
+          label: wallet.getLabel(),
+          type: wallet.type,
+          typeReadable: wallet.typeReadable,
+          address: wallet.getAddress() || '',
+          rpcUrl: wallet.bitassetsRpcUrl,
+          liteWalletQuicUrl: wallet.bitassetsLiteWalletQuicUrl,
+          info: wallet.bitassetsInfo,
+          utxoCount: wallet.bitassetsUtxos.length,
+          durationMs: Date.now() - startedAt,
+          ts: new Date().toISOString(),
+        };
+
+        await RNFS.writeFile(BITASSETS_REAL_DEVICE_SELFTEST_RESULT, JSON.stringify(result), 'utf8');
+        redWalletEvent('real_device_bitassets_wallet_created', result);
+      } catch (error: any) {
+        const result = {
+          ok: false,
+          operation,
+          commandId,
+          error: error?.message ?? String(error),
+          durationMs: Date.now() - startedAt,
+          ts: new Date().toISOString(),
+        };
+        await RNFS.writeFile(BITASSETS_REAL_DEVICE_SELFTEST_RESULT, JSON.stringify(result), 'utf8').catch(() => undefined);
+        redWalletEvent('real_device_bitassets_command_error', result);
+      }
+    })();
+  }, [addWallet, saveToDisk, wallets, walletsInitialized]);
 
   useEffect(() => {
     if (!__DEV__ || Platform.OS !== 'ios' || realDeviceSmokeRef.current || !walletsInitialized) return;

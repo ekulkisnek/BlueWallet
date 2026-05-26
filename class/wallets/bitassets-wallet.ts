@@ -54,9 +54,10 @@ export class BitAssetsWallet extends LegacyWallet {
     }
   }
 
-  async generate(rpcUrl?: string): Promise<void> {
+  async generate(rpcUrl?: string, bitassetsLiteWalletQuicUrl?: string | null): Promise<void> {
     this.bitassetsRpcUrl = validateBitAssetsRpcUrl(rpcUrl ?? this.bitassetsRpcUrl);
-    this.bitassetsLiteWalletQuicUrl = deriveBitAssetsLiteWalletQuicUrl(this.bitassetsRpcUrl) ?? '';
+    this.bitassetsLiteWalletQuicUrl =
+      bitassetsLiteWalletQuicUrl === undefined ? deriveBitAssetsLiteWalletQuicUrl(this.bitassetsRpcUrl) ?? '' : bitassetsLiteWalletQuicUrl ?? '';
     await this.withBitAssetsEvent('generate', { rpcUrl: this.bitassetsRpcUrl }, async () => {
       const client = await this.getConfiguredClient();
       const address = await client.getNewAddress();
