@@ -56,10 +56,17 @@ probe xctrace xcrun xctrace list devices
 probe metro-status curl -sS -m 5 "${METRO_URL:-http://100.76.117.106:8081}/status"
 probe collector-health curl -sS -m 5 http://192.168.1.50:6123/health
 probe command-health curl -sS -m 5 http://192.168.1.50:6124/health
+probe command-body curl -sS -m 5 http://192.168.1.50:6124/command
 {
   echo "metro=$(grep -q 'packager-status:running' "$RUN_DIR/probes/metro-status.txt" 2>/dev/null && echo up || echo down)"
   echo "collector=$(grep -qE '"ok":true|^ok$' "$RUN_DIR/probes/collector-health.txt" 2>/dev/null && echo up || echo down)"
-  echo "command=$(grep -qE '"ok":true|^ok$' "$RUN_DIR/probes/command-health.txt" 2>/dev/null && echo up || echo down)"
+  if grep -qE '"ok":true|^ok$' "$RUN_DIR/probes/command-health.txt" 2>/dev/null; then
+    echo "command=up"
+  elif grep -qE '"operation".*createWallet' "$RUN_DIR/probes/command-body.txt" 2>/dev/null; then
+    echo "command=up_legacy"
+  else
+    echo "command=down"
+  fi
 } >"$RUN_DIR/support-services.txt"
 
 device_state() {
@@ -118,7 +125,8 @@ fi
 if ! grep -qE '"ok":true|^ok$' "$RUN_DIR/probes/collector-health.txt" 2>/dev/null; then
   log "WARN JS collector not healthy; run: scripts/start-redwallet-real-device-support.sh"
 fi
-if ! grep -qE '"ok":true|^ok$' "$RUN_DIR/probes/command-health.txt" 2>/dev/null; then
+if ! grep -qE '"ok":true|^ok$' "$RUN_DIR/probes/command-health.txt" 2>/dev/null &&
+  ! grep -qE '"operation".*createWallet' "$RUN_DIR/probes/command-body.txt" 2>/dev/null; then
   log "WARN BitAssets command server not healthy; run: scripts/start-redwallet-real-device-support.sh"
 fi
 

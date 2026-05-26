@@ -32,12 +32,28 @@ check() {
   return 1
 }
 
+command_server_ok() {
+  local base="${COMMAND_URL%/health}"
+  local health body
+  health="$(curl -sS -m 3 "${base}/health" 2>/dev/null || true)"
+  if [[ "$health" == *'"ok":true'* || "$health" == ok ]]; then
+    return 0
+  fi
+  body="$(curl -sS -m 3 "${base}/command" 2>/dev/null || true)"
+  [[ "$body" == *'"operation"'* && "$body" == *createWallet* ]]
+}
+
 metro_ok=0
 collector_ok=0
 command_ok=0
 check metro "${METRO_URL}/status" && metro_ok=1 || true
 check collector "$COLLECTOR_URL" && collector_ok=1 || true
-check command "$COMMAND_URL" && command_ok=1 || true
+if command_server_ok; then
+  echo "OK   command ${COMMAND_URL%/health}/command (health or legacy /command)"
+  command_ok=1
+else
+  echo "DOWN command $COMMAND_URL (no /health and no createWallet /command)"
+fi
 
 echo ""
 echo "Start missing services (run each in its own terminal or tmux pane):"
