@@ -158,10 +158,13 @@ if [[ -n "$COLLECTOR_DIR" && -f "$COLLECTOR_DIR/events.ndjson" ]]; then
     filtered="$(printf '%s\n' "$phone_events" | grep '"platformVersion":"26.2' || true)"
     if [[ -n "$filtered" ]]; then
       phone_events="$filtered"
+    elif [[ "$LAUNCH_UDID" == "$IPHONE12_UDID" ]]; then
+      log "NOTE no iOS 26.2.x collector events; ignoring simulator/LAN-only noise"
+      phone_events=""
     fi
   fi
   if [[ -n "$phone_events" ]]; then
-    log "SUCCESS phone-origin JS events detected"
+    log "SUCCESS phone-origin JS events detected (real device)"
     printf '%s\n' "$phone_events" >"$RUN_DIR/phone-origin-events.ndjson"
     echo "status=phone_origin_events" >"$RUN_DIR/RESULT.txt"
     "$ROOT_DIR/scripts/collect-redwallet-device-logs.sh" "$LOG_ROOT" 30 >"$RUN_DIR/collect.log" 2>&1 || true

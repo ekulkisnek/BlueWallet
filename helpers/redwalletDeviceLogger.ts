@@ -9,7 +9,11 @@ type ReactNativeErrorUtils = {
 
 const marker = 'REDWALLET_EVENT';
 const logFilePath = `${RNFS.DocumentDirectoryPath}/redwallet-device-events.ndjson`;
-const remoteCollectorUrl = 'http://192.168.1.50:6123/events';
+// Phone must reach Mac collector over LAN or Tailscale (Luke signet host).
+const remoteCollectorUrls = [
+  'http://100.76.117.106:6123/events',
+  'http://192.168.1.50:6123/events',
+];
 const originalConsole = {
   debug: console.debug.bind(console),
   error: console.error.bind(console),
@@ -62,13 +66,17 @@ function emit(event: string, fields: RedWalletEventFields = {}): void {
       originalConsole.warn(`${marker} ${JSON.stringify({ ts: new Date().toISOString(), event: 'log_file_append_failed', error: sanitize(error) })}`);
     });
   if (fetchForRemoteCollector) {
-    fetchForRemoteCollector(remoteCollectorUrl, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: line,
-    }).catch(error => {
-      originalConsole.warn(`${marker} ${JSON.stringify({ ts: new Date().toISOString(), event: 'remote_log_failed', error: sanitize(error) })}`);
-    });
+    for (const url of remoteCollectorUrls) {
+      fetchForRemoteCollector(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: line,
+      }).catch(error => {
+        originalConsole.warn(
+          `${marker} ${JSON.stringify({ ts: new Date().toISOString(), event: 'remote_log_failed', url, error: sanitize(error) })}`,
+        );
+      });
+    }
   }
 }
 
