@@ -127,18 +127,42 @@ function fundAddressFromMainchain(address, amountSats) {
   console.log(`[E2E TEST] Funding ${address} with ${amountSats} sats`);
   const localDev = process.env.BITASSETS_E2E_LOCAL_DEV_DIR || '/Volumes/T705/code/drivechain-wallet-dev/local-dev';
   const composeFile = process.env.BITASSETS_E2E_COMPOSE_FILE || 'docker-compose.local-minimal.yml';
-  const feeSats = Number(process.env.BITASSETS_E2E_DEPOSIT_FEE_SATS || 50000);
-  // orchestrator CreateDeposit often hangs on Colima; docker CLI matches headless deposit smoke.
-  const txid = execFileSync(
-    'bash',
-    [
-      '-lc',
-      `BITASSETS_IMAGE=\${BITASSETS_IMAGE:-local/plain-bitassets:codex-proof} docker compose -f "${localDev}/${composeFile}" exec -T bitassets plain_bitassets_app_cli create-deposit --value-sats ${amountSats} --fee-sats ${feeSats} "${address}"`,
-    ],
-    { encoding: 'utf8', timeout: 120000 },
-  ).trim();
-  lastDepositTxid = txid;
-  console.log('[E2E TEST] create-deposit txid:', txid);
+  const l1MineBlocks = Number(process.env.BITASSETS_E2E_PRE_MINE_L1_BLOCKS || 2);
+  if (l1MineBlocks > 0) {
+    console.log(`[E2E TEST] Mining ${l1MineBlocks} L1 block(s) before create-deposit (clear mempool RBF)`);
+    execFileSync('bash', ['-lc', `cd "${localDev}" && ./scripts/mine-private-signet-blocks.sh ${l1MineBlocks}`], {
+      timeout: Number(process.env.BITASSETS_E2E_PRE_MINE_TIMEOUT_MS || 90000),
+    });
+  }
+  const baseFee = Number(process.env.BITASSETS_E2E_DEPOSIT_FEE_SATS || 50000);
+  const feeSteps = String(process.env.BITASSETS_E2E_DEPOSIT_FEE_STEPS || `${baseFee},${baseFee * 3},${baseFee * 6}`)
+    .split(',')
+    .map(s => Number(s.trim()))
+    .filter(n => Number.isFinite(n) && n > 0);
+  let lastErr = '';
+  for (const feeSats of feeSteps) {
+    try {
+      const txid = execFileSync(
+        'bash',
+        [
+          '-lc',
+          `BITASSETS_IMAGE=\${BITASSETS_IMAGE:-local/plain-bitassets:codex-proof} docker compose -f "${localDev}/${composeFile}" exec -T bitassets plain_bitassets_app_cli create-deposit --value-sats ${amountSats} --fee-sats ${feeSats} "${address}"`,
+        ],
+        { encoding: 'utf8', timeout: 90000 },
+      ).trim();
+      if (!/^[0-9a-f]{64}$/i.test(txid)) {
+        lastErr = `unexpected create-deposit output: ${txid}`;
+        continue;
+      }
+      lastDepositTxid = txid;
+      console.log('[E2E TEST] create-deposit txid:', txid, 'feeSats:', feeSats);
+      return;
+    } catch (e) {
+      lastErr = e?.message || String(e);
+      console.log(`[E2E TEST] create-deposit failed feeSats=${feeSats}:`, lastErr.slice(0, 240));
+    }
+  }
+  throw new Error(`create-deposit failed after fee retries: ${lastErr}`);
 }
 
 function mineBlocks() {
