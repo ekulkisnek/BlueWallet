@@ -69,18 +69,31 @@ class AppDelegate: RCTAppDelegate, UNUserNotificationCenterDelegate {
         return bundleURL()
     }
 
+    private static func embeddedJsBundleURL() -> URL? {
+        if let path = Bundle.main.path(forResource: "main", ofType: "jsbundle") {
+            return URL(fileURLWithPath: path)
+        }
+        let fallback = URL(fileURLWithPath: Bundle.main.bundlePath).appendingPathComponent("main.jsbundle")
+        if FileManager.default.fileExists(atPath: fallback.path) {
+            return fallback
+        }
+        return nil
+    }
+
     override func bundleURL() -> URL? {
-        #if DEBUG
         #if !targetEnvironment(simulator)
-        if let bundledURL = Bundle.main.url(forResource: "main", withExtension: "jsbundle") {
-            NSLog("[AppDelegate] Using bundled real-device JS bundle: \(bundledURL.absoluteString)")
+        if let bundledURL = Self.embeddedJsBundleURL() {
+            NSLog("[AppDelegate] Using embedded JS bundle on device: %@", bundledURL.path)
             return bundledURL
         }
-        NSLog("[AppDelegate] Missing bundled real-device JS bundle; falling back to Metro provider")
-        #endif
+        NSLog("[AppDelegate] ERROR: main.jsbundle missing in app bundle on device")
+        return nil
+        #else
+        #if DEBUG
         return RCTBundleURLProvider.sharedSettings().jsBundleURL(forBundleRoot: "index")
         #else
-        return Bundle.main.url(forResource: "main", withExtension: "jsbundle")
+        return Self.embeddedJsBundleURL()
+        #endif
         #endif
     }
 

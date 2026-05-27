@@ -40,21 +40,41 @@ if [[ "$rc" -ne 0 ]]; then
   exit "$rc"
 fi
 
-if rg -q 'device_logger_installed|real_device_bitassets' "$APP/main.jsbundle" 2>/dev/null; then
+if rg -q 'device_logger_installed|real_device_bitassets|isRedWalletIosRealDeviceProofEnabled|com\.lukekensik\.redwallet\.dev' "$APP/main.jsbundle" 2>/dev/null; then
   log "OK bundle contains real-device proof markers"
 else
-  log "WARN bundle missing expected markers (grep device_logger_installed)"
+  log "WARN bundle missing expected markers (grep device_logger_installed / real device proof)"
 fi
 
 # Embedding main.jsbundle invalidates the sealed app signature.
 IDENT="${REDWALLET_IOS_CODESIGN_IDENTITY:-981B5698C1C67E65D5A8FD8BA8AD0CDE63FEE77B}"
-log "RESIGN identity=$IDENT"
+PROVISION="${REDWALLET_EMBEDDED_PROVISION:-}"
+if [[ -z "$PROVISION" ]]; then
+  PROVISION="$(ls -t "$LOG_ROOT"/current-iphone12-utreexo-redwallet-build/PersonalDebugDerivedData/Build/Products/Debug-iphoneos/BlueWallet.app/embedded.mobileprovision 2>/dev/null | head -1 || true)"
+fi
+if [[ -n "$PROVISION" && -f "$PROVISION" && ! -f "$APP/embedded.mobileprovision" ]]; then
+  cp "$PROVISION" "$APP/embedded.mobileprovision"
+  log "COPIED embedded.mobileprovision from $PROVISION"
+fi
+ENTITLEMENTS="$RUN_DIR/entitlements.plist"
+if [[ -f "$APP/embedded.mobileprovision" ]]; then
+  security cms -D -i "$APP/embedded.mobileprovision" >"$RUN_DIR/profile.plist" 2>/dev/null || true
+  if [[ -f "$RUN_DIR/profile.plist" ]]; then
+    plutil -extract Entitlements xml1 -o "$ENTITLEMENTS" "$RUN_DIR/profile.plist" 2>/dev/null || true
+  fi
+fi
+log "RESIGN identity=$IDENT entitlements=${ENTITLEMENTS:-none}"
 {
+  rm -rf "$APP/_CodeSignature"
   find "$APP" -depth \( -name '*.framework' -o -name '*.appex' -o -name '*.dylib' \) -print0 2>/dev/null |
     while IFS= read -r -d '' nested; do
       codesign --force --sign "$IDENT" --preserve-metadata=entitlements,flags,runtime "$nested" || true
     done
-  codesign --force --sign "$IDENT" --preserve-metadata=entitlements,flags,runtime "$APP"
+  if [[ -f "$ENTITLEMENTS" ]]; then
+    codesign --force --sign "$IDENT" --entitlements "$ENTITLEMENTS" --timestamp=none "$APP"
+  else
+    codesign --force --sign "$IDENT" --preserve-metadata=entitlements,flags,runtime "$APP"
+  fi
   codesign --verify --deep --strict "$APP"
 } >>"$RUN_DIR/resign.log" 2>&1 || {
   log "BLOCKER codesign failed (see $RUN_DIR/resign.log)"

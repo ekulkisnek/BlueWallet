@@ -3,6 +3,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { listen } = require('./redwallet-http-listen');
 
 const host = process.env.REDWALLET_LOG_COLLECTOR_HOST || '0.0.0.0';
 const port = Number(process.env.REDWALLET_LOG_COLLECTOR_PORT || 6123);
@@ -81,7 +82,7 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(port, host, () => {
+listen(server, port, host, () => {
   const summary = [
     `run_dir=${runDir}`,
     `current_link=${currentLink}`,

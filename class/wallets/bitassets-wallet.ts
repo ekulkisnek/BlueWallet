@@ -20,17 +20,26 @@ import { LegacyWallet } from './legacy-wallet';
 import { Transaction } from './types';
 import { Platform } from 'react-native';
 import { isEmulatorSync } from 'react-native-device-info';
+import {
+  isRedWalletIosPhysicalDevice,
+  isRedWalletIosRealDeviceProofEnabled,
+  REDWALLET_PHONE_SIGNET_RPC_HOST,
+} from '../../helpers/redwalletRealDeviceProof';
 
 export function normalizeBitAssetsRpcUrlForRuntime(rpcUrl: string): string {
-  if (Platform.OS !== 'ios' || !__DEV__) return rpcUrl;
+  if (Platform.OS !== 'ios') return rpcUrl;
+  const proof = isRedWalletIosRealDeviceProofEnabled();
+  if (!proof && !__DEV__) return rpcUrl;
   try {
     if (isEmulatorSync()) return rpcUrl;
   } catch {
     return rpcUrl;
   }
+  const phoneHost = proof && isRedWalletIosPhysicalDevice() ? REDWALLET_PHONE_SIGNET_RPC_HOST : '192.168.1.50';
+  // Preserve explicit Tailscale/LAN hosts from signet-endpoints; only rewrite loopback/simulator URLs.
   return rpcUrl.replace(
-    /^(https?:\/\/)(?:localhost|\[::1\]|127(?:\.\d{1,3}){3}|100\.76\.117\.106)(:\d+)?(\/.*)?$/i,
-    (_match, protocol: string, port = '', path = '') => `${protocol}192.168.1.50${port}${path}`.replace(/\/$/, ''),
+    /^(https?:\/\/)(?:localhost|\[::1\]|127(?:\.\d{1,3}){3})(:\d+)?(\/.*)?$/i,
+    (_match, protocol: string, port = '', path = '') => `${protocol}${phoneHost}${port}${path}`.replace(/\/$/, ''),
   );
 }
 

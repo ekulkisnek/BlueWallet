@@ -264,6 +264,8 @@ function isLocalBitAssetsRpcHost(hostname: string): boolean {
   if (host.startsWith('127.')) return true;
   if (host.startsWith('10.')) return true;
   if (host.startsWith('192.168.')) return true;
+  // Core Device USB tunnel (Mac fd26:…::2, phone ::1)
+  if (host.startsWith('fd') && host.includes(':')) return true;
   // Tailscale / CGNAT dev range (100.64.0.0/10) — Luke signet over Tailscale
   const tailscaleMatch = /^100\.(\d{1,3})\./.exec(host);
   if (tailscaleMatch) {

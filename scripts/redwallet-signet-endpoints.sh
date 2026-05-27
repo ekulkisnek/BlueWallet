@@ -83,5 +83,14 @@ EOF
   probe_url "bitassets_phone_probe" "http://$PHONE_HOST:6004"
 } | tee "$OUT_DIR/SUMMARY.txt"
 
+# Reliable fallback: use bitassets CLI inside container (avoids JSON-RPC flakiness / Tailscale reachability issues on host).
+# This gives definitive blockcount even when curl probes return 000/timeout.
+if command -v docker >/dev/null 2>&1 && [[ -f "$COMPOSE_FILE" ]]; then
+  CLI_BLOCKCOUNT=$(docker compose -f "$COMPOSE_FILE" exec -T bitassets plain_bitassets_app_cli get-blockcount 2>/dev/null | tr -d '\r\n' || echo "CLI_FAILED")
+  echo "bitassets_cli_blockcount=$CLI_BLOCKCOUNT" | tee -a "$OUT_DIR/SUMMARY.txt"
+  # Also emit a machine-friendly line for scripts that source the env
+  echo "BITASSETS_BLOCKCOUNT_CLI=$CLI_BLOCKCOUNT" >> "$OUT_DIR/redwallet-signet.env"
+fi
+
 echo "env_file=$OUT_DIR/redwallet-signet.env"
 echo "summary=$OUT_DIR/SUMMARY.txt"

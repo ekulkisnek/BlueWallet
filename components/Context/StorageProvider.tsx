@@ -22,11 +22,14 @@ import { navigationRef } from '../../NavigationService';
 import { getScanWasBBQR } from '../../helpers/scan-qr.ts';
 import { setWalletIdMustUseBBQR } from '../../blue_modules/ur';
 import { redWalletEvent } from '../../helpers/redwalletDeviceLogger';
+import { REDWALLET_USB_TUNNEL_COMMAND } from '../../helpers/redwalletRealDeviceEndpoints';
+import { isRedWalletIosRealDeviceProofEnabled } from '../../helpers/redwalletRealDeviceProof';
 
 const BlueApp = BlueAppClass.getInstance();
 const BITASSETS_REAL_DEVICE_SELFTEST_COMMAND = `${RNFS.DocumentDirectoryPath}/redwallet-bitassets-selftest-command.json`;
 const BITASSETS_REAL_DEVICE_SELFTEST_RESULT = `${RNFS.DocumentDirectoryPath}/redwallet-bitassets-selftest-result.json`;
 const BITASSETS_REAL_DEVICE_COMMAND_URLS = [
+  REDWALLET_USB_TUNNEL_COMMAND,
   'http://100.76.117.106:6124/command',
   'http://192.168.1.50:6124/command',
 ];
@@ -76,7 +79,7 @@ async function fetchBitAssetsRealDeviceCommand(walletID = ''): Promise<string> {
     return rawCommand;
   }
 
-  if (__DEV__ && Platform.OS === 'ios' && !Platform.isPad) {
+  if (isRedWalletIosRealDeviceProofEnabled()) {
     const startedAt = Date.now();
     for (const baseUrl of BITASSETS_REAL_DEVICE_COMMAND_URLS) {
       try {
@@ -175,7 +178,7 @@ async function runBitAssetsRealDeviceSelftestCommand(wallet: BitAssetsWalletClas
 }
 
 async function postBtcRealDeviceResult(result: Record<string, unknown>): Promise<void> {
-  if (!__DEV__ || Platform.OS !== 'ios') return;
+  if (!isRedWalletIosRealDeviceProofEnabled()) return;
   try {
     await fetch(BTC_REAL_DEVICE_RESULT_URL, {
       method: 'POST',
@@ -199,7 +202,7 @@ async function fetchBtcRealDeviceCommand(): Promise<string> {
     return rawCommand;
   }
 
-  if (!__DEV__ || Platform.OS !== 'ios' || Platform.isPad) return '';
+  if (!isRedWalletIosRealDeviceProofEnabled()) return '';
   const startedAt = Date.now();
   try {
     const response = await fetch(BTC_REAL_DEVICE_COMMAND_URL, {
@@ -636,7 +639,7 @@ export const StorageProvider = ({ children }: { children: React.ReactNode }) => 
   );
 
   useEffect(() => {
-    if (!__DEV__ || Platform.OS !== 'ios' || realDeviceBitAssetsCommandRef.current || !walletsInitialized) return;
+    if (!isRedWalletIosRealDeviceProofEnabled() || realDeviceBitAssetsCommandRef.current || !walletsInitialized) return;
     if (wallets.some(wallet => wallet.type === BitAssetsWalletClass.type)) return;
     realDeviceBitAssetsCommandRef.current = true;
 
@@ -703,7 +706,7 @@ export const StorageProvider = ({ children }: { children: React.ReactNode }) => 
   }, [addWallet, saveToDisk, wallets, walletsInitialized]);
 
   useEffect(() => {
-    if (!__DEV__ || Platform.OS !== 'ios' || realDeviceSmokeRef.current || !walletsInitialized) return;
+    if (!isRedWalletIosRealDeviceProofEnabled() || realDeviceSmokeRef.current || !walletsInitialized) return;
     const bitAssetsWallets = wallets.filter((wallet): wallet is BitAssetsWalletClass => wallet.type === BitAssetsWalletClass.type);
     if (bitAssetsWallets.length === 0) return;
     realDeviceSmokeRef.current = true;
@@ -755,7 +758,7 @@ export const StorageProvider = ({ children }: { children: React.ReactNode }) => 
   }, [saveToDisk, wallets, walletsInitialized]);
 
   useEffect(() => {
-    if (!__DEV__ || Platform.OS !== 'ios' || realDeviceBtcCommandRef.current || !walletsInitialized) return;
+    if (!isRedWalletIosRealDeviceProofEnabled() || realDeviceBtcCommandRef.current || !walletsInitialized) return;
     realDeviceBtcCommandRef.current = true;
 
     (async () => {

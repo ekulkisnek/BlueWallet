@@ -1,5 +1,6 @@
 import { AppState, NativeModules, Platform } from 'react-native';
 import RNFS from 'react-native-fs';
+import { REDWALLET_USB_TUNNEL_COLLECTOR_EVENTS } from './redwalletRealDeviceEndpoints';
 
 type RedWalletEventFields = Record<string, unknown>;
 type ReactNativeErrorUtils = {
@@ -9,8 +10,9 @@ type ReactNativeErrorUtils = {
 
 const marker = 'REDWALLET_EVENT';
 const logFilePath = `${RNFS.DocumentDirectoryPath}/redwallet-device-events.ndjson`;
-// Phone must reach Mac collector over LAN or Tailscale (Luke signet host).
+// USB Core Device tunnel first, then LAN/Tailscale (Luke signet host).
 const remoteCollectorUrls = [
+  REDWALLET_USB_TUNNEL_COLLECTOR_EVENTS,
   'http://100.76.117.106:6123/events',
   'http://192.168.1.50:6123/events',
 ];

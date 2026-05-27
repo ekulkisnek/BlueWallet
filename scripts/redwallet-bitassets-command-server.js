@@ -7,6 +7,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { listen } = require('./redwallet-http-listen');
 
 const host = process.env.REDWALLET_BITASSETS_COMMAND_HOST || '0.0.0.0';
 const port = Number(process.env.REDWALLET_BITASSETS_COMMAND_PORT || 6124);
@@ -87,13 +88,18 @@ const server = http.createServer((req, res) => {
 
   const body = fs.readFileSync(commandPath);
   const servedPath = path.join(runDir, `served-${Date.now()}-command.json`);
-  fs.renameSync(commandPath, servedPath);
+  if (process.env.REDWALLET_BITASSETS_COMMAND_REPEAT === '1') {
+    fs.copyFileSync(commandPath, servedPath);
+    log(`served command (repeat) from ${servedPath}`);
+  } else {
+    fs.renameSync(commandPath, servedPath);
+    log(`served command from ${servedPath}`);
+  }
   res.writeHead(200, { 'content-type': 'application/json', 'content-length': body.length });
   res.end(body);
-  log(`served command from ${servedPath}`);
 });
 
-server.listen(port, host, () => {
+listen(server, port, host, () => {
   log(`RedWallet BitAssets command server listening on http://${host}:${port}/command`);
   log(`run_dir=${runDir}`);
 });
