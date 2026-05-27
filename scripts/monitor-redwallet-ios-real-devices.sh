@@ -152,7 +152,7 @@ for udid in "${DEVICES[@]}"; do
       (
         set +e
         perl -e 'alarm shift; exec @ARGV' "$SECONDS_TO_CAPTURE" log stream --style compact \
-          --predicate 'processImagePath CONTAINS "BlueWallet" OR eventMessage CONTAINS "REDWALLET_EVENT"' \
+          --predicate '(processImagePath CONTAINS "BlueWallet" OR eventMessage CONTAINS "REDWALLET_EVENT") AND NOT (eventMessage CONTAINS "CoreSimulator" OR eventMessage CONTAINS "/CoreSimulator/")' \
           2>&1
       ) >"$device_dir/syslog-redwallet.log" &
       pids+=("$!")
@@ -185,7 +185,8 @@ for udid in "${DEVICES[@]}"; do
     fi
   fi
   if [[ -f "$device_dir/syslog-redwallet.log" ]]; then
-    if rg -n 'REDWALLET_EVENT|device_logger_installed|real_device_bitassets|Using real-device Metro' "$device_dir/syslog-redwallet.log" >"$device_dir/syslog-redwallet-interesting.txt" 2>&1; then
+    if rg -n 'REDWALLET_EVENT|device_logger_installed|real_device_bitassets|Using real-device Metro' "$device_dir/syslog-redwallet.log" \
+      | rg -v 'CoreSimulator|/CoreSimulator/' >"$device_dir/syslog-redwallet-interesting.txt" 2>&1; then
       event "device.syslog.scan" "interesting" "$device_dir/syslog-redwallet-interesting.txt"
     else
       event "device.syslog.scan" "no_matches" "$device_dir/syslog-redwallet.log"

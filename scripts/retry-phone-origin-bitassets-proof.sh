@@ -46,7 +46,9 @@ if [[ -n "$ENV_FILE" && -f "$ENV_FILE" ]]; then
   export BITASSETS_RPC_URL
   host_only="${BITASSETS_RPC_URL#http://}"
   host_only="${host_only#https://}"
-  export BITASSETS_LITE_WALLET_QUIC_URL="${host_only%%/*}:6104"
+  host_only="${host_only%%/*}"
+  host_only="${host_only%%:*}"
+  export BITASSETS_LITE_WALLET_QUIC_URL="${host_only}:6104"
 fi
 
 probe devicectl xcrun devicectl list devices --columns '*'
@@ -55,8 +57,51 @@ probe xctrace xcrun xctrace list devices
 # Support services (always probe — useful even when phones are unavailable).
 probe metro-status curl -sS -m 5 "${METRO_URL:-http://100.76.117.106:8081}/status"
 probe collector-health curl -sS -m 5 http://192.168.1.50:6123/health
+probe collector-health-ts curl -sS -m 5 http://100.76.117.106:6123/health
 probe command-health curl -sS -m 5 http://192.168.1.50:6124/health
-probe command-body curl -sS -m 5 http://192.168.1.50:6124/command
+probe bitassets-rpc-lan curl -sS -m 5 -o /dev/null -w '%{http_code}' "http://192.168.1.50:6004/" || true
+probe bitassets-rpc-ts curl -sS -m 5 -o /dev/null -w '%{http_code}' "${BITASSETS_RPC_URL:-http://100.76.117.106:6004}/" || true
+
+resolve_command_server_dir() {
+  local cmd_dir="${REDWALLET_BITASSETS_COMMAND_DIR:-}"
+  if [[ -z "$cmd_dir" ]]; then
+    cmd_dir="$(ls -td "$LOG_ROOT"/ios-real-device-selftest-*/command-server "$LOG_ROOT"/redwallet-bitassets-command-server-*/ 2>/dev/null | head -1 || true)"
+  fi
+  printf '%s' "$cmd_dir"
+}
+
+seed_bitassets_command() {
+  local cmd_dir host rpc quic
+  cmd_dir="$(resolve_command_server_dir)"
+  [[ -n "$cmd_dir" && -d "$cmd_dir" ]] || return 0
+  # Prefer LAN; fall back to Tailscale when host HTTP probes time out (phone may be on tailnet only).
+  host="${REDWALLET_FORCE_PHONE_HOST:-${REDWALLET_PHONE_LAN_HOST:-192.168.1.50}}"
+  if [[ -z "${REDWALLET_FORCE_PHONE_HOST:-}" ]] &&
+    ! grep -qE '^[1-5][0-9]{2}$' "$RUN_DIR/probes/bitassets-rpc-lan.txt" 2>/dev/null &&
+    ! grep -qE '^[1-5][0-9]{2}$' "$RUN_DIR/probes/bitassets-rpc-ts.txt" 2>/dev/null; then
+    host="100.76.117.106"
+  elif [[ -z "${REDWALLET_FORCE_PHONE_HOST:-}" ]] &&
+    ! grep -qE '^[1-5][0-9]{2}$' "$RUN_DIR/probes/bitassets-rpc-lan.txt" 2>/dev/null; then
+    host="100.76.117.106"
+  fi
+  rpc="http://${host}:6004"
+  quic="${host%%:*}:6104"
+  cat >"$cmd_dir/command.json" <<EOF
+{"operation":"createWallet","commandId":"iphone12-proof-${STAMP}","label":"iPhone 12 BitAssets","rpcUrl":"$rpc","bitassetsLiteWalletQuicUrl":"$quic","skipSync":true}
+EOF
+  log "SEEDED command.json host=$host dir=$cmd_dir skipSync=true"
+}
+
+# Do not GET /command during preflight — the server is one-shot and would steal the phone payload.
+CMD_DIR="$(resolve_command_server_dir)"
+if [[ -n "$CMD_DIR" && -f "$CMD_DIR/command.json" ]]; then
+  cp "$CMD_DIR/command.json" "$RUN_DIR/probes/command-body.txt"
+  log "PROBE command-body file=ok (not fetched from server)"
+else
+  echo "command.json missing under $CMD_DIR" >"$RUN_DIR/probes/command-body.txt"
+  log "PROBE command-body file=missing"
+fi
+seed_bitassets_command || true
 {
   echo "metro=$(grep -q 'packager-status:running' "$RUN_DIR/probes/metro-status.txt" 2>/dev/null && echo up || echo down)"
   echo "collector=$(grep -qE '"ok":true|^ok$' "$RUN_DIR/probes/collector-health.txt" 2>/dev/null && echo up || echo down)"
@@ -107,6 +152,9 @@ fi
 
 log "LAUNCH_TARGET udid=$LAUNCH_UDID"
 
+# Refresh one-shot command immediately before launch so preflight probes cannot consume it.
+seed_bitassets_command || true
+
 probe device-details xcrun devicectl device info details --device "$LAUNCH_UDID"
 if grep -q 'passcodeRequired: true' "$RUN_DIR/probes/device-details.txt" 2>/dev/null; then
   log "NOTE passcodeRequired=true on device; SpringBoard may still deny launch unless actively unlocked."
@@ -155,22 +203,58 @@ fi
 MONITOR_DIR="$(readlink "${LOG_ROOT%/}/current-ios-real-device-app-monitor" 2>/dev/null || true)"
 SAFE_LAUNCH_UDID="${LAUNCH_UDID//[^A-Za-z0-9._-]/_}"
 if [[ -n "$MONITOR_DIR" && -f "$MONITOR_DIR/devices/$SAFE_LAUNCH_UDID/syslog-redwallet-interesting.txt" ]]; then
-  if rg -q 'REDWALLET_EVENT.*device_logger_installed|real_device_bitassets' "$MONITOR_DIR/devices/$SAFE_LAUNCH_UDID/syslog-redwallet-interesting.txt" 2>/dev/null; then
+  if rg -q 'REDWALLET_EVENT.*device_logger_installed|real_device_bitassets' "$MONITOR_DIR/devices/$SAFE_LAUNCH_UDID/syslog-redwallet-interesting.txt" 2>/dev/null &&
+    ! rg -q 'CoreSimulator|/CoreSimulator/' "$MONITOR_DIR/devices/$SAFE_LAUNCH_UDID/syslog-redwallet-interesting.txt" 2>/dev/null; then
     log "SUCCESS phone-origin syslog evidence (REDWALLET_EVENT / BitAssets)"
     cp "$MONITOR_DIR/devices/$SAFE_LAUNCH_UDID/syslog-redwallet-interesting.txt" "$RUN_DIR/phone-origin-syslog.txt"
     echo "status=phone_origin_syslog" >"$RUN_DIR/RESULT.txt"
     "$ROOT_DIR/scripts/collect-redwallet-device-logs.sh" "$LOG_ROOT" 30 >"$RUN_DIR/collect.log" 2>&1 || true
     exit 0
   fi
-  if rg -q 'REDWALLET_EVENT' "$MONITOR_DIR/devices/$SAFE_LAUNCH_UDID/syslog-redwallet-interesting.txt" 2>/dev/null; then
+  if rg -q 'REDWALLET_EVENT' "$MONITOR_DIR/devices/$SAFE_LAUNCH_UDID/syslog-redwallet-interesting.txt" 2>/dev/null &&
+    ! rg -q '127\.0\.0\.1:6004|127\.0\.0\.1:6104' "$MONITOR_DIR/devices/$SAFE_LAUNCH_UDID/syslog-redwallet-interesting.txt" 2>/dev/null; then
     log "PARTIAL phone-origin syslog has REDWALLET_EVENT (see $RUN_DIR/phone-origin-syslog-partial.txt)"
     cp "$MONITOR_DIR/devices/$SAFE_LAUNCH_UDID/syslog-redwallet-interesting.txt" "$RUN_DIR/phone-origin-syslog-partial.txt"
+  elif rg -q '127\.0\.0\.1:6004' "$MONITOR_DIR/devices/$SAFE_LAUNCH_UDID/syslog-redwallet-interesting.txt" 2>/dev/null; then
+    log "NOTE syslog REDWALLET_EVENT is host-simulator (127.0.0.1); rebuild embedded bundle: scripts/bundle-redwallet-ios-real-device.sh"
   fi
 fi
 
-COLLECTOR_DIR="$(readlink "${LOG_ROOT%/}/current-js-event-collector" 2>/dev/null || true)"
-if [[ -n "$COLLECTOR_DIR" && -f "$COLLECTOR_DIR/events.ndjson" ]]; then
-  phone_events="$(grep -v '"remote":"::ffff:127' "$COLLECTOR_DIR/events.ndjson" 2>/dev/null | grep -v '"remote":"127' || true)"
+DEVICE_EVENTS="$RUN_DIR/device-redwallet-events.ndjson"
+if perl -e 'alarm 15; exec @ARGV' 15 xcrun devicectl device copy from \
+  --device "$LAUNCH_UDID" \
+  --domain-type appDataContainer \
+  --domain-identifier "$BUNDLE_ID" \
+  --source Documents/redwallet-device-events.ndjson \
+  --destination "$DEVICE_EVENTS" >/dev/null 2>&1 && [[ -s "$DEVICE_EVENTS" ]]; then
+  log "PULLED device event log -> $DEVICE_EVENTS"
+  if rg -q '"platformVersion":"26\.2' "$DEVICE_EVENTS" 2>/dev/null &&
+    rg -q 'real_device_bitassets_wallet_created|device_logger_installed' "$DEVICE_EVENTS" 2>/dev/null; then
+    log "SUCCESS phone-origin device NDJSON (26.2.x BitAssets/logger)"
+    echo "status=phone_origin_device_ndjson" >"$RUN_DIR/RESULT.txt"
+    "$ROOT_DIR/scripts/collect-redwallet-device-logs.sh" "$LOG_ROOT" 30 >"$RUN_DIR/collect.log" 2>&1 || true
+    exit 0
+  fi
+fi
+
+COLLECTOR_FILES=()
+while IFS= read -r cf; do
+  COLLECTOR_FILES+=("$cf")
+done < <(ls -t "${LOG_ROOT%/}"/current-js-event-collector/events.ndjson "${LOG_ROOT%/}"/ios-real-device-selftest-*/js-event-collector/events.ndjson "${LOG_ROOT%/}"/redwallet-js-event-collector-*/events.ndjson 2>/dev/null | head -5)
+phone_events=""
+COLLECTOR_SINCE="${REDWALLET_COLLECTOR_SINCE:-$(date -u -v-"${REDWALLET_PHONE_COLLECTOR_LOOKBACK_MINUTES:-20}"M +%Y-%m-%dT%H:%M:%S 2>/dev/null || date -u -d '20 minutes ago' +%Y-%m-%dT%H:%M:%S 2>/dev/null || true)}"
+for cf in "${COLLECTOR_FILES[@]}"; do
+  [[ -f "$cf" ]] || continue
+  chunk="$(grep -v '"remote":"::ffff:127' "$cf" 2>/dev/null | grep -v '"remote":"127' | grep -v '"remoteAddress":"192.168.1.50"' || true)"
+  if [[ -n "$COLLECTOR_SINCE" && -n "$chunk" ]]; then
+    chunk="$(printf '%s\n' "$chunk" | awk -v since="$COLLECTOR_SINCE" 'index($0, since) > 0' || true)"
+  fi
+  if [[ -n "$chunk" ]]; then
+    phone_events="${phone_events}${phone_events:+$'\n'}${chunk}"
+  fi
+done
+log "COLLECTOR_SINCE=$COLLECTOR_SINCE files=${#COLLECTOR_FILES[@]}"
+if [[ -n "$phone_events" ]]; then
   # Prefer real-device iOS 26.2.x events; ignore simulator 26.3.x noise from shared collector.
   if [[ -n "$phone_events" ]]; then
     filtered="$(printf '%s\n' "$phone_events" | grep '"platformVersion":"26.2' || true)"
@@ -188,8 +272,25 @@ if [[ -n "$COLLECTOR_DIR" && -f "$COLLECTOR_DIR/events.ndjson" ]]; then
     "$ROOT_DIR/scripts/collect-redwallet-device-logs.sh" "$LOG_ROOT" 30 >"$RUN_DIR/collect.log" 2>&1 || true
     exit 0
   fi
+else
+  log "NOTE scanned collector files: ${COLLECTOR_FILES[*]:-none}"
 fi
 
+CMD_DIR_HINT="$(resolve_command_server_dir)"
+if [[ -n "$CMD_DIR_HINT" && -f "$CMD_DIR_HINT/command.json" ]]; then
+  log "HINT command.json still on server — phone never fetched /command (Wi-Fi/Tailscale to Mac 192.168.1.50 required)"
+fi
 log "BLOCKER no phone-origin events yet; check monitor console and ensure app foreground + unlock."
-echo "blocker=no_phone_origin_events" >"$RUN_DIR/BLOCKER.txt"
+{
+  echo "blocker=no_phone_origin_events"
+  if ! grep -qE '^[1-5][0-9]{2}$' "$RUN_DIR/probes/bitassets-rpc-lan.txt" 2>/dev/null &&
+    ! grep -qE '^[1-5][0-9]{2}$' "$RUN_DIR/probes/bitassets-rpc-ts.txt" 2>/dev/null; then
+    log "BLOCKER bitassets_rpc_unreachable — start signet: cd drivechain-wallet-dev/local-dev && docker compose -f docker-compose.local-minimal.yml up -d bitassets"
+    echo "blocker=bitassets_rpc_unreachable"
+  fi
+  if [[ -f "$RUN_DIR/phone-origin-syslog-partial.txt" ]] && rg -q 'CoreSimulator' "$RUN_DIR/phone-origin-syslog-partial.txt" 2>/dev/null; then
+    log "NOTE syslog hits were Mac simulator noise; phone needs Wi-Fi/Tailscale to Mac (192.168.1.50 or 100.76.117.106) for JS collector proof."
+    echo "hint=phone_wifi_or_tailscale_required"
+  fi
+} >"$RUN_DIR/BLOCKER.txt"
 exit 2
