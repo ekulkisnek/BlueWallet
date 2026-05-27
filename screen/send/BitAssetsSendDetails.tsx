@@ -181,6 +181,7 @@ const BitAssetsSendDetails: React.FC = () => {
               {assetList.map(([assetId, bal]) => (
                 <Pressable
                   key={assetId}
+                  testID={`BitAssetsAssetPill-${assetId}`}
                   style={[styles.assetPill, selectedAsset === assetId ? stylesHook.assetPillActive : stylesHook.assetPillInactive]}
                   onPress={() => {
                     setSelectedAsset(assetId);

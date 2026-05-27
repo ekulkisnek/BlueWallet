@@ -82,14 +82,23 @@ describe('BitAssets Send Coins E2E', () => {
     await element(by.id('SendButton')).tap();
     await waitForId('BitAssetsAmountInput');
 
+    // Amount field is disabled until an asset pill is selected.
+    await waitFor(element(by.id(/^BitAssetsAssetPill-/)).atIndex(0))
+      .toBeVisible()
+      .withTimeout(20000);
+    await element(by.id(/^BitAssetsAssetPill-/)).atIndex(0).tap();
+    await sleep(500);
+
     // Input destination address (BitWindow's address)
     await element(by.id('AddressInput')).tap();
     await element(by.id('AddressInput')).replaceText('3AEJkR1vnY6jbQBN3oUgay7PNsUo');
     await dismissKeyboardIfPresent();
 
     // Input amount
+    await waitFor(element(by.id('BitAssetsAmountInput'))).toBeVisible().withTimeout(5000);
     await element(by.id('BitAssetsAmountInput')).tap();
-    await element(by.id('BitAssetsAmountInput')).replaceText('1000000'); // Send 1,000,000 sats
+    await sleep(300);
+    await element(by.id('BitAssetsAmountInput')).typeText('1000000');
     await dismissKeyboardIfPresent();
 
     // Input memo
