@@ -131,6 +131,7 @@ if ! grep -qE '"ok":true|^ok$' "$RUN_DIR/probes/command-health.txt" 2>/dev/null 
 fi
 
 log "MONITOR_START seconds=$MONITOR_SECONDS udid=$LAUNCH_UDID"
+export REDWALLET_MONITOR_TERMINATE_EXISTING="${REDWALLET_MONITOR_TERMINATE_EXISTING:-0}"
 set +e
 "$ROOT_DIR/scripts/monitor-redwallet-ios-real-devices.sh" "$BUNDLE_ID" "$MONITOR_SECONDS" "$LAUNCH_UDID"
 monitor_rc=$?

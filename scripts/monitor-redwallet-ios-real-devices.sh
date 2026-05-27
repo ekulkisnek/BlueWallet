@@ -114,11 +114,15 @@ for udid in "${DEVICES[@]}"; do
   run_capture "$device_dir/processes-before.txt" xcrun devicectl device info processes --device "$udid"
 
   event "device.launch_console.start" "ok" "$udid"
+  launch_extra=()
+  if [[ "${REDWALLET_MONITOR_TERMINATE_EXISTING:-0}" == "1" ]]; then
+    launch_extra+=(--terminate-existing)
+  fi
   (
     set +e
     xcrun devicectl device process launch \
       --device "$udid" \
-      --terminate-existing \
+      "${launch_extra[@]}" \
       --console \
       "$BUNDLE_ID"
     code=$?
