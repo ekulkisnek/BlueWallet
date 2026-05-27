@@ -46,10 +46,13 @@ probe_bitassets_rpc_light() {
 resolve_command_server_dir() {
   local cmd_dir="${REDWALLET_BITASSETS_COMMAND_DIR:-}"
   if [[ -z "$cmd_dir" ]]; then
-    cmd_dir="$(ls -td "$LOG_ROOT"/android-real-device-*/command-server "$LOG_ROOT"/redwallet-bitassets-command-server-*/ 2>/dev/null | head -1 || true)"
+    cmd_dir="$(readlink "${LOG_ROOT%/}/current-android-bitassets-command-server" 2>/dev/null || true)"
+  fi
+  if [[ -z "$cmd_dir" ]]; then
+    cmd_dir="$(ls -td "$LOG_ROOT"/android-origin-retry-*/command-server "$LOG_ROOT"/android-real-device-*/command-server "$LOG_ROOT"/android-bitassets-command-server 2>/dev/null | head -1 || true)"
   fi
   if [[ -z "$cmd_dir" || ! -d "$cmd_dir" ]]; then
-    cmd_dir="$RUN_DIR/command-server"
+    cmd_dir="${LOG_ROOT%/}/android-bitassets-command-server"
     mkdir -p "$cmd_dir"
   fi
   printf '%s' "$cmd_dir"
@@ -126,6 +129,11 @@ elif ! probe ensure-bitassets-rpc perl -e 'alarm 90; exec @ARGV' bash "$ROOT_DIR
 fi
 probe metro-status curl -sS -m 5 http://127.0.0.1:8081/status
 probe collector-health curl -sS -m 5 http://192.168.1.50:6123/health
+if ! probe ensure-android-command-server bash "$ROOT_DIR/scripts/ensure-android-bitassets-command-server.sh"; then
+  log "BLOCKER android_command_server"
+  echo "blocker=android_command_server" >"$RUN_DIR/BLOCKER.txt"
+  exit 2
+fi
 probe command-health curl -sS -m 5 http://192.168.1.50:6124/health
 
 CMD_DIR="$(resolve_command_server_dir)"

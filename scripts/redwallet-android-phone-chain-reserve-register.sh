@@ -24,8 +24,10 @@ exec >>"$LOG" 2>&1
 EVENT_LINE_START="$(wc -l <"$EVENTS" 2>/dev/null | tr -d ' ')"
 EVENT_LINE_START="${EVENT_LINE_START:-0}"
 echo "CHAIN_START $(date -Iseconds) serial=$SERIAL event_line_start=$EVENT_LINE_START"
+echo "LIPHONE_STANDBY=1 force-quit RedWallet on LiPhone; do not run iOS chain scripts (docs/FLEET_LANES.md)"
 
 export ANDROID_SERIAL="$SERIAL"
+export REDWALLET_LIPHONE_STANDBY=1
 export REDWALLET_ANDROID_SERIAL="$SERIAL"
 export REDWALLET_BITASSETS_RPC_MAC="${REDWALLET_BITASSETS_RPC_MAC:-http://192.168.1.50:6004}"
 export BITASSETS_RPC_URL="${REDWALLET_BITASSETS_RPC_MAC}"
