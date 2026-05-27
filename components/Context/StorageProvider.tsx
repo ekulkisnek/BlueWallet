@@ -9,7 +9,11 @@ import {
   TTXMetadata,
   WatchOnlyWallet,
 } from '../../class';
-import { BitAssetsWallet as BitAssetsWalletClass, normalizeBitAssetsRpcUrlForRuntime } from '../../class/wallets/bitassets-wallet';
+import {
+  BitAssetsWallet as BitAssetsWalletClass,
+  normalizeBitAssetsLiteWalletQuicUrlForRuntime,
+  normalizeBitAssetsRpcUrlForRuntime,
+} from '../../class/wallets/bitassets-wallet';
 import type { TWallet } from '../../class/wallets/types';
 import presentAlert from '../../components/Alert';
 import loc, { formatBalanceWithoutSuffix } from '../../loc';
@@ -754,10 +758,15 @@ export const StorageProvider = ({ children }: { children: React.ReactNode }) => 
           if (wallet.bitassetsRpcUrl !== rpcUrl) {
             wallet.bitassetsRpcUrl = rpcUrl;
           }
+          const quicUrl = normalizeBitAssetsLiteWalletQuicUrlForRuntime(rpcUrl, wallet.bitassetsLiteWalletQuicUrl);
+          if (wallet.bitassetsLiteWalletQuicUrl !== quicUrl) {
+            wallet.bitassetsLiteWalletQuicUrl = quicUrl;
+          }
           redWalletEvent('real_device_bitassets_smoke_wallet', {
             walletID: wallet.getID?.(),
             address,
             rpcUrl,
+            liteWalletQuicUrl: quicUrl,
             hasAddress: address.length > 0,
           });
           // Command-server selftest first — rpc probe can block and QUIC sync may never return.

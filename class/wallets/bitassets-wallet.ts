@@ -36,11 +36,32 @@ export function normalizeBitAssetsRpcUrlForRuntime(rpcUrl: string): string {
     return rpcUrl;
   }
   const phoneHost = proof && isRedWalletIosPhysicalDevice() ? REDWALLET_PHONE_SIGNET_RPC_HOST : '192.168.1.50';
-  // Preserve explicit Tailscale/LAN hosts from signet-endpoints; only rewrite loopback/simulator URLs.
-  return rpcUrl.replace(
+  let normalized = rpcUrl.replace(
     /^(https?:\/\/)(?:localhost|\[::1\]|127(?:\.\d{1,3}){3})(:\d+)?(\/.*)?$/i,
     (_match, protocol: string, port = '', path = '') => `${protocol}${phoneHost}${port}${path}`.replace(/\/$/, ''),
   );
+  if (proof && isRedWalletIosPhysicalDevice()) {
+    normalized = normalized.replace(
+      /^(https?:\/\/)(?:100\.76\.117\.106|192\.168\.1\.50)(:\d+)?(\/.*)?$/i,
+      (_match, protocol: string, port = '', path = '') => `${protocol}${phoneHost}${port}${path}`.replace(/\/$/, ''),
+    );
+  }
+  return normalized;
+}
+
+export function normalizeBitAssetsLiteWalletQuicUrlForRuntime(rpcUrl: string, quicUrl: string): string {
+  const derived = quicUrl || deriveBitAssetsLiteWalletQuicUrl(normalizeBitAssetsRpcUrlForRuntime(rpcUrl)) || '';
+  if (Platform.OS !== 'ios' || !isRedWalletIosRealDeviceProofEnabled()) return derived;
+  try {
+    if (isEmulatorSync()) return derived;
+  } catch {
+    return derived;
+  }
+  if (!isRedWalletIosPhysicalDevice()) return derived;
+  const host = REDWALLET_PHONE_SIGNET_RPC_HOST;
+  const portMatch = derived.match(/:(\d+)$/);
+  const port = portMatch ? portMatch[1] : '6104';
+  return `${host}:${port}`;
 }
 
 export class BitAssetsWallet extends LegacyWallet {
@@ -238,8 +259,11 @@ export class BitAssetsWallet extends LegacyWallet {
     if (this.bitassetsRpcUrl !== rpcUrl) {
       this.bitassetsRpcUrl = rpcUrl;
     }
-    const quicUrl = this.bitassetsLiteWalletQuicUrl || deriveBitAssetsLiteWalletQuicUrl(rpcUrl);
-    this.bitassetsLiteWalletQuicUrl = quicUrl ?? '';
+    const quicUrl = normalizeBitAssetsLiteWalletQuicUrlForRuntime(
+      rpcUrl,
+      this.bitassetsLiteWalletQuicUrl || deriveBitAssetsLiteWalletQuicUrl(rpcUrl) || '',
+    );
+    this.bitassetsLiteWalletQuicUrl = quicUrl;
     if (client.configure) {
       await client.configure({
         rpcUrl,
