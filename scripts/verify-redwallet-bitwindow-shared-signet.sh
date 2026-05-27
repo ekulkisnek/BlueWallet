@@ -10,6 +10,9 @@ STAMP="$(date +%Y%m%d-%H%M%S)"
 RUN_DIR="${LOG_ROOT%/}/redwallet-bitwindow-interop-${STAMP}"
 mkdir -p "$RUN_DIR"
 
+# shellcheck source=redwallet-colima-docker-env.sh
+source "$ROOT/scripts/redwallet-colima-docker-env.sh"
+
 log() { echo "$(date +%Y-%m-%dT%H:%M:%S) $*" | tee -a "$RUN_DIR/verify.log"; }
 FAIL=0
 ok() { log "OK $*"; }
