@@ -3,6 +3,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=redwallet-colima-docker-env.sh
+source "$ROOT_DIR/scripts/redwallet-colima-docker-env.sh"
 LOG_ROOT="${REDWALLET_LOG_ROOT:-/Volumes/T705/redwallet-logs}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 CHAIN_ASSET="${REDWALLET_CHAIN_ASSET:-RWFLEET${STAMP}}"
@@ -111,71 +113,127 @@ wait_selftest_ok() {
   return 1
 }
 
-cd "$ROOT_DIR"
-run_chain_preflight
-
-export REDWALLET_BITASSETS_COMMAND_OPERATION=createWallet
-export REDWALLET_ANDROID_SKIP_LAUNCH=0
-export REDWALLET_ANDROID_MONITOR_SECONDS=90
-bash "$ROOT_DIR/scripts/retry-android-origin-bitassets-proof.sh" || true
-export REDWALLET_ANDROID_SKIP_LAUNCH=1
-export REDWALLET_ANDROID_MONITOR_SECONDS=60
-wait_wallet_created || echo "CHAIN_WARN createWallet (see collector)"
-sleep 5
-
-echo "CHAIN_ASSET=$CHAIN_ASSET"
-export REDWALLET_BITASSETS_ASSET_NAME="$CHAIN_ASSET"
-export REDWALLET_BITASSETS_COMMAND_OPERATION=reserve
-bash "$ROOT_DIR/scripts/retry-android-origin-bitassets-proof.sh" || true
-adb -s "$SERIAL" shell monkey -p "$ANDROID_PACKAGE" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
-sleep 8
-wait_selftest_ok reserve || echo "CHAIN_FAIL reserve"
-
 LOCAL_DEV="${LOCAL_DEV:-/Volumes/T705/code/drivechain-wallet-dev/local-dev}"
 COMPOSE_FILE="${COMPOSE_FILE:-$LOCAL_DEV/docker-compose.local-minimal.yml}"
-if [[ "${REDWALLET_SKIP_CHAIN_MINE:-0}" != "1" ]]; then
-  if [[ -x "$LOCAL_DEV/scripts/mine-private-signet-blocks.sh" ]]; then
-    "$LOCAL_DEV/scripts/mine-private-signet-blocks.sh" 1 && echo "CHAIN_L1_MINE_OK" || echo "CHAIN_L1_MINE_FAIL"
-  fi
-  if [[ -x "$LOCAL_DEV/scripts/mine-bitassets-block.sh" ]]; then
-    "$LOCAL_DEV/scripts/mine-bitassets-block.sh" && echo "CHAIN_MINE_OK" || echo "CHAIN_MINE_FAIL"
-  fi
-fi
-sleep "${REDWALLET_CHAIN_REGISTER_DELAY_SEC:-15}"
 
-export REDWALLET_BITASSETS_ASSET_NAME="$CHAIN_ASSET"
-export REDWALLET_BITASSETS_COMMAND_OPERATION=register
-bash "$ROOT_DIR/scripts/retry-android-origin-bitassets-proof.sh" || true
-adb -s "$SERIAL" shell monkey -p "$ANDROID_PACKAGE" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
-sleep 8
-wait_selftest_ok register || echo "CHAIN_FAIL register"
-register_txid="$last_chain_txid"
-
-chain_asset_id=""
-if [[ -f "$COMPOSE_FILE" ]] && command -v docker >/dev/null 2>&1; then
-  chain_asset_id="$(docker compose -f "$COMPOSE_FILE" exec -T bitassets plain_bitassets_app_cli bitassets 2>/dev/null \
+resolve_chain_asset_id() {
+  if [[ -n "${REDWALLET_BITASSETS_TRANSFER_ASSET_ID:-}" ]]; then
+    printf '%s\n' "$REDWALLET_BITASSETS_TRANSFER_ASSET_ID"
+    return 0
+  fi
+  if [[ "${REDWALLET_SKIP_DOCKER_LOOKUP:-0}" == "1" || ! -f "$COMPOSE_FILE" ]] || ! command -v docker >/dev/null 2>&1; then
+    return 1
+  fi
+  docker compose -f "$COMPOSE_FILE" exec -T bitassets plain_bitassets_app_cli bitassets 2>/dev/null \
     | python3 -c 'import json,sys
 name=sys.argv[1]
 d=json.load(sys.stdin)
 for row in d:
   if isinstance(row,(list,tuple)) and len(row)>=2 and row[0]==name:
     print(row[1]); sys.exit(0)
-sys.exit(1)' "$CHAIN_ASSET" 2>/dev/null || true)"
+if d:
+  print(d[-1][1]); sys.exit(0)
+sys.exit(1)' "$CHAIN_ASSET" 2>/dev/null || return 1
+}
+
+cd "$ROOT_DIR"
+run_chain_preflight
+
+register_txid="${REDWALLET_CHAIN_REGISTER_TXID:-}"
+transfer_txid=""
+
+if [[ "${REDWALLET_CHAIN_TRANSFER_ONLY:-0}" != "1" && "${REDWALLET_CHAIN_FROM_REGISTER:-0}" != "1" ]]; then
+  export REDWALLET_BITASSETS_COMMAND_OPERATION=createWallet
+  export REDWALLET_ANDROID_SKIP_LAUNCH=0
+  export REDWALLET_ANDROID_MONITOR_SECONDS=90
+  bash "$ROOT_DIR/scripts/retry-android-origin-bitassets-proof.sh" || true
+  export REDWALLET_ANDROID_SKIP_LAUNCH=1
+  export REDWALLET_ANDROID_MONITOR_SECONDS=60
+  wait_wallet_created || echo "CHAIN_WARN createWallet (see collector)"
+  sleep 5
+
+  echo "CHAIN_ASSET=$CHAIN_ASSET"
+  export REDWALLET_BITASSETS_ASSET_NAME="$CHAIN_ASSET"
+  export REDWALLET_BITASSETS_COMMAND_OPERATION=reserve
+  export REDWALLET_ANDROID_SKIP_LAUNCH=0
+  bash "$ROOT_DIR/scripts/retry-android-origin-bitassets-proof.sh" || true
+  export REDWALLET_ANDROID_SKIP_LAUNCH=1
+  sleep 8
+  wait_selftest_ok reserve || echo "CHAIN_FAIL reserve"
+
+  if [[ "${REDWALLET_SKIP_CHAIN_MINE:-0}" != "1" ]]; then
+    if [[ -x "$LOCAL_DEV/scripts/mine-private-signet-blocks.sh" ]]; then
+      "$LOCAL_DEV/scripts/mine-private-signet-blocks.sh" 1 && echo "CHAIN_L1_MINE_OK" || echo "CHAIN_L1_MINE_FAIL"
+    fi
+    if [[ -x "$LOCAL_DEV/scripts/mine-bitassets-block.sh" ]]; then
+      "$LOCAL_DEV/scripts/mine-bitassets-block.sh" && echo "CHAIN_MINE_OK" || echo "CHAIN_MINE_FAIL"
+    fi
+  fi
+  sleep "${REDWALLET_CHAIN_REGISTER_DELAY_SEC:-15}"
+
+  export REDWALLET_BITASSETS_ASSET_NAME="$CHAIN_ASSET"
+  export REDWALLET_BITASSETS_COMMAND_OPERATION=register
+  export REDWALLET_ANDROID_SKIP_LAUNCH=0
+  bash "$ROOT_DIR/scripts/retry-android-origin-bitassets-proof.sh" || true
+  export REDWALLET_ANDROID_SKIP_LAUNCH=1
+  sleep 8
+  wait_selftest_ok register || echo "CHAIN_FAIL register"
+  register_txid="$last_chain_txid"
+elif [[ "${REDWALLET_CHAIN_FROM_REGISTER:-0}" == "1" ]]; then
+  echo "CHAIN_FROM_REGISTER asset=$CHAIN_ASSET"
+  export REDWALLET_BITASSETS_ASSET_NAME="$CHAIN_ASSET"
+  export REDWALLET_BITASSETS_COMMAND_OPERATION=register
+  export REDWALLET_ANDROID_SKIP_LAUNCH=0
+  bash "$ROOT_DIR/scripts/retry-android-origin-bitassets-proof.sh" || true
+  export REDWALLET_ANDROID_SKIP_LAUNCH=1
+  sleep 8
+  wait_selftest_ok register || echo "CHAIN_FAIL register"
+  register_txid="$last_chain_txid"
+  if [[ "${REDWALLET_SKIP_CHAIN_MINE:-0}" != "1" ]]; then
+    if [[ -x "$LOCAL_DEV/scripts/mine-bitassets-block.sh" ]]; then
+      "$LOCAL_DEV/scripts/mine-bitassets-block.sh" && echo "CHAIN_MINE_OK post-register" || echo "CHAIN_MINE_FAIL post-register"
+    fi
+  fi
+  sleep "${REDWALLET_CHAIN_TRANSFER_DELAY_SEC:-10}"
+else
+  echo "CHAIN_TRANSFER_ONLY asset=$CHAIN_ASSET register_txid=${register_txid:-none}"
+  if [[ "${REDWALLET_SKIP_CHAIN_MINE:-0}" != "1" ]]; then
+    if [[ -x "$LOCAL_DEV/scripts/mine-bitassets-block.sh" ]]; then
+      "$LOCAL_DEV/scripts/mine-bitassets-block.sh" && echo "CHAIN_MINE_OK pre-transfer" || echo "CHAIN_MINE_FAIL pre-transfer"
+    fi
+  fi
+  sleep "${REDWALLET_CHAIN_TRANSFER_DELAY_SEC:-10}"
 fi
-if [[ -n "$chain_asset_id" ]]; then
-  echo "CHAIN_ASSET_ID=$chain_asset_id"
+
+# Transfer uses on-chain BitAsset id (hex), never the register txid.
+chain_asset_id=""
+if chain_asset_id="$(resolve_chain_asset_id)"; then
+  echo "CHAIN_ASSET_ID=$chain_asset_id (from bitassets list / env)"
+else
+  chain_asset_id=""
+  echo "CHAIN_ASSET_ID=unset (docker lookup failed; will not use register_txid)"
+fi
+if [[ -n "$register_txid" && -n "$chain_asset_id" ]] || [[ "${REDWALLET_CHAIN_TRANSFER_ONLY:-0}" == "1" && -n "$chain_asset_id" ]]; then
   export REDWALLET_BITASSETS_TRANSFER_ASSET_ID="$chain_asset_id"
   export REDWALLET_BITASSETS_TRANSFER_DEST="${REDWALLET_BITASSETS_TRANSFER_DEST:-cadLofSiGHqnuVEN2Q1KqZFvNWv}"
   export REDWALLET_BITASSETS_COMMAND_OPERATION=transfer
+  adb -s "$SERIAL" shell am force-stop "$ANDROID_PACKAGE" >/dev/null 2>&1 || true
+  adb -s "$SERIAL" shell input keyevent KEYCODE_WAKEUP >/dev/null 2>&1 || true
+  export REDWALLET_ANDROID_SKIP_LAUNCH=0
   bash "$ROOT_DIR/scripts/retry-android-origin-bitassets-proof.sh" || true
-  adb -s "$SERIAL" shell monkey -p "$ANDROID_PACKAGE" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
-  sleep 8
-  wait_selftest_ok transfer || echo "CHAIN_FAIL transfer"
+  export REDWALLET_ANDROID_SKIP_LAUNCH=1
+  if wait_selftest_ok transfer; then
+    transfer_txid="$last_chain_txid"
+  else
+    echo "CHAIN_FAIL transfer"
+  fi
+elif [[ -n "$register_txid" ]]; then
+  echo "CHAIN_SKIP transfer (no sidechain asset id; register_txid=${register_txid} is not asset id)"
 else
-  echo "CHAIN_SKIP transfer (no asset id)"
+  echo "CHAIN_SKIP transfer (no register txid)"
 fi
 
 export REDWALLET_ANDROID_MONITOR_SECONDS=180
 bash "$ROOT_DIR/scripts/monitor-redwallet-android-real-device.sh" "$ANDROID_PACKAGE" 180 "$SERIAL" || true
 bash "$ROOT_DIR/scripts/collect-redwallet-device-logs.sh" "$LOG_ROOT" 30 || true
-echo "CHAIN_DONE $(date -Iseconds) asset=$CHAIN_ASSET register_txid=${register_txid:-none} asset_id=${chain_asset_id:-none}"
+echo "CHAIN_DONE $(date -Iseconds) asset=$CHAIN_ASSET register_txid=${register_txid:-none} transfer_txid=${transfer_txid:-none} asset_id=${chain_asset_id:-none}"
