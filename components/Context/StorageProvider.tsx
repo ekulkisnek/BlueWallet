@@ -27,7 +27,7 @@ import { getScanWasBBQR } from '../../helpers/scan-qr.ts';
 import { setWalletIdMustUseBBQR } from '../../blue_modules/ur';
 import { redWalletEvent } from '../../helpers/redwalletDeviceLogger';
 import { REDWALLET_USB_TUNNEL_COMMAND, REDWALLET_USB_TUNNEL_HOST_FILE } from '../../helpers/redwalletRealDeviceEndpoints';
-import { isRedWalletRealDeviceProofEnabled } from '../../helpers/redwalletRealDeviceProof';
+import { isRedWalletIosRealDeviceProofEnabled, isRedWalletRealDeviceProofEnabled } from '../../helpers/redwalletRealDeviceProof';
 import { REDWALLET_SIGNET_BITASSETS_RPC_URL } from '../../helpers/redwalletSignetEndpoints.generated';
 
 const BlueApp = BlueAppClass.getInstance();
@@ -354,7 +354,7 @@ async function fetchBtcRealDeviceCommand(): Promise<string> {
     return rawCommand;
   }
 
-  if (!isRedWalletRealDeviceProofEnabled()) return '';
+  if (!isRedWalletIosRealDeviceProofEnabled()) return '';
   const startedAt = Date.now();
   try {
     const response = await fetch(BTC_REAL_DEVICE_COMMAND_URL, {
@@ -986,7 +986,7 @@ export const StorageProvider = ({ children }: { children: React.ReactNode }) => 
   }, [wallets, walletsInitialized]);
 
   useEffect(() => {
-    if (!isRedWalletRealDeviceProofEnabled() || realDeviceBtcCommandRef.current || !walletsInitialized) return;
+    if (!isRedWalletIosRealDeviceProofEnabled() || realDeviceBtcCommandRef.current || !walletsInitialized) return;
     realDeviceBtcCommandRef.current = true;
 
     (async () => {
