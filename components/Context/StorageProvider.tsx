@@ -151,6 +151,11 @@ function isBitAssetsStaleSyncError(error: unknown): boolean {
   return /stale|resync from snapshot|from_block_hash|partially synced|partial sync|not known/i.test(message);
 }
 
+function isBitAssetsInsufficientFundsError(error: unknown): boolean {
+  const message = (error as { message?: string })?.message ?? String(error);
+  return /not enough native wallet BitAsset funds/i.test(message);
+}
+
 async function syncBitAssetsWithLogging(wallet: BitAssetsWalletClass, operation: string): Promise<boolean> {
   const maxAttempts = operation === 'transfer' || operation.startsWith('transfer:') ? 5 : 1;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -208,6 +213,12 @@ async function resolveBitAssetsSelftestWallet(
   if (walletId) {
     const match = wallets.find(w => w.getID?.() === walletId);
     if (match) return match;
+    redWalletEvent('real_device_bitassets_selftest_wallet_missing', {
+      walletID: walletId,
+      operation: String(command.operation ?? ''),
+      availableWalletIDs: wallets.map(w => w.getID?.()).filter(Boolean),
+    });
+    return null;
   }
   const operation = String(command.operation ?? '');
   const assetId = String(command.assetId ?? '').trim();
@@ -223,6 +234,42 @@ async function resolveBitAssetsSelftestWallet(
     }
   }
   return wallets[0];
+}
+
+async function transferBitAssetsAfterSync(
+  wallet: BitAssetsWalletClass,
+  params: {
+    destinationAddress: string;
+    assetId: string;
+    amount: number;
+    feeSats: number;
+    memo?: string;
+  },
+  operation: string,
+): Promise<string> {
+  const maxAttempts = 4;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const synced = await syncBitAssetsWithLogging(wallet, `${operation}:pre-transfer:${attempt}`);
+    if (!synced) {
+      throw new Error('BitAssets wallet sync failed before transfer; wallet state is stale');
+    }
+    try {
+      return await wallet.transferBitAssets(params);
+    } catch (error: any) {
+      if (!isBitAssetsInsufficientFundsError(error) || attempt >= maxAttempts) {
+        throw error;
+      }
+      redWalletEvent('real_device_bitassets_selftest_transfer_retry', {
+        walletID: wallet.getID?.(),
+        operation,
+        attempt,
+        assetId: params.assetId,
+        error: error?.message ?? String(error),
+      });
+      await new Promise(resolve => setTimeout(resolve, 5000));
+    }
+  }
+  throw new Error('transfer failed after sync retries');
 }
 
 async function runBitAssetsRealDeviceSelftestCommandInner(wallet: BitAssetsWalletClass, prefetchedCommand = ''): Promise<void> {
@@ -288,19 +335,18 @@ async function runBitAssetsRealDeviceSelftestCommandInner(wallet: BitAssetsWalle
         txid = await wallet.registerBitAsset(registerParams);
       }
     } else if (operation === 'transfer') {
-      if (isRedWalletRealDeviceProofEnabled()) {
-        const synced = await syncBitAssetsWithLogging(wallet, operation);
-        if (!synced) {
-          throw new Error('BitAssets wallet sync failed before transfer; wallet state is stale');
-        }
-      }
-      txid = await wallet.transferBitAssets({
+      const transferParams = {
         destinationAddress: String(command.destinationAddress),
         assetId: String(command.assetId),
         amount: Number(command.amount),
         feeSats: Number(command.feeSats ?? 0),
         memo: command.memo ? String(command.memo) : undefined,
-      });
+      };
+      if (isRedWalletRealDeviceProofEnabled()) {
+        txid = await transferBitAssetsAfterSync(wallet, transferParams, operation);
+      } else {
+        txid = await wallet.transferBitAssets(transferParams);
+      }
     } else {
       throw new Error(`Unsupported BitAssets real-device selftest operation: ${operation}`);
     }
@@ -1006,7 +1052,17 @@ export const StorageProvider = ({ children }: { children: React.ReactNode }) => 
         return;
       }
       const wallet = await resolveBitAssetsSelftestWallet(bitAssetsWallets, command);
-      if (!wallet) return;
+      if (!wallet) {
+        const missingWalletId = String(command.walletID ?? command.walletId ?? '').trim();
+        if (missingWalletId) {
+          redWalletEvent('real_device_bitassets_selftest_error', {
+            walletID: missingWalletId,
+            operation: String(command.operation ?? ''),
+            error: `BitAssets wallet ${missingWalletId} is not loaded on device`,
+          });
+        }
+        return;
+      }
       const rpcUrl = normalizeBitAssetsRpcUrlForRuntime(wallet.bitassetsRpcUrl);
       if (wallet.bitassetsRpcUrl !== rpcUrl) {
         wallet.bitassetsRpcUrl = rpcUrl;
