@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Push reserve → register → transfer on Android physical device; poll collector/logcat.
+#
+# Post-register PASS (transfer-only): scripts/redwallet-android-guarded-transfer-only.sh
+# Wallet restore / CHAIN_GATE_FAIL: docs/orchestration/ANDROID_WALLET_RESTORE.md
+# Preflight (once per chain): scripts/redwallet-android-chain-preflight.sh
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -83,15 +87,11 @@ android_transfer_wallet_gate() {
 }
 
 run_chain_preflight() {
-  local preflight_rc=0 env_file="$LOG_ROOT/current-preflight-android.env"
+  local preflight_rc=0
   set +e
-  bash "$ROOT_DIR/scripts/preflight-redwallet-android-chain.sh"
+  bash "$ROOT_DIR/scripts/redwallet-android-chain-preflight.sh"
   preflight_rc=$?
   set -e
-  if [[ -f "$env_file" ]]; then
-    # shellcheck disable=SC1090
-    source "$env_file"
-  fi
   if [[ "$preflight_rc" -ne 0 ]]; then
     echo "CHAIN_GATE_FAIL preflight exit=$preflight_rc"
     exit 1

@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# Transfer-only on Android physical device after register (guarded: sync + balance retries in app).
+# Canonical post-PASS path: transfer-only on Android after a successful register.
+# Sets wallet ID gates, MONITOR_NO_RESTART, and delegates to the phone-chain script.
+# Wallet restore before re-run: docs/orchestration/ANDROID_WALLET_RESTORE.md
+# Full reserve→register→transfer: redwallet-android-phone-chain-reserve-register.sh
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

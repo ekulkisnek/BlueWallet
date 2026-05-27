@@ -75,11 +75,20 @@ seed_bitassets_command() {
 EOF
       ;;
     register)
+      wallet_id_json=""
+      if [[ -n "${REDWALLET_BITASSETS_WALLET_ID:-}" ]]; then
+        wallet_id_json=",\"walletID\":\"${REDWALLET_BITASSETS_WALLET_ID}\""
+      fi
       cat >"$cmd_dir/command.json" <<EOF
-{"operation":"register","commandId":"android-register-${STAMP}","name":"${asset_name}","initialSupply":1000,"feeSats":0,"rpcUrl":"${rpc}","bitassetsLiteWalletQuicUrl":"${quic}"}
+{"operation":"register","commandId":"android-register-${STAMP}","name":"${asset_name}","initialSupply":1000,"feeSats":0,"rpcUrl":"${rpc}","bitassetsLiteWalletQuicUrl":"${quic}"${wallet_id_json}}
 EOF
       ;;
     transfer)
+      if [[ "${REDWALLET_ANDROID_REQUIRE_WALLET_ID:-0}" == "1" && -z "${REDWALLET_BITASSETS_WALLET_ID:-}" ]]; then
+        log "BLOCKER transfer requires REDWALLET_BITASSETS_WALLET_ID"
+        echo "blocker=transfer_wallet_id_required" >"$RUN_DIR/BLOCKER.txt"
+        return 1
+      fi
       wallet_id_json=""
       if [[ -n "${REDWALLET_BITASSETS_WALLET_ID:-}" ]]; then
         wallet_id_json=",\"walletID\":\"${REDWALLET_BITASSETS_WALLET_ID}\""
@@ -87,6 +96,10 @@ EOF
       cat >"$cmd_dir/command.json" <<EOF
 {"operation":"transfer","commandId":"android-transfer-${STAMP}","assetId":"${REDWALLET_BITASSETS_TRANSFER_ASSET_ID:-}","destinationAddress":"${REDWALLET_BITASSETS_TRANSFER_DEST:-}","amount":${REDWALLET_BITASSETS_TRANSFER_AMOUNT:-1},"feeSats":0,"rpcUrl":"${rpc}","bitassetsLiteWalletQuicUrl":"${quic}"${wallet_id_json}}
 EOF
+      if [[ -n "${REDWALLET_BITASSETS_WALLET_ID:-}" ]] && ! rg -qF "\"walletID\":\"${REDWALLET_BITASSETS_WALLET_ID}\"" "$cmd_dir/command.json" 2>/dev/null; then
+        log "BLOCKER command.json missing walletID"
+        return 1
+      fi
       ;;
     *)
       cat >"$cmd_dir/command.json" <<EOF
@@ -118,33 +131,40 @@ if ! probe adb-device adb -s "$ANDROID_SERIAL" get-state; then
   exit 2
 fi
 
-ENV_FILE="$(ls -t "$LOG_ROOT"/signet-endpoints-*/redwallet-signet.env 2>/dev/null | head -1 || true)"
-if [[ -z "$ENV_FILE" || ! -f "$ENV_FILE" ]]; then
-  probe signet-endpoints perl -e 'alarm 90; exec @ARGV' bash -c "cd '$ROOT_DIR' && scripts/redwallet-signet-endpoints.sh" || true
+if [[ "${REDWALLET_ANDROID_CHAIN_PREFLIGHT_DONE:-0}" == "1" ]]; then
+  log "SKIP preflight probes (chain preflight already ran)"
 else
-  log "SKIP signet-endpoints (reuse $ENV_FILE)"
-fi
-if [[ "${REDWALLET_SKIP_BITASSETS_RESTART:-0}" == 1 ]]; then
-  if ! probe ensure-bitassets-rpc probe_bitassets_rpc_light; then
+  ENV_FILE="$(ls -t "$LOG_ROOT"/signet-endpoints-*/redwallet-signet.env 2>/dev/null | head -1 || true)"
+  if [[ -z "$ENV_FILE" || ! -f "$ENV_FILE" ]]; then
+    probe signet-endpoints perl -e 'alarm 90; exec @ARGV' bash -c "cd '$ROOT_DIR' && scripts/redwallet-signet-endpoints.sh" || true
+  else
+    log "SKIP signet-endpoints (reuse $ENV_FILE)"
+  fi
+  if [[ "${REDWALLET_SKIP_BITASSETS_RESTART:-0}" == 1 ]]; then
+    if ! probe ensure-bitassets-rpc probe_bitassets_rpc_light; then
+      echo "blocker=bitassets_rpc_down" >"$RUN_DIR/BLOCKER.txt"
+      exit 2
+    fi
+  elif ! probe ensure-bitassets-rpc perl -e 'alarm 90; exec @ARGV' bash "$ROOT_DIR/scripts/ensure-bitassets-rpc-responsive.sh"; then
     echo "blocker=bitassets_rpc_down" >"$RUN_DIR/BLOCKER.txt"
     exit 2
   fi
-elif ! probe ensure-bitassets-rpc perl -e 'alarm 90; exec @ARGV' bash "$ROOT_DIR/scripts/ensure-bitassets-rpc-responsive.sh"; then
-  echo "blocker=bitassets_rpc_down" >"$RUN_DIR/BLOCKER.txt"
-  exit 2
+  probe metro-status curl -sS -m 5 http://127.0.0.1:8081/status
+  probe collector-health curl -sS -m 5 http://192.168.1.50:6123/health
+  if ! probe ensure-android-command-server bash "$ROOT_DIR/scripts/ensure-android-bitassets-command-server.sh"; then
+    log "BLOCKER android_command_server"
+    echo "blocker=android_command_server" >"$RUN_DIR/BLOCKER.txt"
+    exit 2
+  fi
+  probe command-health curl -sS -m 5 http://192.168.1.50:6124/health
 fi
-probe metro-status curl -sS -m 5 http://127.0.0.1:8081/status
-probe collector-health curl -sS -m 5 http://192.168.1.50:6123/health
-if ! probe ensure-android-command-server bash "$ROOT_DIR/scripts/ensure-android-bitassets-command-server.sh"; then
-  log "BLOCKER android_command_server"
-  echo "blocker=android_command_server" >"$RUN_DIR/BLOCKER.txt"
-  exit 2
-fi
-probe command-health curl -sS -m 5 http://192.168.1.50:6124/health
 
 CMD_DIR="$(resolve_command_server_dir)"
 export REDWALLET_BITASSETS_COMMAND_DIR="$CMD_DIR"
-seed_bitassets_command || true
+if ! seed_bitassets_command; then
+  log "BLOCKER seed_bitassets_command failed"
+  exit 2
+fi
 cp "$CMD_DIR/command.json" "$RUN_DIR/probes/command-body.txt" 2>/dev/null || true
 export REDWALLET_KEEP_COMMAND_SERVER=1
 android_push_app_file "$CMD_DIR/command.json" "redwallet-bitassets-selftest-command.json" || true

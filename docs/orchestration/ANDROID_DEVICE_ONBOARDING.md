@@ -16,7 +16,9 @@ Physical Pixel proof runs on a **single Mac lane** with LiPhone in standby. See 
 | `preflight-redwallet-android-chain.sh` | Fail-fast gates before chain |
 | `retry-android-origin-bitassets-proof.sh` | Seed `command.json`, `adb run-as` push, monitor |
 | `redwallet-android-phone-chain-reserve-register.sh` | Full reserve → register → transfer chain |
-| `redwallet-android-guarded-transfer-only.sh` | Transfer-only after prior register (sets wallet ID + guards) |
+| `redwallet-android-guarded-transfer-only.sh` | Transfer-only after prior register (canonical post-PASS path) |
+| `redwallet-android-chain-preflight.sh` | Preflight once; sets `REDWALLET_ANDROID_CHAIN_PREFLIGHT_DONE` |
+| `redwallet-fleet-status.sh` | Read-only RPC height, lock, latest `CHAIN_OK` |
 
 ## Environment (transfer-only)
 
@@ -41,6 +43,8 @@ scripts/redwallet-android-guarded-transfer-only.sh
 ```
 
 ## Wallet-mismatch recovery
+
+See [ANDROID_WALLET_RESTORE.md](./ANDROID_WALLET_RESTORE.md) for the focused restore checklist.
 
 Transfer-only fails fast when the **registering wallet is not on device** or the **BitAssets wallet count is wrong** (see `CHAIN_GATE_FAIL` in chain log).
 
