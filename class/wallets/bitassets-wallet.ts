@@ -23,8 +23,9 @@ import { isEmulatorSync } from 'react-native-device-info';
 import {
   canonicalBitAssetsQuicUrlForRuntime,
   canonicalBitAssetsRpcUrlForRuntime,
+  isRedWalletAndroidPhysicalDevice,
   isRedWalletIosPhysicalDevice,
-  isRedWalletIosRealDeviceProofEnabled,
+  isRedWalletRealDeviceProofEnabled,
 } from '../../helpers/redwalletRealDeviceProof';
 
 function isLoopbackBitAssetsHost(hostname: string): boolean {
@@ -47,7 +48,19 @@ function isLoopbackBitAssetsQuicUrl(quicUrl: string): boolean {
   return isLoopbackBitAssetsHost(host);
 }
 
+function isEmulatorLoopbackBitAssetsRpcUrl(rpcUrl: string): boolean {
+  if (Platform.OS !== 'android' || !isRedWalletAndroidPhysicalDevice()) return false;
+  try {
+    return new URL(validateBitAssetsRpcUrl(rpcUrl)).hostname === '10.0.2.2';
+  } catch {
+    return false;
+  }
+}
+
 function shouldUseCanonicalBitAssetsEndpoints(): boolean {
+  if (Platform.OS === 'android') {
+    return isRedWalletAndroidPhysicalDevice();
+  }
   if (Platform.OS !== 'ios') return false;
   try {
     if (isEmulatorSync()) return false;
@@ -55,10 +68,13 @@ function shouldUseCanonicalBitAssetsEndpoints(): boolean {
     return isRedWalletIosPhysicalDevice();
   }
   // Embedded main.jsbundle is built with --dev false; physical iPhones must never keep loopback RPC.
-  return isRedWalletIosPhysicalDevice() || isRedWalletIosRealDeviceProofEnabled() || __DEV__;
+  return isRedWalletIosPhysicalDevice() || isRedWalletRealDeviceProofEnabled() || __DEV__;
 }
 
-function isIosPhysicalDeviceForBitAssets(): boolean {
+function isPhysicalDeviceForBitAssets(): boolean {
+  if (Platform.OS === 'android') {
+    return isRedWalletAndroidPhysicalDevice();
+  }
   if (Platform.OS !== 'ios') return false;
   // main.jsbundle is built with --dev false; __DEV__ is false on real devices using embedded bundle.
   if (!__DEV__) return true;
@@ -71,7 +87,10 @@ function isIosPhysicalDeviceForBitAssets(): boolean {
 }
 
 export function normalizeBitAssetsRpcUrlForRuntime(rpcUrl: string): string {
-  if (isIosPhysicalDeviceForBitAssets() && (!rpcUrl.trim() || isLoopbackBitAssetsRpcUrl(rpcUrl))) {
+  if (
+    isPhysicalDeviceForBitAssets() &&
+    (!rpcUrl.trim() || isLoopbackBitAssetsRpcUrl(rpcUrl) || isEmulatorLoopbackBitAssetsRpcUrl(rpcUrl))
+  ) {
     return canonicalBitAssetsRpcUrlForRuntime();
   }
   if (!shouldUseCanonicalBitAssetsEndpoints()) {
@@ -86,7 +105,7 @@ export function normalizeBitAssetsRpcUrlForRuntime(rpcUrl: string): string {
 export function normalizeBitAssetsLiteWalletQuicUrlForRuntime(rpcUrl: string, quicUrl: string): string {
   const resolvedRpc = normalizeBitAssetsRpcUrlForRuntime(rpcUrl);
   const derived = quicUrl || deriveBitAssetsLiteWalletQuicUrl(resolvedRpc) || '';
-  if (isIosPhysicalDeviceForBitAssets() && (!derived.trim() || isLoopbackBitAssetsQuicUrl(derived))) {
+  if (isPhysicalDeviceForBitAssets() && (!derived.trim() || isLoopbackBitAssetsQuicUrl(derived))) {
     return canonicalBitAssetsQuicUrlForRuntime();
   }
   if (!shouldUseCanonicalBitAssetsEndpoints()) {

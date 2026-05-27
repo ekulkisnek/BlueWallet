@@ -33,7 +33,14 @@ import { validateBitAssetsRpcUrl } from '../../blue_modules/BitAssetsWalletForms
 import { REDWALLET_SIGNET_BITASSETS_RPC_URL } from '../../helpers/redwalletSignetEndpoints.generated';
 
 const DEFAULT_BITASSETS_RPC_URL = (() => {
-  if (Platform.OS === 'android') return 'http://10.0.2.2:6004';
+  if (Platform.OS === 'android') {
+    try {
+      if (!isEmulatorSync()) return REDWALLET_SIGNET_BITASSETS_RPC_URL;
+    } catch {
+      return REDWALLET_SIGNET_BITASSETS_RPC_URL;
+    }
+    return 'http://10.0.2.2:6004';
+  }
   if (Platform.OS === 'ios') {
     try {
       if (!isEmulatorSync()) return REDWALLET_SIGNET_BITASSETS_RPC_URL;

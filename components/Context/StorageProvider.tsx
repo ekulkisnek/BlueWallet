@@ -27,7 +27,7 @@ import { getScanWasBBQR } from '../../helpers/scan-qr.ts';
 import { setWalletIdMustUseBBQR } from '../../blue_modules/ur';
 import { redWalletEvent } from '../../helpers/redwalletDeviceLogger';
 import { REDWALLET_USB_TUNNEL_COMMAND, REDWALLET_USB_TUNNEL_HOST_FILE } from '../../helpers/redwalletRealDeviceEndpoints';
-import { isRedWalletIosRealDeviceProofEnabled } from '../../helpers/redwalletRealDeviceProof';
+import { isRedWalletRealDeviceProofEnabled } from '../../helpers/redwalletRealDeviceProof';
 import { REDWALLET_SIGNET_BITASSETS_RPC_URL } from '../../helpers/redwalletSignetEndpoints.generated';
 
 const BlueApp = BlueAppClass.getInstance();
@@ -114,7 +114,7 @@ async function fetchBitAssetsRealDeviceCommand(walletID = '', options: { consume
     return rawCommand;
   }
 
-  if (isRedWalletIosRealDeviceProofEnabled()) {
+  if (isRedWalletRealDeviceProofEnabled()) {
     const startedAt = Date.now();
     for (const baseUrl of await resolveBitAssetsRealDeviceCommandUrls()) {
       try {
@@ -257,13 +257,13 @@ async function runBitAssetsRealDeviceSelftestCommandInner(wallet: BitAssetsWalle
         bitassetData: (command.bitassetData ?? {}) as Record<string, unknown>,
         feeSats: Number(command.feeSats ?? 0),
       };
-      if (isRedWalletIosRealDeviceProofEnabled()) {
+      if (isRedWalletRealDeviceProofEnabled()) {
         txid = await registerBitAssetAfterReservationSync(wallet, registerParams, operation);
       } else {
         txid = await wallet.registerBitAsset(registerParams);
       }
     } else if (operation === 'transfer') {
-      if (isRedWalletIosRealDeviceProofEnabled()) {
+      if (isRedWalletRealDeviceProofEnabled()) {
         await syncBitAssetsWithLogging(wallet, operation);
       }
       txid = await wallet.transferBitAssets({
@@ -277,7 +277,7 @@ async function runBitAssetsRealDeviceSelftestCommandInner(wallet: BitAssetsWalle
       throw new Error(`Unsupported BitAssets real-device selftest operation: ${operation}`);
     }
 
-    if (!isRedWalletIosRealDeviceProofEnabled()) {
+    if (!isRedWalletRealDeviceProofEnabled()) {
       await wallet.syncBitAssets();
     } else if (operation === 'reserve') {
       // Register/transfer read reservation UTXOs from native cache; refresh after reserve.
@@ -330,7 +330,7 @@ async function runBitAssetsRealDeviceSelftestCommand(wallet: BitAssetsWalletClas
 }
 
 async function postBtcRealDeviceResult(result: Record<string, unknown>): Promise<void> {
-  if (!isRedWalletIosRealDeviceProofEnabled()) return;
+  if (!isRedWalletRealDeviceProofEnabled()) return;
   try {
     await fetch(BTC_REAL_DEVICE_RESULT_URL, {
       method: 'POST',
@@ -354,7 +354,7 @@ async function fetchBtcRealDeviceCommand(): Promise<string> {
     return rawCommand;
   }
 
-  if (!isRedWalletIosRealDeviceProofEnabled()) return '';
+  if (!isRedWalletRealDeviceProofEnabled()) return '';
   const startedAt = Date.now();
   try {
     const response = await fetch(BTC_REAL_DEVICE_COMMAND_URL, {
@@ -791,8 +791,8 @@ export const StorageProvider = ({ children }: { children: React.ReactNode }) => 
   );
 
   useEffect(() => {
-    if (!isRedWalletIosRealDeviceProofEnabled() || realDeviceBitAssetsCommandRef.current || !walletsInitialized) return;
-    if (wallets.length === 0 || wallets.some(wallet => wallet.type === BitAssetsWalletClass.type)) return;
+    if (!isRedWalletRealDeviceProofEnabled() || realDeviceBitAssetsCommandRef.current || !walletsInitialized) return;
+    if (wallets.some(wallet => wallet.type === BitAssetsWalletClass.type)) return;
 
     (async () => {
       const rawCommand = await fetchBitAssetsRealDeviceCommand('', { consumeLocalFile: false });
@@ -862,12 +862,12 @@ export const StorageProvider = ({ children }: { children: React.ReactNode }) => 
   }, [addWallet, saveToDisk, wallets, walletsInitialized]);
 
   useEffect(() => {
-    if (!isRedWalletIosRealDeviceProofEnabled() || realDeviceSmokeRef.current || !walletsInitialized) return;
+    if (!isRedWalletRealDeviceProofEnabled() || realDeviceSmokeRef.current || !walletsInitialized) return;
     const bitAssetsWallets = wallets.filter((wallet): wallet is BitAssetsWalletClass => wallet.type === BitAssetsWalletClass.type);
     if (bitAssetsWallets.length === 0) return;
     realDeviceSmokeRef.current = true;
     (async () => {
-      const proofMode = isRedWalletIosRealDeviceProofEnabled();
+      const proofMode = isRedWalletRealDeviceProofEnabled();
       const smokeWallets = proofMode ? bitAssetsWallets.slice(0, 1) : bitAssetsWallets;
       const prefetchedCommand = proofMode ? await fetchBitAssetsRealDeviceCommand(smokeWallets[0]?.getID?.() ?? '') : '';
       redWalletEvent('real_device_bitassets_smoke_begin', {
@@ -941,7 +941,7 @@ export const StorageProvider = ({ children }: { children: React.ReactNode }) => 
 
   // USB push can land while the app stays foregrounded; devicectl cold launch often fails (CoreDevice 1011).
   useEffect(() => {
-    if (!isRedWalletIosRealDeviceProofEnabled() || !walletsInitialized) return;
+    if (!isRedWalletRealDeviceProofEnabled() || !walletsInitialized) return;
     const bitAssetsWallets = wallets.filter((wallet): wallet is BitAssetsWalletClass => wallet.type === BitAssetsWalletClass.type);
     if (bitAssetsWallets.length === 0) return;
 
@@ -986,7 +986,7 @@ export const StorageProvider = ({ children }: { children: React.ReactNode }) => 
   }, [wallets, walletsInitialized]);
 
   useEffect(() => {
-    if (!isRedWalletIosRealDeviceProofEnabled() || realDeviceBtcCommandRef.current || !walletsInitialized) return;
+    if (!isRedWalletRealDeviceProofEnabled() || realDeviceBtcCommandRef.current || !walletsInitialized) return;
     realDeviceBtcCommandRef.current = true;
 
     (async () => {

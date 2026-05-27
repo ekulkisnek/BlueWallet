@@ -10,12 +10,11 @@ type ReactNativeErrorUtils = {
 
 const marker = 'REDWALLET_EVENT';
 const logFilePath = `${RNFS.DocumentDirectoryPath}/redwallet-device-events.ndjson`;
-// USB Core Device tunnel first, then LAN/Tailscale (Luke signet host).
-const remoteCollectorUrls = [
-  REDWALLET_USB_TUNNEL_COLLECTOR_EVENTS,
-  'http://100.76.117.106:6123/events',
-  'http://192.168.1.50:6123/events',
-];
+// Physical Android uses Wi‑Fi LAN; iOS prefers USB tunnel then LAN/Tailscale.
+const remoteCollectorUrls =
+  Platform.OS === 'android'
+    ? ['http://192.168.1.50:6123/events', 'http://100.76.117.106:6123/events', REDWALLET_USB_TUNNEL_COLLECTOR_EVENTS]
+    : [REDWALLET_USB_TUNNEL_COLLECTOR_EVENTS, 'http://100.76.117.106:6123/events', 'http://192.168.1.50:6123/events'];
 const originalConsole = {
   debug: console.debug.bind(console),
   error: console.error.bind(console),

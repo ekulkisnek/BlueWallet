@@ -14,12 +14,28 @@ export const REDWALLET_PHONE_SIGNET_RPC_HOST = REDWALLET_SIGNET_PHONE_HOST;
 
 export function isRedWalletIosRealDeviceProofEnabled(): boolean {
   if (Platform.OS !== 'ios' || Platform.isPad) return false;
+  try {
+    if (isEmulatorSync()) return false;
+  } catch {
+    // fall through
+  }
   if (__DEV__) return true;
   try {
     return REAL_DEVICE_PROOF_BUNDLE_IDS.has(getBundleId());
   } catch {
     return false;
   }
+}
+
+/** Debug APK on a physical Android device (Metro / adb reverse). */
+export function isRedWalletAndroidRealDeviceProofEnabled(): boolean {
+  if (Platform.OS !== 'android') return false;
+  if (!isRedWalletAndroidPhysicalDevice()) return false;
+  return __DEV__;
+}
+
+export function isRedWalletRealDeviceProofEnabled(): boolean {
+  return isRedWalletIosRealDeviceProofEnabled() || isRedWalletAndroidRealDeviceProofEnabled();
 }
 
 export function isRedWalletIosPhysicalDevice(): boolean {
@@ -29,6 +45,19 @@ export function isRedWalletIosPhysicalDevice(): boolean {
   } catch {
     return true;
   }
+}
+
+export function isRedWalletAndroidPhysicalDevice(): boolean {
+  if (Platform.OS !== 'android') return false;
+  try {
+    return !isEmulatorSync();
+  } catch {
+    return true;
+  }
+}
+
+export function isRedWalletMobilePhysicalDevice(): boolean {
+  return isRedWalletIosPhysicalDevice() || isRedWalletAndroidPhysicalDevice();
 }
 
 export function canonicalBitAssetsRpcUrlForRuntime(): string {
