@@ -38,6 +38,50 @@ export REDWALLET_ANDROID_SKIP_LAUNCH=1
 export REDWALLET_KEEP_COMMAND_SERVER=1
 export REDWALLET_ANDROID_MONITOR_SECONDS=60
 
+if [[ -n "${REDWALLET_BITASSETS_WALLET_ID:-}" ]]; then
+  export REDWALLET_BITASSETS_WALLET_ID
+fi
+if [[ -n "${REDWALLET_ANDROID_MONITOR_NO_RESTART:-}" ]]; then
+  export REDWALLET_ANDROID_MONITOR_NO_RESTART
+fi
+
+android_transfer_wallet_gate() {
+  if [[ "${REDWALLET_CHAIN_TRANSFER_ONLY:-0}" != "1" ]]; then
+    return 0
+  fi
+  if [[ "${REDWALLET_ANDROID_REQUIRE_WALLET_ID:-0}" == "1" && -z "${REDWALLET_BITASSETS_WALLET_ID:-}" ]]; then
+    echo "CHAIN_GATE_FAIL transfer-only requires REDWALLET_BITASSETS_WALLET_ID (REDWALLET_ANDROID_REQUIRE_WALLET_ID=1)"
+    exit 1
+  fi
+  local expected_count="${REDWALLET_ANDROID_EXPECT_BITASSETS_WALLET_COUNT:-1}"
+  local wallet_id="${REDWALLET_BITASSETS_WALLET_ID:-}"
+  if [[ -z "$wallet_id" ]]; then
+    echo "CHAIN_GATE_WARN transfer-only without REDWALLET_BITASSETS_WALLET_ID (ambiguous wallet selection)"
+    return 0
+  fi
+  local ev_pat count_line wallet_count available_line
+  ev_pat="$(android_event_pat)"
+  count_line="$(tail -n 800 "$EVENTS" 2>/dev/null | rg "real_device_bitassets_smoke_done" | rg -e "$ev_pat" | tail -1 || true)"
+  if [[ -z "$count_line" ]]; then
+    count_line="$(tail -n 800 "$EVENTS" 2>/dev/null | rg "real_device_bitassets_smoke_begin" | rg -e "$ev_pat" | tail -1 || true)"
+  fi
+  if [[ -n "$count_line" ]]; then
+    wallet_count="$(printf '%s' "$count_line" | rg -o '"walletCount":[0-9]+' | head -1 | sed 's/"walletCount"://' || true)"
+    if [[ -n "${wallet_count:-}" && "$wallet_count" != "$expected_count" ]]; then
+      echo "CHAIN_GATE_FAIL bitassets_wallet_count=$wallet_count expected=$expected_count serial=$SERIAL"
+      echo "CHAIN_GATE_HINT restore registering wallet $wallet_id — docs/orchestration/ANDROID_DEVICE_ONBOARDING.md"
+      exit 1
+    fi
+  fi
+  if ! tail -n 1200 "$EVENTS" 2>/dev/null | rg "real_device_bitassets_smoke_wallet" | rg -e "$ev_pat" | rg -F "\"walletID\":\"${wallet_id}\"" -q 2>/dev/null; then
+    available_line="$(tail -n 400 "$EVENTS" 2>/dev/null | rg "real_device_bitassets_selftest_wallet_missing" | rg -e "$ev_pat" | tail -1 || true)"
+    echo "CHAIN_GATE_FAIL registering wallet_id=$wallet_id not loaded on device"
+    [[ -n "$available_line" ]] && echo "CHAIN_GATE_DETAIL $available_line"
+    exit 1
+  fi
+  echo "CHAIN_GATE_OK transfer_wallet_id=$wallet_id wallet_count=${wallet_count:-unknown}"
+}
+
 run_chain_preflight() {
   local preflight_rc=0 env_file="$LOG_ROOT/current-preflight-android.env"
   set +e
@@ -203,7 +247,8 @@ elif [[ "${REDWALLET_CHAIN_FROM_REGISTER:-0}" == "1" ]]; then
   fi
   sleep "${REDWALLET_CHAIN_TRANSFER_DELAY_SEC:-10}"
 else
-  echo "CHAIN_TRANSFER_ONLY asset=$CHAIN_ASSET register_txid=${register_txid:-none}"
+  echo "CHAIN_TRANSFER_ONLY asset=$CHAIN_ASSET register_txid=${register_txid:-none} wallet_id=${REDWALLET_BITASSETS_WALLET_ID:-unset}"
+  android_transfer_wallet_gate
   if [[ "${REDWALLET_SKIP_CHAIN_MINE:-0}" != "1" ]]; then
     if [[ -x "$LOCAL_DEV/scripts/mine-bitassets-block.sh" ]]; then
       "$LOCAL_DEV/scripts/mine-bitassets-block.sh" && echo "CHAIN_MINE_OK pre-transfer" || echo "CHAIN_MINE_FAIL pre-transfer"

@@ -80,8 +80,12 @@ EOF
 EOF
       ;;
     transfer)
+      wallet_id_json=""
+      if [[ -n "${REDWALLET_BITASSETS_WALLET_ID:-}" ]]; then
+        wallet_id_json=",\"walletID\":\"${REDWALLET_BITASSETS_WALLET_ID}\""
+      fi
       cat >"$cmd_dir/command.json" <<EOF
-{"operation":"transfer","commandId":"android-transfer-${STAMP}","assetId":"${REDWALLET_BITASSETS_TRANSFER_ASSET_ID:-}","destinationAddress":"${REDWALLET_BITASSETS_TRANSFER_DEST:-}","amount":${REDWALLET_BITASSETS_TRANSFER_AMOUNT:-1},"feeSats":0,"rpcUrl":"${rpc}","bitassetsLiteWalletQuicUrl":"${quic}"${REDWALLET_BITASSETS_WALLET_ID:+,"walletID":"${REDWALLET_BITASSETS_WALLET_ID}"}}
+{"operation":"transfer","commandId":"android-transfer-${STAMP}","assetId":"${REDWALLET_BITASSETS_TRANSFER_ASSET_ID:-}","destinationAddress":"${REDWALLET_BITASSETS_TRANSFER_DEST:-}","amount":${REDWALLET_BITASSETS_TRANSFER_AMOUNT:-1},"feeSats":0,"rpcUrl":"${rpc}","bitassetsLiteWalletQuicUrl":"${quic}"${wallet_id_json}}
 EOF
       ;;
     *)
