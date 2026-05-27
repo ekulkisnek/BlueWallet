@@ -83,6 +83,13 @@ bitwindow_api=http://127.0.0.1:30301
 orchestrator=http://127.0.0.1:30400
 EOF
 
+DEPOSIT_SUMMARY="$(ls -td "${LOG_ROOT%/}"/headless-bitassets-deposit-*/SUMMARY.txt 2>/dev/null | head -1 || true)"
+if [[ -n "$DEPOSIT_SUMMARY" && -f "$DEPOSIT_SUMMARY" ]]; then
+  cp "$DEPOSIT_SUMMARY" "$RUN_DIR/latest-l1-deposit.txt"
+  TXID=$(grep '^deposit_txid=' "$DEPOSIT_SUMMARY" | cut -d= -f2-)
+  ok "latest headless L1 deposit txid=$TXID ($DEPOSIT_SUMMARY)"
+fi
+
 ln -sfn "$RUN_DIR" "${LOG_ROOT%/}/current-redwallet-bitwindow-interop" 2>/dev/null || true
 log "END failures=$FAIL summary=$RUN_DIR/SUMMARY.txt"
 exit "$FAIL"
