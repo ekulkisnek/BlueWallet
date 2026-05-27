@@ -115,19 +115,26 @@ describe('BitAssets Send Coins E2E', () => {
 
 function fundAddressFromMainchain(address, amountSats) {
   console.log(`[E2E TEST] Funding ${address} with ${amountSats} sats`);
-  const rpcUrl = 'http://localhost:30400/bitassets.v1.BitAssetsService/CreateDeposit';
-  execFileSync('curl', [
-    '-H', 'Content-Type: application/json',
-    '-d', JSON.stringify({ address, value_sats: amountSats, fee_sats: 10000 }),
-    rpcUrl
-  ]);
+  const localDev = process.env.BITASSETS_E2E_LOCAL_DEV_DIR || '/Volumes/T705/code/drivechain-wallet-dev/local-dev';
+  const composeFile = process.env.BITASSETS_E2E_COMPOSE_FILE || 'docker-compose.local-minimal.yml';
+  const feeSats = 10000;
+  // orchestrator CreateDeposit often hangs on Colima; docker CLI matches headless deposit smoke.
+  const txid = execFileSync(
+    'bash',
+    [
+      '-lc',
+      `BITASSETS_IMAGE=\${BITASSETS_IMAGE:-local/plain-bitassets:codex-proof} docker compose -f "${localDev}/${composeFile}" exec -T bitassets plain_bitassets_app_cli create-deposit --value-sats ${amountSats} --fee-sats ${feeSats} "${address}"`,
+    ],
+    { encoding: 'utf8', timeout: 120000 },
+  ).trim();
+  console.log('[E2E TEST] create-deposit txid:', txid);
 }
 
 function mineBlocks() {
   console.log('[E2E TEST] Mining L1 blocks and sidechain block to confirm transactions...');
   execFileSync('bash', [
     '-lc',
-    'cd /Volumes/T705/code/drivechain-wallet-dev/local-dev && ./scripts/mine-private-signet-blocks.sh 6 && ./scripts/mine-bitassets-block.sh'
+    `cd ${process.env.BITASSETS_E2E_LOCAL_DEV_DIR || '/Volumes/T705/code/drivechain-wallet-dev/local-dev'} && ./scripts/mine-private-signet-blocks.sh ${process.env.BITASSETS_E2E_L1_MINE_BLOCKS || 3} && ./scripts/mine-bitassets-block.sh`
   ]);
 }
 
