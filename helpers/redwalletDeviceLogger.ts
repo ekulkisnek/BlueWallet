@@ -1,6 +1,6 @@
 import { AppState, NativeModules, Platform } from 'react-native';
 import RNFS from 'react-native-fs';
-import { REDWALLET_USB_TUNNEL_COLLECTOR_EVENTS } from './redwalletRealDeviceEndpoints';
+import { redWalletCollectorEventUrlsForRuntime } from './redwalletRealDeviceEndpoints';
 
 type RedWalletEventFields = Record<string, unknown>;
 type ReactNativeErrorUtils = {
@@ -10,11 +10,7 @@ type ReactNativeErrorUtils = {
 
 const marker = 'REDWALLET_EVENT';
 const logFilePath = `${RNFS.DocumentDirectoryPath}/redwallet-device-events.ndjson`;
-// Physical Android uses Wi‑Fi LAN; iOS prefers USB tunnel then LAN/Tailscale.
-const remoteCollectorUrls =
-  Platform.OS === 'android'
-    ? ['http://192.168.1.50:6123/events', 'http://100.76.117.106:6123/events', REDWALLET_USB_TUNNEL_COLLECTOR_EVENTS]
-    : [REDWALLET_USB_TUNNEL_COLLECTOR_EVENTS, 'http://100.76.117.106:6123/events', 'http://192.168.1.50:6123/events'];
+const remoteCollectorUrls = redWalletCollectorEventUrlsForRuntime();
 const originalConsole = {
   debug: console.debug.bind(console),
   error: console.error.bind(console),
@@ -64,7 +60,9 @@ function emit(event: string, fields: RedWalletEventFields = {}): void {
   appendQueue = appendQueue
     .then(() => RNFS.appendFile(logFilePath, `${line}\n`, 'utf8'))
     .catch(error => {
-      originalConsole.warn(`${marker} ${JSON.stringify({ ts: new Date().toISOString(), event: 'log_file_append_failed', error: sanitize(error) })}`);
+      originalConsole.warn(
+        `${marker} ${JSON.stringify({ ts: new Date().toISOString(), event: 'log_file_append_failed', error: sanitize(error) })}`,
+      );
     });
   if (fetchForRemoteCollector) {
     for (const url of remoteCollectorUrls) {

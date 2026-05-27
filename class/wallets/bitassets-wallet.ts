@@ -20,9 +20,11 @@ import { LegacyWallet } from './legacy-wallet';
 import { Transaction } from './types';
 import { Platform } from 'react-native';
 import { isEmulatorSync } from 'react-native-device-info';
+import { isRedWalletCoreDeviceUsbTunnelHost } from '../../helpers/redwalletRealDeviceEndpoints';
 import {
   canonicalBitAssetsQuicUrlForRuntime,
   canonicalBitAssetsRpcUrlForRuntime,
+  isRedWalletAndroidLanMacEndpointsOnly,
   isRedWalletAndroidPhysicalDevice,
   isRedWalletIosPhysicalDevice,
   isRedWalletRealDeviceProofEnabled,
@@ -46,6 +48,21 @@ function isLoopbackBitAssetsQuicUrl(quicUrl: string): boolean {
   if (!quicUrl.trim()) return true;
   const host = quicUrl.split(':')[0] ?? '';
   return isLoopbackBitAssetsHost(host);
+}
+
+function isUsbTunnelBitAssetsRpcUrl(rpcUrl: string): boolean {
+  if (!rpcUrl.trim()) return false;
+  try {
+    return isRedWalletCoreDeviceUsbTunnelHost(new URL(validateBitAssetsRpcUrl(rpcUrl)).hostname);
+  } catch {
+    return false;
+  }
+}
+
+function isUsbTunnelBitAssetsQuicUrl(quicUrl: string): boolean {
+  if (!quicUrl.trim()) return false;
+  const host = quicUrl.split(':')[0] ?? '';
+  return isRedWalletCoreDeviceUsbTunnelHost(host);
 }
 
 function isEmulatorLoopbackBitAssetsRpcUrl(rpcUrl: string): boolean {
@@ -89,14 +106,21 @@ function isPhysicalDeviceForBitAssets(): boolean {
 export function normalizeBitAssetsRpcUrlForRuntime(rpcUrl: string): string {
   if (
     isPhysicalDeviceForBitAssets() &&
-    (!rpcUrl.trim() || isLoopbackBitAssetsRpcUrl(rpcUrl) || isEmulatorLoopbackBitAssetsRpcUrl(rpcUrl))
+    (!rpcUrl.trim() ||
+      isLoopbackBitAssetsRpcUrl(rpcUrl) ||
+      isEmulatorLoopbackBitAssetsRpcUrl(rpcUrl) ||
+      (isRedWalletAndroidLanMacEndpointsOnly() && isUsbTunnelBitAssetsRpcUrl(rpcUrl)))
   ) {
     return canonicalBitAssetsRpcUrlForRuntime();
   }
   if (!shouldUseCanonicalBitAssetsEndpoints()) {
     return validateBitAssetsRpcUrl(rpcUrl);
   }
-  if (!rpcUrl.trim() || isLoopbackBitAssetsRpcUrl(rpcUrl)) {
+  if (
+    !rpcUrl.trim() ||
+    isLoopbackBitAssetsRpcUrl(rpcUrl) ||
+    (isRedWalletAndroidLanMacEndpointsOnly() && isUsbTunnelBitAssetsRpcUrl(rpcUrl))
+  ) {
     return canonicalBitAssetsRpcUrlForRuntime();
   }
   return validateBitAssetsRpcUrl(rpcUrl);
@@ -105,13 +129,22 @@ export function normalizeBitAssetsRpcUrlForRuntime(rpcUrl: string): string {
 export function normalizeBitAssetsLiteWalletQuicUrlForRuntime(rpcUrl: string, quicUrl: string): string {
   const resolvedRpc = normalizeBitAssetsRpcUrlForRuntime(rpcUrl);
   const derived = quicUrl || deriveBitAssetsLiteWalletQuicUrl(resolvedRpc) || '';
-  if (isPhysicalDeviceForBitAssets() && (!derived.trim() || isLoopbackBitAssetsQuicUrl(derived))) {
+  if (
+    isPhysicalDeviceForBitAssets() &&
+    (!derived.trim() ||
+      isLoopbackBitAssetsQuicUrl(derived) ||
+      (isRedWalletAndroidLanMacEndpointsOnly() && isUsbTunnelBitAssetsQuicUrl(derived)))
+  ) {
     return canonicalBitAssetsQuicUrlForRuntime();
   }
   if (!shouldUseCanonicalBitAssetsEndpoints()) {
     return derived;
   }
-  if (!derived.trim() || isLoopbackBitAssetsQuicUrl(derived)) {
+  if (
+    !derived.trim() ||
+    isLoopbackBitAssetsQuicUrl(derived) ||
+    (isRedWalletAndroidLanMacEndpointsOnly() && isUsbTunnelBitAssetsQuicUrl(derived))
+  ) {
     return canonicalBitAssetsQuicUrlForRuntime();
   }
   return derived;

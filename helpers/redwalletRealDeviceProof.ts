@@ -12,6 +12,33 @@ const REAL_DEVICE_PROOF_BUNDLE_IDS = new Set(['com.lukekensik.redwallet.dev']);
 /** Signet host reachable from iPhone on Wi‑Fi (from scripts/redwallet-signet-endpoints.sh). */
 export const REDWALLET_PHONE_SIGNET_RPC_HOST = REDWALLET_SIGNET_PHONE_HOST;
 
+export function isRedWalletIosPhysicalDevice(): boolean {
+  if (Platform.OS !== 'ios') return false;
+  try {
+    return !isEmulatorSync();
+  } catch {
+    return true;
+  }
+}
+
+export function isRedWalletAndroidPhysicalDevice(): boolean {
+  if (Platform.OS !== 'android') return false;
+  try {
+    return !isEmulatorSync();
+  } catch {
+    return true;
+  }
+}
+
+/** Physical Android uses Mac LAN for command/collector/RPC — never LiPhone USB tunnel hosts. */
+export function isRedWalletAndroidLanMacEndpointsOnly(): boolean {
+  return isRedWalletAndroidPhysicalDevice();
+}
+
+export function isRedWalletMobilePhysicalDevice(): boolean {
+  return isRedWalletIosPhysicalDevice() || isRedWalletAndroidPhysicalDevice();
+}
+
 export function isRedWalletIosRealDeviceProofEnabled(): boolean {
   if (Platform.OS !== 'ios' || Platform.isPad) return false;
   try {
@@ -36,28 +63,6 @@ export function isRedWalletAndroidRealDeviceProofEnabled(): boolean {
 
 export function isRedWalletRealDeviceProofEnabled(): boolean {
   return isRedWalletIosRealDeviceProofEnabled() || isRedWalletAndroidRealDeviceProofEnabled();
-}
-
-export function isRedWalletIosPhysicalDevice(): boolean {
-  if (Platform.OS !== 'ios') return false;
-  try {
-    return !isEmulatorSync();
-  } catch {
-    return true;
-  }
-}
-
-export function isRedWalletAndroidPhysicalDevice(): boolean {
-  if (Platform.OS !== 'android') return false;
-  try {
-    return !isEmulatorSync();
-  } catch {
-    return true;
-  }
-}
-
-export function isRedWalletMobilePhysicalDevice(): boolean {
-  return isRedWalletIosPhysicalDevice() || isRedWalletAndroidPhysicalDevice();
 }
 
 export function canonicalBitAssetsRpcUrlForRuntime(): string {

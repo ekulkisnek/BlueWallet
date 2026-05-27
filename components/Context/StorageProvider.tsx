@@ -26,14 +26,13 @@ import { navigationRef } from '../../NavigationService';
 import { getScanWasBBQR } from '../../helpers/scan-qr.ts';
 import { setWalletIdMustUseBBQR } from '../../blue_modules/ur';
 import { redWalletEvent } from '../../helpers/redwalletDeviceLogger';
-import { REDWALLET_USB_TUNNEL_COMMAND, REDWALLET_USB_TUNNEL_HOST_FILE } from '../../helpers/redwalletRealDeviceEndpoints';
+import { resolveRedWalletBitAssetsCommandUrls } from '../../helpers/redwalletRealDeviceEndpoints';
 import { isRedWalletIosRealDeviceProofEnabled, isRedWalletRealDeviceProofEnabled } from '../../helpers/redwalletRealDeviceProof';
 import { REDWALLET_SIGNET_BITASSETS_RPC_URL } from '../../helpers/redwalletSignetEndpoints.generated';
 
 const BlueApp = BlueAppClass.getInstance();
 const BITASSETS_REAL_DEVICE_SELFTEST_COMMAND = `${RNFS.DocumentDirectoryPath}/redwallet-bitassets-selftest-command.json`;
 const BITASSETS_REAL_DEVICE_SELFTEST_RESULT = `${RNFS.DocumentDirectoryPath}/redwallet-bitassets-selftest-result.json`;
-const BITASSETS_REAL_DEVICE_COMMAND_URL_LAN = 'http://192.168.1.50:6124/command';
 const BITASSETS_REAL_DEVICE_COMMAND_FETCH_TIMEOUT_MS = 8000;
 const BTC_REAL_DEVICE_COMMAND = `${RNFS.DocumentDirectoryPath}/redwallet-btc-selftest-command.json`;
 const BTC_REAL_DEVICE_RESULT = `${RNFS.DocumentDirectoryPath}/redwallet-btc-selftest-result.json`;
@@ -90,19 +89,6 @@ async function probeBitAssetsRpc(
   }
 }
 
-async function resolveBitAssetsRealDeviceCommandUrls(): Promise<string[]> {
-  const urls: string[] = [];
-  const tunnelFile = `${RNFS.DocumentDirectoryPath}/${REDWALLET_USB_TUNNEL_HOST_FILE}`;
-  if (await RNFS.exists(tunnelFile)) {
-    const host = (await RNFS.readFile(tunnelFile, 'utf8')).trim();
-    if (host) {
-      urls.push(`http://[${host}]:6124/command`);
-    }
-  }
-  urls.push(REDWALLET_USB_TUNNEL_COMMAND, BITASSETS_REAL_DEVICE_COMMAND_URL_LAN);
-  return urls;
-}
-
 async function fetchBitAssetsRealDeviceCommand(walletID = '', options: { consumeLocalFile?: boolean } = {}): Promise<string> {
   const consumeLocalFile = options.consumeLocalFile !== false;
   const exists = await RNFS.exists(BITASSETS_REAL_DEVICE_SELFTEST_COMMAND);
@@ -116,7 +102,7 @@ async function fetchBitAssetsRealDeviceCommand(walletID = '', options: { consume
 
   if (isRedWalletRealDeviceProofEnabled()) {
     const startedAt = Date.now();
-    for (const baseUrl of await resolveBitAssetsRealDeviceCommandUrls()) {
+    for (const baseUrl of await resolveRedWalletBitAssetsCommandUrls()) {
       try {
         const url = walletID ? `${baseUrl}?walletID=${encodeURIComponent(walletID)}` : baseUrl;
         const response = await fetchWithTimeout(
@@ -949,10 +935,14 @@ export const StorageProvider = ({ children }: { children: React.ReactNode }) => 
     const maybeRunPushedSelftest = async () => {
       if (cancelled) return;
       const wallet = bitAssetsWallets[0];
+      let prefetchedCommand = '';
       const commandExists = await RNFS.exists(BITASSETS_REAL_DEVICE_SELFTEST_COMMAND);
-      if (!commandExists) {
-        const remoteCommand = await fetchBitAssetsRealDeviceCommand(wallet.getID?.() ?? '');
-        if (!remoteCommand.trim()) return;
+      if (commandExists) {
+        prefetchedCommand = await RNFS.readFile(BITASSETS_REAL_DEVICE_SELFTEST_COMMAND, 'utf8');
+        await RNFS.unlink(BITASSETS_REAL_DEVICE_SELFTEST_COMMAND).catch(() => undefined);
+      } else {
+        prefetchedCommand = await fetchBitAssetsRealDeviceCommand(wallet.getID?.() ?? '');
+        if (!prefetchedCommand.trim()) return;
       }
       const rpcUrl = normalizeBitAssetsRpcUrlForRuntime(wallet.bitassetsRpcUrl);
       if (wallet.bitassetsRpcUrl !== rpcUrl) {
@@ -967,7 +957,7 @@ export const StorageProvider = ({ children }: { children: React.ReactNode }) => 
         rpcUrl,
         liteWalletQuicUrl: quicUrl,
       });
-      await runBitAssetsRealDeviceSelftestCommand(wallet);
+      await runBitAssetsRealDeviceSelftestCommand(wallet, prefetchedCommand);
     };
 
     const runPushedSelftest = () => {
