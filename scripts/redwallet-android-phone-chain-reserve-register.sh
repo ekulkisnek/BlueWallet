@@ -5,7 +5,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOG_ROOT="${REDWALLET_LOG_ROOT:-/Volumes/T705/redwallet-logs}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
-CHAIN_ASSET="RWFLEET${STAMP}"
+CHAIN_ASSET="${REDWALLET_CHAIN_ASSET:-RWFLEET${STAMP}}"
 SERIAL="${1:-${ANDROID_SERIAL:-${REDWALLET_ANDROID_SERIAL:-0A201JECB03306}}}"
 LOCK_DIR="${LOG_ROOT}/android-phone-chain-$(echo "$SERIAL" | tr -cd 'a-zA-Z0-9').lock.d"
 if ! mkdir "$LOCK_DIR" 2>/dev/null; then
@@ -52,7 +52,7 @@ run_chain_preflight() {
 }
 
 android_event_pat() {
-  printf '"platform":"android"|192\\.168\\.1\\.'
+  printf '"platform":"android"'
 }
 
 last_chain_txid=""
@@ -73,6 +73,21 @@ pull_selftest_result_txid() {
   fi
   rm -f "$tmp"
   return "$rc"
+}
+
+wait_wallet_created() {
+  local ev_pat hit
+  ev_pat="$(android_event_pat)"
+  for ((i = 1; i <= POLLS; i++)); do
+    hit="$(tail -n +"$((EVENT_LINE_START + 1))" "$EVENTS" 2>/dev/null | rg "real_device_bitassets_wallet_created" | rg -e "$ev_pat" | tail -1 || true)"
+    if [[ -n "$hit" ]]; then
+      echo "CHAIN_OK op=createWallet poll=$i wallet_created=1"
+      return 0
+    fi
+    echo "CHAIN_WAIT op=createWallet poll=$i/$POLLS"
+    sleep "$POLL_SEC"
+  done
+  return 1
 }
 
 wait_selftest_ok() {
@@ -98,9 +113,13 @@ cd "$ROOT_DIR"
 run_chain_preflight
 
 export REDWALLET_BITASSETS_COMMAND_OPERATION=createWallet
+export REDWALLET_ANDROID_SKIP_LAUNCH=0
+export REDWALLET_ANDROID_MONITOR_SECONDS=90
 bash "$ROOT_DIR/scripts/retry-android-origin-bitassets-proof.sh" || true
-adb -s "$SERIAL" shell monkey -p "$ANDROID_PACKAGE" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
-sleep 12
+export REDWALLET_ANDROID_SKIP_LAUNCH=1
+export REDWALLET_ANDROID_MONITOR_SECONDS=60
+wait_wallet_created || echo "CHAIN_WARN createWallet (see collector)"
+sleep 5
 
 echo "CHAIN_ASSET=$CHAIN_ASSET"
 export REDWALLET_BITASSETS_ASSET_NAME="$CHAIN_ASSET"
