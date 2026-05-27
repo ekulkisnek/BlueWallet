@@ -49,7 +49,11 @@ L1_BW=$(curl -sS -m 10 -X POST "http://127.0.0.1:30301/bitwindowd.v1.BitwindowdS
   -H "Content-Type: application/json" -d "{}" 2>/dev/null \
   | python3 -c "import sys,json; print(json.load(sys.stdin).get('blockHeight',''))" 2>/dev/null || true)
 if [[ ! "$L1_BW" =~ ^[0-9]+$ ]]; then
-  L1_BW=$(curl -sS -m 12 --user drivechain:MhkfIUOVBZ-auHb_e5d6SXiA-u2_TV-isSNo_-_Njc4 \
+  _RPC_AUTH="${BITCOIN_RPC_AUTH:-}"
+  if [[ -z "$_RPC_AUTH" && -r "${LOCAL_DEV}/data/signet/.cookie" ]]; then
+    _RPC_AUTH="$(cat "${LOCAL_DEV}/data/signet/.cookie")"
+  fi
+  L1_BW=$(curl -sS -m 12 ${_RPC_AUTH:+--user "$_RPC_AUTH"} \
     -d '{"jsonrpc":"1.0","id":"t","method":"getblockcount","params":[]}' \
     -H "content-type: application/json" http://127.0.0.1:38335/ 2>/dev/null \
     | python3 -c "import sys,json; print(json.load(sys.stdin).get('result',''))" 2>/dev/null || echo err)
