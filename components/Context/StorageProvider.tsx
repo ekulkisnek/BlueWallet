@@ -22,7 +22,7 @@ import { navigationRef } from '../../NavigationService';
 import { getScanWasBBQR } from '../../helpers/scan-qr.ts';
 import { setWalletIdMustUseBBQR } from '../../blue_modules/ur';
 import { redWalletEvent } from '../../helpers/redwalletDeviceLogger';
-import { REDWALLET_USB_TUNNEL_COMMAND } from '../../helpers/redwalletRealDeviceEndpoints';
+import { REDWALLET_USB_TUNNEL_COMMAND, REDWALLET_USB_TUNNEL_HOST_FILE } from '../../helpers/redwalletRealDeviceEndpoints';
 import { isRedWalletIosRealDeviceProofEnabled } from '../../helpers/redwalletRealDeviceProof';
 
 const BlueApp = BlueAppClass.getInstance();
@@ -71,6 +71,18 @@ async function probeBitAssetsRpc(rpcUrl: string): Promise<Record<string, unknown
   }
 }
 
+async function resolveBitAssetsRealDeviceCommandUrls(): Promise<string[]> {
+  const urls = [...BITASSETS_REAL_DEVICE_COMMAND_URLS];
+  const tunnelFile = `${RNFS.DocumentDirectoryPath}/${REDWALLET_USB_TUNNEL_HOST_FILE}`;
+  if (await RNFS.exists(tunnelFile)) {
+    const host = (await RNFS.readFile(tunnelFile, 'utf8')).trim();
+    if (host) {
+      urls.unshift(`http://[${host}]:6124/command`);
+    }
+  }
+  return urls;
+}
+
 async function fetchBitAssetsRealDeviceCommand(walletID = ''): Promise<string> {
   const exists = await RNFS.exists(BITASSETS_REAL_DEVICE_SELFTEST_COMMAND);
   if (exists) {
@@ -81,7 +93,7 @@ async function fetchBitAssetsRealDeviceCommand(walletID = ''): Promise<string> {
 
   if (isRedWalletIosRealDeviceProofEnabled()) {
     const startedAt = Date.now();
-    for (const baseUrl of BITASSETS_REAL_DEVICE_COMMAND_URLS) {
+    for (const baseUrl of await resolveBitAssetsRealDeviceCommandUrls()) {
       try {
         const url = walletID ? `${baseUrl}?walletID=${encodeURIComponent(walletID)}` : baseUrl;
         const response = await fetch(url, {
@@ -654,11 +666,12 @@ export const StorageProvider = ({ children }: { children: React.ReactNode }) => 
         const command = JSON.parse(rawCommand);
         operation = String(command.operation ?? '');
         commandId = String(command.commandId ?? '');
-        redWalletEvent('real_device_bitassets_command_begin', { operation, commandId });
 
         if (operation !== 'createWallet') {
           return;
         }
+
+        redWalletEvent('real_device_bitassets_command_begin', { operation, commandId });
 
         const wallet = new BitAssetsWalletClass();
         wallet.setLabel(String(command.label ?? 'iPhone BitAssets'));

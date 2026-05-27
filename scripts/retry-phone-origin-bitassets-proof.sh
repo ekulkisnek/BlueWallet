@@ -100,11 +100,26 @@ seed_bitassets_command() {
     host="100.76.117.106"
   fi
   rpc="http://${host}:6004"
-  quic="${host%%:*}:6104"
-  cat >"$cmd_dir/command.json" <<EOF
+  quic="${host}:6104"
+  op="${REDWALLET_BITASSETS_COMMAND_OPERATION:-createWallet}"
+  case "$op" in
+    reserve)
+      cat >"$cmd_dir/command.json" <<EOF
+{"operation":"reserve","commandId":"iphone12-reserve-${STAMP}","name":"RWPROOF","feeSats":500}
+EOF
+      ;;
+    register)
+      cat >"$cmd_dir/command.json" <<EOF
+{"operation":"register","commandId":"iphone12-register-${STAMP}","name":"RWPROOF","initialSupply":1000,"feeSats":500}
+EOF
+      ;;
+    *)
+      cat >"$cmd_dir/command.json" <<EOF
 {"operation":"createWallet","commandId":"iphone12-proof-${STAMP}","label":"iPhone 12 BitAssets","rpcUrl":"$rpc","bitassetsLiteWalletQuicUrl":"$quic","skipSync":true}
 EOF
-  log "SEEDED command.json host=$host dir=$cmd_dir skipSync=true"
+      ;;
+  esac
+  log "SEEDED command.json operation=$op host=$host dir=$cmd_dir"
 }
 
 # Do not GET /command during preflight — the server is one-shot and would steal the phone payload.
@@ -169,6 +184,26 @@ log "LAUNCH_TARGET udid=$LAUNCH_UDID"
 
 # Refresh one-shot command immediately before launch so preflight probes cannot consume it.
 seed_bitassets_command || true
+
+push_usb_tunnel_host_file() {
+  local usb_host tmp
+  usb_host="$("$ROOT_DIR/scripts/redwallet-usb-tunnel-mac-ipv6.sh" 2>/dev/null || true)"
+  [[ -n "$usb_host" ]] || return 0
+  tmp="$(mktemp)"
+  printf '%s\n' "$usb_host" >"$tmp"
+  if perl -e 'alarm 15; exec @ARGV' 15 xcrun devicectl device copy to \
+    --device "$LAUNCH_UDID" \
+    --domain-type appDataContainer \
+    --domain-identifier "$BUNDLE_ID" \
+    --source "$tmp" \
+    --destination "Documents/redwallet-usb-tunnel-host.txt" >>"$RUN_DIR/push-usb-tunnel.log" 2>&1; then
+    log "PUSHED usb tunnel host=$usb_host -> Documents/redwallet-usb-tunnel-host.txt"
+  else
+    log "WARN push usb tunnel host failed (see push-usb-tunnel.log)"
+  fi
+  rm -f "$tmp"
+}
+push_usb_tunnel_host_file || true
 
 probe device-details xcrun devicectl device info details --device "$LAUNCH_UDID"
 if grep -q 'passcodeRequired: true' "$RUN_DIR/probes/device-details.txt" 2>/dev/null; then
