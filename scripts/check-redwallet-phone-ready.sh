@@ -33,6 +33,45 @@ device_line() {
   xcrun devicectl list devices --columns '*' 2>/dev/null | awk -v u="$udid" '$0 ~ u { print $0 }'
 }
 
+check_udid_ready() {
+  local udid="$1"
+  local line
+  line="$(device_line "$udid" || true)"
+  if [[ -z "$line" ]]; then
+    say "NOT_READY device_not_listed udid=$udid"
+    return 2
+  fi
+  if [[ "$line" == *unavailable* ]]; then
+    say "NOT_READY device_unavailable udid=$udid"
+    say "$line"
+    return 2
+  fi
+  if [[ "$line" == *connected* || "$line" == *available* ]]; then
+    json_out "{\"ready\":true,\"exit\":0,\"udid\":\"$udid\"}"
+    say "READY udid=$udid"
+    say "$line"
+    return 0
+  fi
+  say "NOT_READY device_unknown_state udid=$udid line=$line"
+  return 2
+}
+
+if [[ -n "${REDWALLET_FORCE_LAUNCH_UDID:-}" ]]; then
+  if check_udid_ready "$REDWALLET_FORCE_LAUNCH_UDID"; then
+    exit 0
+  fi
+  usb_hint=""
+  if ! system_profiler SPUSBDataType 2>/dev/null | grep -qi iphone; then
+    usb_hint=",\"usb_detected\":false"
+    say "NOT_READY usb_not_detected — no iPhone in system_profiler SPUSBDataType; plug in USB cable."
+  else
+    usb_hint=",\"usb_detected\":true"
+  fi
+  json_out "{\"ready\":false,\"exit\":2,\"reason\":\"forced_udid_not_ready\",\"udid\":\"$REDWALLET_FORCE_LAUNCH_UDID\"${usb_hint}}"
+  say "NOT_READY forced_udid_not_ready udid=$REDWALLET_FORCE_LAUNCH_UDID — reconnect USB, trust Mac, unlock screen."
+  exit 2
+fi
+
 for udid in "$IPHONE12_UDID" "$LIPHONE_UDID"; do
   line="$(device_line "$udid" || true)"
   if [[ -z "$line" ]]; then

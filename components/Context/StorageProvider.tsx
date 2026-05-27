@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { LayoutAnimation, Platform } from 'react-native';
+import { AppState, LayoutAnimation } from 'react-native';
 import RNFS from 'react-native-fs';
 import {
   BlueApp as BlueAppClass,
@@ -150,31 +150,106 @@ async function fetchBitAssetsRealDeviceCommand(
   return '';
 }
 
-async function runBitAssetsRealDeviceSelftestCommand(wallet: BitAssetsWalletClass, prefetchedCommand = ''): Promise<void> {
+let realDeviceBitAssetsSelftestInFlight = false;
+
+const BITASSETS_REGISTER_RESERVATION_RETRY_MS = 3000;
+const BITASSETS_REGISTER_RESERVATION_MAX_ATTEMPTS = 12;
+
+function isBitAssetsReservationUtxoMissingError(error: unknown): boolean {
+  const message = (error as { message?: string })?.message ?? String(error);
+  return message.includes('no wallet UTXO matching reservation');
+}
+
+async function syncBitAssetsWithLogging(wallet: BitAssetsWalletClass, operation: string): Promise<void> {
+  try {
+    await wallet.syncBitAssets();
+  } catch (syncError: any) {
+    redWalletEvent('real_device_bitassets_selftest_sync_error', {
+      walletID: wallet.getID?.(),
+      operation,
+      error: syncError?.message ?? String(syncError),
+    });
+  }
+}
+
+async function registerBitAssetAfterReservationSync(
+  wallet: BitAssetsWalletClass,
+  params: { name: string; initialSupply: number; bitassetData: Record<string, unknown>; feeSats: number },
+  operation: string,
+): Promise<string> {
+  for (let attempt = 1; attempt <= BITASSETS_REGISTER_RESERVATION_MAX_ATTEMPTS; attempt++) {
+    await syncBitAssetsWithLogging(wallet, `${operation}:pre-register:${attempt}`);
+    try {
+      return await wallet.registerBitAsset(params);
+    } catch (error: any) {
+      if (!isBitAssetsReservationUtxoMissingError(error) || attempt >= BITASSETS_REGISTER_RESERVATION_MAX_ATTEMPTS) {
+        throw error;
+      }
+      redWalletEvent('real_device_bitassets_selftest_register_retry', {
+        walletID: wallet.getID?.(),
+        operation,
+        name: params.name,
+        attempt,
+        error: error?.message ?? String(error),
+      });
+      await new Promise(resolve => setTimeout(resolve, BITASSETS_REGISTER_RESERVATION_RETRY_MS));
+    }
+  }
+  throw new Error(`register failed after ${BITASSETS_REGISTER_RESERVATION_MAX_ATTEMPTS} sync attempts`);
+}
+
+async function runBitAssetsRealDeviceSelftestCommandInner(wallet: BitAssetsWalletClass, prefetchedCommand = ''): Promise<void> {
   const rawCommand = prefetchedCommand || (await fetchBitAssetsRealDeviceCommand(wallet.getID?.() ?? ''));
   if (!rawCommand) return;
 
   const command = JSON.parse(rawCommand);
   const operation = String(command.operation ?? '');
   const startedAt = Date.now();
+  const assetName = String(command.name ?? '');
   redWalletEvent('real_device_bitassets_selftest_begin', {
     walletID: wallet.getID?.(),
     address: wallet.getAddress() || '',
     operation,
+    ...(assetName ? { name: assetName } : {}),
   });
 
   try {
     let txid = '';
-    if (operation === 'reserve') {
+    let okOperation = operation;
+    if (operation === 'reserveRegister') {
+      const name = String(command.name);
+      const feeSats = Number(command.feeSats ?? 0);
+      await wallet.reserveBitAsset({ name, feeSats });
+      await syncBitAssetsWithLogging(wallet, operation);
+      txid = await registerBitAssetAfterReservationSync(
+        wallet,
+        {
+          name,
+          initialSupply: Number(command.initialSupply),
+          bitassetData: command.bitassetData ?? {},
+          feeSats,
+        },
+        operation,
+      );
+      okOperation = 'register';
+    } else if (operation === 'reserve') {
       txid = await wallet.reserveBitAsset({ name: String(command.name), feeSats: Number(command.feeSats ?? 0) });
     } else if (operation === 'register') {
-      txid = await wallet.registerBitAsset({
+      const registerParams = {
         name: String(command.name),
         initialSupply: Number(command.initialSupply),
-        bitassetData: command.bitassetData ?? {},
+        bitassetData: (command.bitassetData ?? {}) as Record<string, unknown>,
         feeSats: Number(command.feeSats ?? 0),
-      });
+      };
+      if (isRedWalletIosRealDeviceProofEnabled()) {
+        txid = await registerBitAssetAfterReservationSync(wallet, registerParams, operation);
+      } else {
+        txid = await wallet.registerBitAsset(registerParams);
+      }
     } else if (operation === 'transfer') {
+      if (isRedWalletIosRealDeviceProofEnabled()) {
+        await syncBitAssetsWithLogging(wallet, operation);
+      }
       txid = await wallet.transferBitAssets({
         destinationAddress: String(command.destinationAddress),
         assetId: String(command.assetId),
@@ -188,15 +263,27 @@ async function runBitAssetsRealDeviceSelftestCommand(wallet: BitAssetsWalletClas
 
     if (!isRedWalletIosRealDeviceProofEnabled()) {
       await wallet.syncBitAssets();
+    } else if (operation === 'reserve') {
+      // Register/transfer read reservation UTXOs from native cache; refresh after reserve.
+      try {
+        await wallet.syncBitAssets();
+      } catch (syncError: any) {
+        redWalletEvent('real_device_bitassets_selftest_sync_error', {
+          walletID: wallet.getID?.(),
+          operation,
+          error: syncError?.message ?? String(syncError),
+        });
+      }
     }
     await RNFS.writeFile(
       BITASSETS_REAL_DEVICE_SELFTEST_RESULT,
-      JSON.stringify({ ok: true, operation, txid, durationMs: Date.now() - startedAt, ts: new Date().toISOString() }),
+      JSON.stringify({ ok: true, operation: okOperation, txid, durationMs: Date.now() - startedAt, ts: new Date().toISOString() }),
       'utf8',
     );
     redWalletEvent('real_device_bitassets_selftest_ok', {
       walletID: wallet.getID?.(),
-      operation,
+      operation: okOperation,
+      ...(assetName ? { name: assetName } : {}),
       txid,
       durationMs: Date.now() - startedAt,
     });
@@ -213,6 +300,16 @@ async function runBitAssetsRealDeviceSelftestCommand(wallet: BitAssetsWalletClas
       error: message,
       durationMs: Date.now() - startedAt,
     });
+  }
+}
+
+async function runBitAssetsRealDeviceSelftestCommand(wallet: BitAssetsWalletClass, prefetchedCommand = ''): Promise<void> {
+  if (realDeviceBitAssetsSelftestInFlight) return;
+  realDeviceBitAssetsSelftestInFlight = true;
+  try {
+    await runBitAssetsRealDeviceSelftestCommandInner(wallet, prefetchedCommand);
+  } finally {
+    realDeviceBitAssetsSelftestInFlight = false;
   }
 }
 
@@ -822,6 +919,49 @@ export const StorageProvider = ({ children }: { children: React.ReactNode }) => 
       redWalletEvent('real_device_bitassets_smoke_done', { walletCount: bitAssetsWallets.length });
     })();
   }, [saveToDisk, wallets, walletsInitialized]);
+
+  // USB push can land while the app stays foregrounded; devicectl cold launch often fails (CoreDevice 1011).
+  useEffect(() => {
+    if (!isRedWalletIosRealDeviceProofEnabled() || !walletsInitialized) return;
+    const bitAssetsWallets = wallets.filter((wallet): wallet is BitAssetsWalletClass => wallet.type === BitAssetsWalletClass.type);
+    if (bitAssetsWallets.length === 0) return;
+
+    let cancelled = false;
+    const maybeRunPushedSelftest = async () => {
+      if (cancelled) return;
+      const wallet = bitAssetsWallets[0];
+      const commandExists = await RNFS.exists(BITASSETS_REAL_DEVICE_SELFTEST_COMMAND);
+      if (!commandExists) {
+        const remoteCommand = await fetchBitAssetsRealDeviceCommand(wallet.getID?.() ?? '');
+        if (!remoteCommand.trim()) return;
+      }
+      const rpcUrl = normalizeBitAssetsRpcUrlForRuntime(wallet.bitassetsRpcUrl);
+      if (wallet.bitassetsRpcUrl !== rpcUrl) {
+        wallet.bitassetsRpcUrl = rpcUrl;
+      }
+      const quicUrl = normalizeBitAssetsLiteWalletQuicUrlForRuntime(rpcUrl, wallet.bitassetsLiteWalletQuicUrl);
+      if (wallet.bitassetsLiteWalletQuicUrl !== quicUrl) {
+        wallet.bitassetsLiteWalletQuicUrl = quicUrl;
+      }
+      redWalletEvent('real_device_bitassets_selftest_push_resume', {
+        walletID: wallet.getID?.(),
+        rpcUrl,
+        liteWalletQuicUrl: quicUrl,
+      });
+      await runBitAssetsRealDeviceSelftestCommand(wallet);
+    };
+
+    const subscription = AppState.addEventListener('change', state => {
+      if (state === 'active') void maybeRunPushedSelftest();
+    });
+    void maybeRunPushedSelftest();
+    const interval = setInterval(() => void maybeRunPushedSelftest(), 4000);
+    return () => {
+      cancelled = true;
+      subscription.remove();
+      clearInterval(interval);
+    };
+  }, [wallets, walletsInitialized]);
 
   useEffect(() => {
     if (!isRedWalletIosRealDeviceProofEnabled() || realDeviceBtcCommandRef.current || !walletsInitialized) return;

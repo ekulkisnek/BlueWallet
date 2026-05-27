@@ -3,7 +3,7 @@ import { execFileSync } from 'child_process';
 import { extractTextFromElementById, sleep, tapAndTapAgainIfElementIsNotVisible, waitForId } from './helperz';
 import { mineBitAssetsTx } from './bitassetsE2eShared';
 
-const rpcUrl = 'http://127.0.0.1:6004';
+const rpcUrl = process.env.BITASSETS_RPC_URL || 'http://192.168.1.50:6004';
 const walletLabel = 'BitAssets-Send-E2E';
 let lastDepositTxid = '';
 
@@ -17,12 +17,12 @@ describe('BitAssets Send Coins E2E', () => {
   it('creates wallet, funds it, and sends coins to BitWindow address', async () => {
     await device.disableSynchronization();
     
-    let onWalletScreen = await isVisibleId('BitAssetsWalletScreen', 3000);
+    const onWalletScreen = await isVisibleId('BitAssetsWalletScreen', 3000);
     if (!onWalletScreen) {
       let onAddWallet = await isVisibleId('WalletNameInput', 3000);
       if (!onAddWallet) {
         await waitForId('WalletsList');
-        let walletExists = await isVisibleId(walletLabel, 2000);
+        const walletExists = await isVisibleId(walletLabel, 2000);
         if (walletExists) {
           await element(by.id(walletLabel)).tap();
         } else {
@@ -222,7 +222,6 @@ async function tapSyncButton() {
 
   try {
     await element(by.id('BitAssetsSyncButton')).tap();
-    return;
   } catch (_) {}
 }
 
