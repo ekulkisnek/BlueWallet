@@ -147,6 +147,16 @@ for udid in "${DEVICES[@]}"; do
     fi
     launch_cmd+=("$BUNDLE_ID")
     run_capture "$device_dir/launch.log" "${launch_cmd[@]}"
+    if [[ "${REDWALLET_MONITOR_SYSLOG:-1}" == "1" ]]; then
+      event "device.syslog.start" "ok" "$udid"
+      (
+        set +e
+        perl -e 'alarm shift; exec @ARGV' "$SECONDS_TO_CAPTURE" log stream --style compact \
+          --predicate 'processImagePath CONTAINS "BlueWallet" OR eventMessage CONTAINS "REDWALLET_EVENT"' \
+          2>&1
+      ) >"$device_dir/syslog-redwallet.log" &
+      pids+=("$!")
+    fi
   fi
 done
 
@@ -167,10 +177,19 @@ for udid in "${DEVICES[@]}"; do
   device_dir="$RUN_DIR/devices/$safe_udid"
   run_capture "$device_dir/apps-after.txt" xcrun devicectl device info apps --device "$udid"
   run_capture "$device_dir/processes-after.txt" xcrun devicectl device info processes --device "$udid"
-  if rg -n 'Could not load bundle|No bundle URL present|Unhandled JS Exception|Fatal|Exception|error|failed|REDWALLET_EVENT|BitAssets|Using real-device Metro' "$device_dir/redwallet-console.log" > "$device_dir/redwallet-console-interesting.txt" 2>&1; then
-    event "device.console.scan" "interesting" "$device_dir/redwallet-console-interesting.txt"
-  else
-    event "device.console.scan" "no_matches" "$device_dir/redwallet-console.log"
+  if [[ -f "$device_dir/redwallet-console.log" ]]; then
+    if rg -n 'Could not load bundle|No bundle URL present|Unhandled JS Exception|Fatal|Exception|error|failed|REDWALLET_EVENT|BitAssets|Using real-device Metro' "$device_dir/redwallet-console.log" >"$device_dir/redwallet-console-interesting.txt" 2>&1; then
+      event "device.console.scan" "interesting" "$device_dir/redwallet-console-interesting.txt"
+    else
+      event "device.console.scan" "no_matches" "$device_dir/redwallet-console.log"
+    fi
+  fi
+  if [[ -f "$device_dir/syslog-redwallet.log" ]]; then
+    if rg -n 'REDWALLET_EVENT|device_logger_installed|real_device_bitassets|Using real-device Metro' "$device_dir/syslog-redwallet.log" >"$device_dir/syslog-redwallet-interesting.txt" 2>&1; then
+      event "device.syslog.scan" "interesting" "$device_dir/syslog-redwallet-interesting.txt"
+    else
+      event "device.syslog.scan" "no_matches" "$device_dir/syslog-redwallet.log"
+    fi
   fi
 done
 

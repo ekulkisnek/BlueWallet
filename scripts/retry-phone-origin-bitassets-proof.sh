@@ -152,6 +152,22 @@ if [[ -n "$MONITOR_DIR" ]]; then
   fi
 fi
 
+MONITOR_DIR="$(readlink "${LOG_ROOT%/}/current-ios-real-device-app-monitor" 2>/dev/null || true)"
+SAFE_LAUNCH_UDID="${LAUNCH_UDID//[^A-Za-z0-9._-]/_}"
+if [[ -n "$MONITOR_DIR" && -f "$MONITOR_DIR/devices/$SAFE_LAUNCH_UDID/syslog-redwallet-interesting.txt" ]]; then
+  if rg -q 'REDWALLET_EVENT.*device_logger_installed|real_device_bitassets' "$MONITOR_DIR/devices/$SAFE_LAUNCH_UDID/syslog-redwallet-interesting.txt" 2>/dev/null; then
+    log "SUCCESS phone-origin syslog evidence (REDWALLET_EVENT / BitAssets)"
+    cp "$MONITOR_DIR/devices/$SAFE_LAUNCH_UDID/syslog-redwallet-interesting.txt" "$RUN_DIR/phone-origin-syslog.txt"
+    echo "status=phone_origin_syslog" >"$RUN_DIR/RESULT.txt"
+    "$ROOT_DIR/scripts/collect-redwallet-device-logs.sh" "$LOG_ROOT" 30 >"$RUN_DIR/collect.log" 2>&1 || true
+    exit 0
+  fi
+  if rg -q 'REDWALLET_EVENT' "$MONITOR_DIR/devices/$SAFE_LAUNCH_UDID/syslog-redwallet-interesting.txt" 2>/dev/null; then
+    log "PARTIAL phone-origin syslog has REDWALLET_EVENT (see $RUN_DIR/phone-origin-syslog-partial.txt)"
+    cp "$MONITOR_DIR/devices/$SAFE_LAUNCH_UDID/syslog-redwallet-interesting.txt" "$RUN_DIR/phone-origin-syslog-partial.txt"
+  fi
+fi
+
 COLLECTOR_DIR="$(readlink "${LOG_ROOT%/}/current-js-event-collector" 2>/dev/null || true)"
 if [[ -n "$COLLECTOR_DIR" && -f "$COLLECTOR_DIR/events.ndjson" ]]; then
   phone_events="$(grep -v '"remote":"::ffff:127' "$COLLECTOR_DIR/events.ndjson" 2>/dev/null | grep -v '"remote":"127' || true)"
