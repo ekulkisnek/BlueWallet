@@ -23,17 +23,24 @@ was configuration/port/datadir, not "unknown network".
 
 ## Fixed launch path (drivechain-wallet-dev)
 
+**2026-05-26:** BitWindow ships **stock Bitcoin Core** (`bitcoind` v29), which ignores
+`local-signet=1` and does not P2P-sync to Docker `drivechaind`. Use the **bridge** path:
+drivechaind sidecar (Docker) + host JSON-RPC bridge on `38335`.
+
 ```sh
 cd /Volumes/T705/code/drivechain-wallet-dev/local-dev
 
 # Optional: quarantine corrupt host signet data
 ./scripts/prepare-bitwindow-local-signet-datadir.sh
 
-# Launch (orchestratord + local bitcoind 38335 + bitwindowd + verify)
+# Launch (orchestratord + sidecar + RPC bridge + bitwindowd + verify)
 BITWINDOW_SKIP_GUI=1 ./scripts/launch-bitwindow-local-signet.sh
 
 # Or stepwise:
-./scripts/start-bitwindow-local-bitcoind.sh   # RPC 38335, syncs Docker via addnode :38333
+./scripts/start-bitwindow-local-bitcoind.sh   # default mode=bridge
+
+# Sync check (docker tip vs local RPC)
+./scripts/poll-bitwindow-local-signet-sync.sh
 
 # Preflight only
 ./scripts/verify-bitwindow-local-signet.sh
@@ -44,10 +51,10 @@ script explicitly starts local `bitcoind` before `bitwindowd`.
 
 v2 `bitcoin.conf` template (`scripts/bitwindow-local-signet-bitcoin.conf.template`):
 
-- Local RPC **38335** (avoids Docker **38332**)
-- `addnode=127.0.0.1:38333` (sync private signet from Docker P2P)
-- Local ZMQ **29100-29104** (for orchestratord-managed bitcoind)
-- `local-signet=1` + Luke's private `signetchallenge`
+- Local RPC **38335** via RPC bridge → drivechaind sidecar (avoids Docker **38332** bind conflict)
+- Sidecar syncs via `connect=mainchain:38333` on the compose network
+- ZMQ **29100-29104** published from sidecar (mapped from container 29000-29004)
+- `local-signet=1` in conf (orchestrator); chain uses Luke's private `signetchallenge`
 
 ## Interop with RedWallet
 
