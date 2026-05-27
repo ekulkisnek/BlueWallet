@@ -42,9 +42,18 @@ BITWINDOW_SKIP_GUI=1 ./scripts/launch-bitwindow-local-signet.sh
 # Sync check (docker tip vs local RPC)
 ./scripts/poll-bitwindow-local-signet-sync.sh
 
-# Preflight only
+# Preflight (infra + headless network/tip)
 ./scripts/verify-bitwindow-local-signet.sh
+./scripts/verify-bitwindow-local-signet-headless.sh
 ```
+
+Headless proof (no GUI): orchestrator `GetBitcoinConfig` → `network=local-signet`,
+`rpcPort=38335`; bitwindowd `GetNetworkStats` → `blockHeight` matches Docker tip.
+Evidence bundle: `/Volumes/T705/redwallet-logs/current-bitwindow-headless`.
+
+**Note:** shipped `bitwindowd` may reject `UpdateNetwork("local-signet")` until rebuilt with
+`NetworkLocalSignet` in `bitwindow/server/config/config.go` (fixed in drivechain-frontends).
+Orchestrator can already be on `local-signet` via `bitcoin.conf`.
 
 **Note:** `SwapNetwork` does not start L1 if bitcoind was not already running; the launch
 script explicitly starts local `bitcoind` before `bitwindowd`.
