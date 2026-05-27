@@ -3,6 +3,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=redwallet-colima-docker-env.sh
+source "$ROOT_DIR/scripts/redwallet-colima-docker-env.sh"
 LOG_ROOT="${REDWALLET_LOG_ROOT:-/Volumes/T705/redwallet-logs}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 LOG="$LOG_ROOT/signet-mine-reservation-${STAMP}.log"

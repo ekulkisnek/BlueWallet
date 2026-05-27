@@ -4,6 +4,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=redwallet-colima-docker-env.sh
+source "$ROOT/scripts/redwallet-colima-docker-env.sh"
 LOCAL_DEV="${LOCAL_DEV:-/Volumes/T705/code/drivechain-wallet-dev/local-dev}"
 COMPOSE="${COMPOSE_FILE:-$LOCAL_DEV/docker-compose.local-minimal.yml}"
 export BITASSETS_IMAGE="${BITASSETS_IMAGE:-local/plain-bitassets:codex-proof}"

@@ -2,6 +2,10 @@
 # Load signet-miner on mainchain before BMM/L1 mining (avoids createwallet "already exists" race).
 set -euo pipefail
 
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=redwallet-colima-docker-env.sh
+source "$ROOT_DIR/scripts/redwallet-colima-docker-env.sh"
+
 LOCAL_DEV="${LOCAL_DEV:-/Volumes/T705/code/drivechain-wallet-dev/local-dev}"
 COMPOSE_FILE="${COMPOSE_FILE:-$LOCAL_DEV/docker-compose.local-minimal.yml}"
 

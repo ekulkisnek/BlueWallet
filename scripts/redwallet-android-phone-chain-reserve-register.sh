@@ -14,6 +14,8 @@ STAMP="$(date +%Y%m%d-%H%M%S)"
 CHAIN_ASSET="${REDWALLET_CHAIN_ASSET:-RWFLEET${STAMP}}"
 SERIAL="${1:-${ANDROID_SERIAL:-${REDWALLET_ANDROID_SERIAL:-0A201JECB03306}}}"
 LOCK_DIR="${LOG_ROOT}/android-phone-chain-$(echo "$SERIAL" | tr -cd 'a-zA-Z0-9').lock.d"
+REDWALLET_ANDROID_CHAIN_LOCK_DIR="$LOCK_DIR" \
+  bash "$ROOT_DIR/scripts/redwallet-android-chain-lock-stale.sh" --clear-if-stale >/dev/null 2>&1 || true
 if ! mkdir "$LOCK_DIR" 2>/dev/null; then
   echo "CHAIN_BUSY $(date -Iseconds) lock=$LOCK_DIR"
   exit 0

@@ -24,6 +24,8 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
 fi
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=redwallet-colima-docker-env.sh
+source "$ROOT_DIR/scripts/redwallet-colima-docker-env.sh"
 OUTPUT_ROOT="${1:-${REDWALLET_LOG_ROOT:-/Volumes/T705/redwallet-logs}}"
 MINUTES="${2:-20}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
