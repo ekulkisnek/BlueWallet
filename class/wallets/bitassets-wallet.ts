@@ -58,7 +58,22 @@ function shouldUseCanonicalBitAssetsEndpoints(): boolean {
   return isRedWalletIosPhysicalDevice() || isRedWalletIosRealDeviceProofEnabled() || __DEV__;
 }
 
+function isIosPhysicalDeviceForBitAssets(): boolean {
+  if (Platform.OS !== 'ios') return false;
+  // main.jsbundle is built with --dev false; __DEV__ is false on real devices using embedded bundle.
+  if (!__DEV__) return true;
+  try {
+    return !isEmulatorSync();
+  } catch {
+    // Device-info can fail on some CoreDevice builds; prefer LAN signet over loopback.
+    return true;
+  }
+}
+
 export function normalizeBitAssetsRpcUrlForRuntime(rpcUrl: string): string {
+  if (isIosPhysicalDeviceForBitAssets() && (!rpcUrl.trim() || isLoopbackBitAssetsRpcUrl(rpcUrl))) {
+    return canonicalBitAssetsRpcUrlForRuntime();
+  }
   if (!shouldUseCanonicalBitAssetsEndpoints()) {
     return validateBitAssetsRpcUrl(rpcUrl);
   }
@@ -71,6 +86,9 @@ export function normalizeBitAssetsRpcUrlForRuntime(rpcUrl: string): string {
 export function normalizeBitAssetsLiteWalletQuicUrlForRuntime(rpcUrl: string, quicUrl: string): string {
   const resolvedRpc = normalizeBitAssetsRpcUrlForRuntime(rpcUrl);
   const derived = quicUrl || deriveBitAssetsLiteWalletQuicUrl(resolvedRpc) || '';
+  if (isIosPhysicalDeviceForBitAssets() && (!derived.trim() || isLoopbackBitAssetsQuicUrl(derived))) {
+    return canonicalBitAssetsQuicUrlForRuntime();
+  }
   if (!shouldUseCanonicalBitAssetsEndpoints()) {
     return derived;
   }

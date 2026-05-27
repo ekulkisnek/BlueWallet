@@ -215,6 +215,20 @@ async function runBitAssetsRealDeviceSelftestCommandInner(wallet: BitAssetsWalle
   });
 
   try {
+    const commandRpcUrl = String(command.rpcUrl ?? command.bitassetsRpcUrl ?? '').trim();
+    if (commandRpcUrl) {
+      const rpcUrl = normalizeBitAssetsRpcUrlForRuntime(commandRpcUrl);
+      const quicUrl = normalizeBitAssetsLiteWalletQuicUrlForRuntime(
+        rpcUrl,
+        command.bitassetsLiteWalletQuicUrl === undefined ? '' : String(command.bitassetsLiteWalletQuicUrl ?? ''),
+      );
+      if (wallet.bitassetsRpcUrl !== rpcUrl || wallet.bitassetsLiteWalletQuicUrl !== quicUrl) {
+        wallet.bitassetsRpcUrl = rpcUrl;
+        wallet.bitassetsLiteWalletQuicUrl = quicUrl;
+        await wallet.generate(rpcUrl, quicUrl);
+      }
+    }
+
     let txid = '';
     let okOperation = operation;
     if (operation === 'reserveRegister') {
