@@ -4,6 +4,7 @@ import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.module.annotations.ReactModule
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.net.URI
@@ -78,7 +79,33 @@ class BitAssetsWalletModule(private val reactContext: ReactApplicationContext) :
     override fun walletInfo(promise: Promise) = resolve("walletInfo", promise) { nativeWalletInfo(openWallet()) }
 
     @ReactMethod
-    override fun sync(promise: Promise) = resolve("sync", promise) { nativeSync(openWallet()) }
+    override fun sync(promise: Promise) {
+        try {
+            eventLog("sync", "begin")
+            val value = synchronized(walletLock) {
+                val first = runCatching { unwrap(nativeSync(openWallet())) }
+                if (first.isSuccess) {
+                    return@synchronized first.getOrThrow()
+                }
+                val errorText = first.exceptionOrNull()?.message ?: "BitAssets wallet sync failed"
+                if (!isSnapshotResyncError(errorText)) {
+                    throw first.exceptionOrNull() ?: IllegalStateException(errorText)
+                }
+                eventLog("sync", "snapshotResync", mapOf("error" to errorText))
+                resetWalletSnapshotPreservingAddresses()
+                if (walletHandle != 0L) {
+                    nativeFree(walletHandle)
+                    walletHandle = 0L
+                }
+                unwrap(nativeSync(openWallet()))
+            }
+            eventLog("sync", "ok", resultFields(value))
+            promise.resolve(value)
+        } catch (error: Throwable) {
+            eventLog("sync", "error", mapOf("error" to (error.message ?: error.toString())))
+            rejectSanitized(promise, "BITASSETS_WALLET_ERROR", error)
+        }
+    }
 
     @ReactMethod
     override fun listUtxos(promise: Promise) = resolve("listUtxos", promise) { nativeListUtxos(openWallet()) }
@@ -291,6 +318,26 @@ class BitAssetsWalletModule(private val reactContext: ReactApplicationContext) :
         if (parts.size < 2 || parts[0] != "172") return false
         val secondOctet = parts[1].toIntOrNull() ?: return false
         return secondOctet in 16..31
+    }
+
+    private fun resetWalletSnapshotPreservingAddresses() {
+        val walletFile = File(File(reactContext.noBackupFilesDir, "bitassets"), "wallet.json")
+        if (!walletFile.exists()) return
+        val json = JSONObject(walletFile.readText())
+        json.put("confirmed_utxos", JSONArray())
+        json.put("mempool_utxos", JSONArray())
+        json.put("spent_outpoints", JSONArray())
+        json.put("last_tip_hash", JSONObject.NULL)
+        json.put("last_tip_height", JSONObject.NULL)
+        walletFile.writeText(json.toString(), Charsets.UTF_8)
+        eventLog("sync", "snapshotReset", mapOf("walletPath" to walletFile.absolutePath))
+    }
+
+    private fun isSnapshotResyncError(message: String): Boolean {
+        val normalized = message.lowercase()
+        return normalized.contains("resync from snapshot")
+            || normalized.contains("no longer on the active sidechain")
+            || normalized.contains("from_block_hash")
     }
 
     private fun resolve(operation: String, promise: Promise, call: () -> String) {

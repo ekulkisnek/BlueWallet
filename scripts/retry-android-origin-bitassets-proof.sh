@@ -81,7 +81,7 @@ EOF
       ;;
     transfer)
       cat >"$cmd_dir/command.json" <<EOF
-{"operation":"transfer","commandId":"android-transfer-${STAMP}","assetId":"${REDWALLET_BITASSETS_TRANSFER_ASSET_ID:-}","destinationAddress":"${REDWALLET_BITASSETS_TRANSFER_DEST:-}","amount":${REDWALLET_BITASSETS_TRANSFER_AMOUNT:-1},"feeSats":0,"rpcUrl":"${rpc}","bitassetsLiteWalletQuicUrl":"${quic}"}
+{"operation":"transfer","commandId":"android-transfer-${STAMP}","assetId":"${REDWALLET_BITASSETS_TRANSFER_ASSET_ID:-}","destinationAddress":"${REDWALLET_BITASSETS_TRANSFER_DEST:-}","amount":${REDWALLET_BITASSETS_TRANSFER_AMOUNT:-1},"feeSats":0,"rpcUrl":"${rpc}","bitassetsLiteWalletQuicUrl":"${quic}"${REDWALLET_BITASSETS_WALLET_ID:+,"walletID":"${REDWALLET_BITASSETS_WALLET_ID}"}}
 EOF
       ;;
     *)
@@ -96,6 +96,7 @@ EOF
 android_push_app_file() {
   local local_file="$1"
   local dest_name="$2"
+  adb -s "$ANDROID_SERIAL" shell "run-as $ANDROID_PACKAGE mkdir -p files" >>"$RUN_DIR/push-app-file.log" 2>&1 || true
   if adb -s "$ANDROID_SERIAL" shell "run-as $ANDROID_PACKAGE tee files/${dest_name}" <"$local_file" >>"$RUN_DIR/push-app-file.log" 2>&1; then
     log "PUSHED $dest_name via run-as tee"
     return 0
@@ -105,6 +106,7 @@ android_push_app_file() {
 }
 
 log "START run_dir=$RUN_DIR serial=$ANDROID_SERIAL"
+START_EPOCH=$(date +%s)
 
 if ! probe adb-device adb -s "$ANDROID_SERIAL" get-state; then
   log "BLOCKER android_not_ready"
@@ -174,7 +176,16 @@ if rg -q '"platform":"android".*real_device_bitassets_(selftest_ok|wallet_create
   exit 0
 fi
 if [[ -s "$RUN_DIR/collector-android-events.txt" ]] &&
-  rg -q 'real_device_bitassets_(selftest_ok|wallet_created|smoke_ok)' "$RUN_DIR/collector-android-events.txt" 2>/dev/null; then
+  awk -v start="$START_EPOCH" '
+    function ts(s,   m) {
+      if (match(s, /"ts":"([^"]+)"/, m)) {
+        gsub(/[-:TZ]/, " ", m[1]); return mktime(substr(m[1],1,19))
+      }
+      return 0
+    }
+    ts($0) >= start && /real_device_bitassets_(selftest_ok|wallet_created|smoke_ok)/ { found=1 }
+    END { exit(found ? 0 : 1) }
+  ' "$RUN_DIR/collector-android-events.txt" 2>/dev/null; then
   echo "status=ok" >"$RUN_DIR/RESULT.txt"
   log "RESULT ok (collector android proof)"
   exit 0

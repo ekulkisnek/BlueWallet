@@ -131,8 +131,6 @@ d=json.load(sys.stdin)
 for row in d:
   if isinstance(row,(list,tuple)) and len(row)>=2 and row[0]==name:
     print(row[1]); sys.exit(0)
-if d:
-  print(d[-1][1]); sys.exit(0)
 sys.exit(1)' "$CHAIN_ASSET" 2>/dev/null || return 1
 }
 
@@ -170,6 +168,7 @@ if [[ "${REDWALLET_CHAIN_TRANSFER_ONLY:-0}" != "1" && "${REDWALLET_CHAIN_FROM_RE
     fi
   fi
   sleep "${REDWALLET_CHAIN_REGISTER_DELAY_SEC:-15}"
+  bash "$ROOT_DIR/scripts/ensure-bitassets-rpc-responsive.sh" "${BITASSETS_RPC_URL:-http://192.168.1.50:6004}" || echo "CHAIN_WARN rpc check before register failed"
 
   export REDWALLET_BITASSETS_ASSET_NAME="$CHAIN_ASSET"
   export REDWALLET_BITASSETS_COMMAND_OPERATION=register
@@ -177,8 +176,12 @@ if [[ "${REDWALLET_CHAIN_TRANSFER_ONLY:-0}" != "1" && "${REDWALLET_CHAIN_FROM_RE
   bash "$ROOT_DIR/scripts/retry-android-origin-bitassets-proof.sh" || true
   export REDWALLET_ANDROID_SKIP_LAUNCH=1
   sleep 8
-  wait_selftest_ok register || echo "CHAIN_FAIL register"
-  register_txid="$last_chain_txid"
+  last_chain_txid=""
+  if wait_selftest_ok register; then
+    register_txid="$last_chain_txid"
+  else
+    echo "CHAIN_FAIL register"
+  fi
 elif [[ "${REDWALLET_CHAIN_FROM_REGISTER:-0}" == "1" ]]; then
   echo "CHAIN_FROM_REGISTER asset=$CHAIN_ASSET"
   export REDWALLET_BITASSETS_ASSET_NAME="$CHAIN_ASSET"
@@ -187,8 +190,12 @@ elif [[ "${REDWALLET_CHAIN_FROM_REGISTER:-0}" == "1" ]]; then
   bash "$ROOT_DIR/scripts/retry-android-origin-bitassets-proof.sh" || true
   export REDWALLET_ANDROID_SKIP_LAUNCH=1
   sleep 8
-  wait_selftest_ok register || echo "CHAIN_FAIL register"
-  register_txid="$last_chain_txid"
+  last_chain_txid=""
+  if wait_selftest_ok register; then
+    register_txid="$last_chain_txid"
+  else
+    echo "CHAIN_FAIL register"
+  fi
   if [[ "${REDWALLET_SKIP_CHAIN_MINE:-0}" != "1" ]]; then
     if [[ -x "$LOCAL_DEV/scripts/mine-bitassets-block.sh" ]]; then
       "$LOCAL_DEV/scripts/mine-bitassets-block.sh" && echo "CHAIN_MINE_OK post-register" || echo "CHAIN_MINE_FAIL post-register"

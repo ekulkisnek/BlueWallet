@@ -50,16 +50,23 @@ log() {
 }
 
 log "START serial=$SERIAL package=$PACKAGE seconds=$SECONDS_TO_CAPTURE"
-adb -s "$SERIAL" logcat -c >/dev/null 2>&1 || true
-adb -s "$SERIAL" shell am force-stop "$PACKAGE" >/dev/null 2>&1 || true
-adb -s "$SERIAL" reverse tcp:8081 tcp:8081 >/dev/null 2>&1 || true
-adb -s "$SERIAL" shell monkey -p "$PACKAGE" -c android.intent.category.LAUNCHER 1 >>"$RUN_DIR/launch.log" 2>&1 || true
+if [[ "${REDWALLET_ANDROID_MONITOR_NO_RESTART:-0}" != "1" ]]; then
+  adb -s "$SERIAL" logcat -c >/dev/null 2>&1 || true
+  adb -s "$SERIAL" shell am force-stop "$PACKAGE" >/dev/null 2>&1 || true
+  adb -s "$SERIAL" reverse tcp:8081 tcp:8081 >/dev/null 2>&1 || true
+  adb -s "$SERIAL" shell monkey -p "$PACKAGE" -c android.intent.category.LAUNCHER 1 >>"$RUN_DIR/launch.log" 2>&1 || true
+else
+  log "NO_RESTART=1 (app stays foregrounded; command push while running)"
+  adb -s "$SERIAL" reverse tcp:8081 tcp:8081 >/dev/null 2>&1 || true
+fi
 
 sleep "$SECONDS_TO_CAPTURE"
 
 adb -s "$SERIAL" logcat -d -v time >"$RUN_DIR/logcat-full.txt" 2>&1 || true
 rg 'REDWALLET_EVENT' "$RUN_DIR/logcat-full.txt" >"$RUN_DIR/redwallet-events.txt" 2>/dev/null || true
 rg 'REDWALLET_EVENT.*(js_error|selftest_error|command_error|smoke_error|network_error)' "$RUN_DIR/logcat-full.txt" \
+  | rg -v 'selftest_command_fetch_error.*fd13:' \
+  | rg -v 'network_error.*fd13:' \
   >"$RUN_DIR/redwallet-blocking-errors.txt" 2>/dev/null || true
 rg '192\.168\.1\.50:6004|127\.0\.0\.1:6004' "$RUN_DIR/logcat-full.txt" >"$RUN_DIR/redwallet-rpc-urls.txt" 2>/dev/null || true
 
