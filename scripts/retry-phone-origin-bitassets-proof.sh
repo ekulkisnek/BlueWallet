@@ -281,22 +281,27 @@ fi
 seed_bitassets_command || true
 
 push_usb_tunnel_host_file() {
-  local usb_host tmp
+  local usb_host tmp attempt
   usb_host="$("$ROOT_DIR/scripts/redwallet-usb-tunnel-mac-ipv6.sh" "${REDWALLET_FORCE_LAUNCH_UDID:-}" 2>/dev/null || true)"
   [[ -n "$usb_host" ]] || return 0
   tmp="$(mktemp)"
   printf '%s\n' "$usb_host" >"$tmp"
-  if perl -e 'alarm 15; exec @ARGV' 15 xcrun devicectl device copy to \
-    --device "$LAUNCH_UDID" \
-    --domain-type appDataContainer \
-    --domain-identifier "$BUNDLE_ID" \
-    --source "$tmp" \
-    --destination "Documents/redwallet-usb-tunnel-host.txt" >>"$RUN_DIR/push-usb-tunnel.log" 2>&1; then
-    log "PUSHED usb tunnel host=$usb_host -> Documents/redwallet-usb-tunnel-host.txt"
-  else
-    log "WARN push usb tunnel host failed (see push-usb-tunnel.log)"
-  fi
+  for attempt in 1 2 3; do
+    if perl -e 'alarm 15; exec @ARGV' 15 xcrun devicectl device copy to \
+      --device "$LAUNCH_UDID" \
+      --domain-type appDataContainer \
+      --domain-identifier "$BUNDLE_ID" \
+      --source "$tmp" \
+      --destination "Documents/redwallet-usb-tunnel-host.txt" >>"$RUN_DIR/push-usb-tunnel.log" 2>&1; then
+      log "PUSHED usb tunnel host=$usb_host attempt=$attempt -> Documents/redwallet-usb-tunnel-host.txt"
+      rm -f "$tmp"
+      return 0
+    fi
+    log "WARN push usb tunnel host attempt=$attempt failed (see push-usb-tunnel.log)"
+    sleep 1
+  done
   rm -f "$tmp"
+  log "WARN push usb tunnel host failed after 3 attempts"
 }
 push_usb_tunnel_host_file || true
 

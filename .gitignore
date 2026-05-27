@@ -88,6 +88,13 @@ android/app/src/main/jniLibs/*/libfloresta_bitassets_wallet.so
 
 *.mx
 *.realm
+
+# Local fleet/debug artifacts (not source)
+/"$LOG"
+screen.png
+screen2.png
+preview/
+**/release_notes 2.txt
 *.realm.lock
 android/app/.project
 android/.settings/org.eclipse.buildship.core.prefs

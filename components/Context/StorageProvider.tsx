@@ -33,7 +33,7 @@ import { REDWALLET_SIGNET_BITASSETS_RPC_URL } from '../../helpers/redwalletSigne
 const BlueApp = BlueAppClass.getInstance();
 const BITASSETS_REAL_DEVICE_SELFTEST_COMMAND = `${RNFS.DocumentDirectoryPath}/redwallet-bitassets-selftest-command.json`;
 const BITASSETS_REAL_DEVICE_SELFTEST_RESULT = `${RNFS.DocumentDirectoryPath}/redwallet-bitassets-selftest-result.json`;
-const BITASSETS_REAL_DEVICE_COMMAND_URLS = ['http://192.168.1.50:6124/command', REDWALLET_USB_TUNNEL_COMMAND];
+const BITASSETS_REAL_DEVICE_COMMAND_URL_LAN = 'http://192.168.1.50:6124/command';
 const BITASSETS_REAL_DEVICE_COMMAND_FETCH_TIMEOUT_MS = 8000;
 const BTC_REAL_DEVICE_COMMAND = `${RNFS.DocumentDirectoryPath}/redwallet-btc-selftest-command.json`;
 const BTC_REAL_DEVICE_RESULT = `${RNFS.DocumentDirectoryPath}/redwallet-btc-selftest-result.json`;
@@ -91,14 +91,15 @@ async function probeBitAssetsRpc(
 }
 
 async function resolveBitAssetsRealDeviceCommandUrls(): Promise<string[]> {
-  const urls = [...BITASSETS_REAL_DEVICE_COMMAND_URLS];
+  const urls: string[] = [];
   const tunnelFile = `${RNFS.DocumentDirectoryPath}/${REDWALLET_USB_TUNNEL_HOST_FILE}`;
   if (await RNFS.exists(tunnelFile)) {
     const host = (await RNFS.readFile(tunnelFile, 'utf8')).trim();
     if (host) {
-      urls.splice(1, 0, `http://[${host}]:6124/command`);
+      urls.push(`http://[${host}]:6124/command`);
     }
   }
+  urls.push(REDWALLET_USB_TUNNEL_COMMAND, BITASSETS_REAL_DEVICE_COMMAND_URL_LAN);
   return urls;
 }
 
@@ -969,11 +970,14 @@ export const StorageProvider = ({ children }: { children: React.ReactNode }) => 
       await runBitAssetsRealDeviceSelftestCommand(wallet);
     };
 
+    const runPushedSelftest = () => {
+      maybeRunPushedSelftest().catch(() => undefined);
+    };
     const subscription = AppState.addEventListener('change', state => {
-      if (state === 'active') void maybeRunPushedSelftest();
+      if (state === 'active') runPushedSelftest();
     });
-    void maybeRunPushedSelftest();
-    const interval = setInterval(() => void maybeRunPushedSelftest(), 4000);
+    runPushedSelftest();
+    const interval = setInterval(runPushedSelftest, 4000);
     return () => {
       cancelled = true;
       subscription.remove();
