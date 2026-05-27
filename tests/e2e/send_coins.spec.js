@@ -4,6 +4,7 @@ import { extractTextFromElementById, sleep, tapAndTapAgainIfElementIsNotVisible,
 
 const rpcUrl = 'http://127.0.0.1:6004';
 const walletLabel = 'BitAssets-Send-E2E';
+let lastDepositTxid = '';
 
 describe('BitAssets Send Coins E2E', () => {
   beforeAll(async () => {
@@ -127,15 +128,27 @@ function fundAddressFromMainchain(address, amountSats) {
     ],
     { encoding: 'utf8', timeout: 120000 },
   ).trim();
+  lastDepositTxid = txid;
   console.log('[E2E TEST] create-deposit txid:', txid);
 }
 
 function mineBlocks() {
-  console.log('[E2E TEST] Mining L1 blocks and sidechain block to confirm transactions...');
-  execFileSync('bash', [
-    '-lc',
-    `cd ${process.env.BITASSETS_E2E_LOCAL_DEV_DIR || '/Volumes/T705/code/drivechain-wallet-dev/local-dev'} && ./scripts/mine-private-signet-blocks.sh ${process.env.BITASSETS_E2E_L1_MINE_BLOCKS || 3} && ./scripts/mine-bitassets-block.sh`
-  ]);
+  if (process.env.BITASSETS_E2E_SKIP_MINE === '1') {
+    console.log('[E2E TEST] Skipping mine (BITASSETS_E2E_SKIP_MINE=1)');
+    return;
+  }
+  const localDev = process.env.BITASSETS_E2E_LOCAL_DEV_DIR || '/Volumes/T705/code/drivechain-wallet-dev/local-dev';
+  const confirmEnv = lastDepositTxid ? `BITASSETS_CONFIRM_TXID=${lastDepositTxid}` : '';
+  console.log('[E2E TEST] Mining sidechain block (BMM) to confirm deposit...');
+  execFileSync(
+    'bash',
+    [
+      '-lc',
+      `cd "${localDev}" && ${confirmEnv} BITASSETS_IMAGE=\${BITASSETS_IMAGE:-local/plain-bitassets:codex-proof} ./scripts/mine-bitassets-block.sh`,
+    ],
+    { timeout: Number(process.env.BITASSETS_E2E_MINE_TIMEOUT_MS || 120000) },
+  );
+  console.log('[E2E TEST] Mining complete');
 }
 
 async function tapSyncButton() {
