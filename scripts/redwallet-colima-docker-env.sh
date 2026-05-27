@@ -2,6 +2,14 @@
 # Source from RedWallet scripts when docker compose must talk to Colima (not default.sock).
 # Colima sets DOCKER_HOST in interactive shells; headless agents often omit it.
 _redwallet_apply_colima_docker_env() {
+  local sock="${HOME}/.colima/default/docker.sock"
+  if [[ -z "${DOCKER_HOST:-}" && -S "$sock" ]] && command -v docker >/dev/null 2>&1; then
+    unset DOCKER_CONTEXT
+    export DOCKER_HOST="unix://${sock}"
+    if docker info >/dev/null 2>&1; then
+      return 0
+    fi
+  fi
   if docker info >/dev/null 2>&1; then
     return 0
   fi
@@ -12,13 +20,10 @@ _redwallet_apply_colima_docker_env() {
       return 0
     fi
   fi
-  local sock="${HOME}/.colima/default/docker.sock"
   if [[ -S "$sock" ]] && command -v docker >/dev/null 2>&1; then
     unset DOCKER_CONTEXT
     export DOCKER_HOST="unix://${sock}"
-    if docker info >/dev/null 2>&1; then
-      return 0
-    fi
+    docker info >/dev/null 2>&1
   fi
 }
 _redwallet_apply_colima_docker_env

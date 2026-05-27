@@ -76,6 +76,8 @@ wait_for_signed_app() {
   if [[ "${REDWALLET_SKIP_IOS_MONITOR:-0}" != 1 ]] && [ -x "$ROOT_DIR/scripts/monitor-redwallet-ios-real-devices.sh" ]; then
     log "MONITOR_START seconds=$MONITOR_SECONDS"
     REDWALLET_IOS_MONITOR_RUN_DIR="$RUN_DIR/real-device-monitor" \
+      REDWALLET_MONITOR_TERMINATE_EXISTING="${REDWALLET_MONITOR_TERMINATE_EXISTING:-1}" \
+      REDWALLET_MONITOR_CONSOLE="${REDWALLET_MONITOR_CONSOLE:-1}" \
       "$ROOT_DIR/scripts/monitor-redwallet-ios-real-devices.sh" "$BUNDLE_ID" "$MONITOR_SECONDS" "${DEVICES[@]}"
     log "MONITOR_EXIT:$?"
   else

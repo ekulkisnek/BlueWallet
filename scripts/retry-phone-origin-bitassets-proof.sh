@@ -401,8 +401,26 @@ if [[ -n "$MONITOR_DIR" ]]; then
   MONITOR_DEVICE_DIR="$(resolve_monitor_device_dir "$MONITOR_DIR" "$LAUNCH_UDID" 2>/dev/null || true)"
 fi
 
-if [[ -n "$MONITOR_DEVICE_DIR" && -f "$MONITOR_DEVICE_DIR/redwallet-console.log" ]]; then
-  if rg -q 'Using real-device Metro bundle URL' "$MONITOR_DEVICE_DIR/redwallet-console.log" 2>/dev/null; then
+console_log_for_monitor() {
+  local dir="$1"
+  if [[ -f "$dir/redwallet-console-interesting.txt" ]]; then
+    printf '%s' "$dir/redwallet-console-interesting.txt"
+    return 0
+  fi
+  if [[ -f "$dir/redwallet-console.log" ]]; then
+    printf '%s' "$dir/redwallet-console.log"
+    return 0
+  fi
+  return 1
+}
+
+MONITOR_CONSOLE_LOG=""
+if [[ -n "$MONITOR_DEVICE_DIR" ]]; then
+  MONITOR_CONSOLE_LOG="$(console_log_for_monitor "$MONITOR_DEVICE_DIR" 2>/dev/null || true)"
+fi
+
+if [[ -n "$MONITOR_CONSOLE_LOG" && -f "$MONITOR_CONSOLE_LOG" ]]; then
+  if rg -q 'Using real-device Metro bundle URL' "$MONITOR_CONSOLE_LOG" 2>/dev/null; then
     log "BLOCKER phone native binary still uses Metro AppDelegate path — run scripts/finish-redwallet-ios-device-proof.sh after nosign xcodebuild"
     {
       echo "blocker=stale_native_metro_path"
@@ -410,17 +428,26 @@ if [[ -n "$MONITOR_DEVICE_DIR" && -f "$MONITOR_DEVICE_DIR/redwallet-console.log"
     } >"$RUN_DIR/BLOCKER.txt"
     exit 2
   fi
-  if ! rg -q 'Using embedded JS bundle on device' "$MONITOR_DEVICE_DIR/redwallet-console.log" 2>/dev/null; then
-    log "WARN device console missing embedded JS AppDelegate line (see redwallet-console.log)"
-  elif rg -q 'REDWALLET_EVENT' "$MONITOR_DEVICE_DIR/redwallet-console.log" 2>/dev/null &&
-    ! rg -q '127\.0\.0\.1:6004|127\.0\.0\.1:6104|CoreSimulator' "$MONITOR_DEVICE_DIR/redwallet-console.log" 2>/dev/null; then
+  if ! rg -q 'Using embedded JS bundle on device' "$MONITOR_CONSOLE_LOG" 2>/dev/null; then
+    log "WARN device console missing embedded JS AppDelegate line (see $(basename "$MONITOR_CONSOLE_LOG"))"
+  elif rg -q 'REDWALLET_EVENT' "$MONITOR_CONSOLE_LOG" 2>/dev/null &&
+    ! rg -q '127\.0\.0\.1:6004|127\.0\.0\.1:6104|CoreSimulator' "$MONITOR_CONSOLE_LOG" 2>/dev/null; then
     log "PARTIAL phone-origin console (embedded JS + native BitAssets; need smoke/selftest_ok)"
-    cp "$MONITOR_DEVICE_DIR/redwallet-console.log" "$RUN_DIR/phone-origin-console-partial.log"
+    cp "$MONITOR_CONSOLE_LOG" "$RUN_DIR/phone-origin-console-partial.log"
   fi
-  if rg -q 'device_logger_installed|real_device_bitassets_wallet_created|real_device_bitassets_command' "$MONITOR_DEVICE_DIR/redwallet-console.log" 2>/dev/null &&
-    ! rg -q '127\.0\.0\.1:6004|127\.0\.0\.1:6104|CoreSimulator' "$MONITOR_DEVICE_DIR/redwallet-console.log" 2>/dev/null; then
+  if rg -q '192\.168\.1\.50:6004' "$MONITOR_CONSOLE_LOG" 2>/dev/null &&
+    rg -q 'operation":"reserve".*"status":"ok"|reserve ok' "$MONITOR_CONSOLE_LOG" 2>/dev/null &&
+    ! rg -q '127\.0\.0\.1:6004|127\.0\.0\.1:6104|CoreSimulator' "$MONITOR_CONSOLE_LOG" 2>/dev/null; then
+    log "SUCCESS phone-origin LAN RPC + reserve ok (devicectl console)"
+    cp "$MONITOR_CONSOLE_LOG" "$RUN_DIR/phone-origin-console.log"
+    echo "status=phone_origin_reserve_ok" >"$RUN_DIR/RESULT.txt"
+    "$ROOT_DIR/scripts/collect-redwallet-device-logs.sh" "$LOG_ROOT" 30 >"$RUN_DIR/collect.log" 2>&1 || true
+    exit 0
+  fi
+  if rg -q 'device_logger_installed|real_device_bitassets_wallet_created|real_device_bitassets_command' "$MONITOR_CONSOLE_LOG" 2>/dev/null &&
+    ! rg -q '127\.0\.0\.1:6004|127\.0\.0\.1:6104|CoreSimulator' "$MONITOR_CONSOLE_LOG" 2>/dev/null; then
     log "SUCCESS phone-origin devicectl console evidence"
-    cp "$MONITOR_DEVICE_DIR/redwallet-console.log" "$RUN_DIR/phone-origin-console.log"
+    cp "$MONITOR_CONSOLE_LOG" "$RUN_DIR/phone-origin-console.log"
     echo "status=phone_origin_console" >"$RUN_DIR/RESULT.txt"
     "$ROOT_DIR/scripts/collect-redwallet-device-logs.sh" "$LOG_ROOT" 30 >"$RUN_DIR/collect.log" 2>&1 || true
     exit 0
