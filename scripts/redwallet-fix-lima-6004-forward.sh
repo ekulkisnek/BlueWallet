@@ -9,6 +9,18 @@ COMPOSE="${COMPOSE_FILE:-$LOCAL/docker-compose.local-minimal.yml}"
 exec >>"$LOG" 2>&1
 echo "LIMAFWD_START $(date -Iseconds)"
 
+# Docker Desktop can hold :6004 with a stale proxy while Colima serves the live bitassets VM port.
+if lsof -iTCP:6004 -sTCP:LISTEN 2>/dev/null | grep -q com.docke; then
+  echo "LIMAFWD quitting Docker Desktop (stale :6004 listener)"
+  osascript -e 'tell application "Docker" to quit' 2>/dev/null || true
+  sleep 3
+  pids="$(lsof -tiTCP:6004 -sTCP:LISTEN 2>/dev/null || true)"
+  if [[ -n "$pids" ]]; then
+    kill -TERM $pids 2>/dev/null || true
+    sleep 2
+  fi
+fi
+
 colima stop || true
 colima start
 if [[ -x "$LOCAL/scripts/ensure-colima-overcommit.sh" ]]; then
