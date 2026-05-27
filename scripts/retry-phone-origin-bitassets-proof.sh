@@ -185,6 +185,9 @@ log "LAUNCH_TARGET udid=$LAUNCH_UDID"
 reinstall_redwallet_app() {
   local app="${REDWALLET_IOS_APP_PATH:-}"
   [[ -n "$app" && -d "$app" ]] || return 0
+  if [[ "$app" != /* ]]; then
+    app="$ROOT_DIR/$app"
+  fi
   local out="$RUN_DIR/probes/reinstall.txt"
   mkdir -p "$RUN_DIR/probes"
   set +e
@@ -192,8 +195,18 @@ reinstall_redwallet_app() {
   local uninstall_rc=$?
   perl -e 'alarm 120; exec @ARGV' 120 xcrun devicectl device install app --device "$LAUNCH_UDID" "$app" >>"$out" 2>&1
   local install_rc=$?
+  xcrun devicectl device info apps --device "$LAUNCH_UDID" >"$RUN_DIR/probes/apps-after-reinstall.txt" 2>&1
+  local verify_rc=1
+  if rg -q "$BUNDLE_ID" "$RUN_DIR/probes/apps-after-reinstall.txt" 2>/dev/null; then
+    verify_rc=0
+  fi
   set -e
-  log "REINSTALL uninstall_exit=$uninstall_rc install_exit=$install_rc app=$app -> $out"
+  log "REINSTALL uninstall_exit=$uninstall_rc install_exit=$install_rc verify_exit=$verify_rc app=$app -> $out"
+  if [[ "$install_rc" -ne 0 || "$verify_rc" -ne 0 ]]; then
+    log "BLOCKER reinstall failed — see $out and apps-after-reinstall.txt"
+    echo "blocker=reinstall_failed" >"$RUN_DIR/BLOCKER.txt"
+    return 1
+  fi
 }
 
 if [[ "${REDWALLET_IOS_FORCE_REINSTALL:-0}" == "1" ]]; then
