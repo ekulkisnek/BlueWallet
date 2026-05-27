@@ -193,7 +193,7 @@ reinstall_redwallet_app() {
   set +e
   xcrun devicectl device uninstall app --device "$LAUNCH_UDID" "$BUNDLE_ID" >>"$out" 2>&1
   local uninstall_rc=$?
-  perl -e 'alarm 120; exec @ARGV' 120 xcrun devicectl device install app --device "$LAUNCH_UDID" "$app" >>"$out" 2>&1
+  xcrun devicectl device install app --device "$LAUNCH_UDID" "$app" >>"$out" 2>&1
   local install_rc=$?
   xcrun devicectl device info apps --device "$LAUNCH_UDID" >"$RUN_DIR/probes/apps-after-reinstall.txt" 2>&1
   local verify_rc=1
