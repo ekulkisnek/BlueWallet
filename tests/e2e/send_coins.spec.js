@@ -1,6 +1,7 @@
 import { element, waitFor } from 'detox';
 import { execFileSync } from 'child_process';
 import { extractTextFromElementById, sleep, tapAndTapAgainIfElementIsNotVisible, waitForId } from './helperz';
+import { mineBitAssetsTx } from './bitassetsE2eShared';
 
 const rpcUrl = 'http://127.0.0.1:6004';
 const walletLabel = 'BitAssets-Send-E2E';
@@ -78,6 +79,12 @@ describe('BitAssets Send Coins E2E', () => {
     await tapSyncButton();
     await sleep(5000);
 
+    if (process.env.BITASSETS_SEND_COINS_SKIP_REGISTER !== '1') {
+      await ensureRegisteredBitAssetForSend();
+      await tapSyncButton();
+      await sleep(5000);
+    }
+
     // Go to Send Details
     await element(by.id('SendButton')).tap();
     await waitForId('BitAssetsAmountInput');
@@ -98,7 +105,7 @@ describe('BitAssets Send Coins E2E', () => {
     await waitFor(element(by.id('BitAssetsAmountInput'))).toBeVisible().withTimeout(5000);
     await element(by.id('BitAssetsAmountInput')).tap();
     await sleep(300);
-    await element(by.id('BitAssetsAmountInput')).typeText('1000000');
+    await element(by.id('BitAssetsAmountInput')).typeText(process.env.BITASSETS_SEND_COINS_AMOUNT || '1');
     await dismissKeyboardIfPresent();
 
     // Input memo
@@ -278,6 +285,72 @@ async function isVisibleId(id, timeout = 1000) {
   } catch (_) {
     return false;
   }
+}
+
+async function ensureRegisteredBitAssetForSend() {
+  console.log('[E2E TEST] Reserve + register BitAsset (deposit alone has no send pills)');
+  const reserveTxid = await submitViaE2ETop('reserve');
+  console.log('[E2E TEST] reserve txid:', reserveTxid);
+  mineBitAssetsTx(reserveTxid);
+  await tapSyncButton();
+  await sleep(5000);
+
+  let registerTxid;
+  try {
+    registerTxid = await submitViaE2ETop('register');
+  } catch (error) {
+    const message = String(error?.message ?? error);
+    if (!/reservation|wallet UTXO/i.test(message)) throw error;
+    await tapSyncButton();
+    await sleep(5000);
+    registerTxid = await submitViaE2ETop('register');
+  }
+  console.log('[E2E TEST] register txid:', registerTxid);
+  mineBitAssetsTx(registerTxid);
+}
+
+async function submitViaE2ETop(operation) {
+  await openBitAssetsTools();
+  try {
+    await element(by.id('BitAssetsWalletScreen')).scroll(1200, 'up');
+  } catch (_) {}
+  await element(by.id(`BitAssetsE2ETopSubmit-${operation}`)).tap();
+  return waitForSubmitTxid();
+}
+
+async function waitForSubmitTxid(previousTxid) {
+  const deadline = Date.now() + 90000;
+  while (Date.now() < deadline) {
+    if (await resultHasTxid(1000)) {
+      const txid = extractTxid(await extractTextFromElementById('BitAssetsResultText'));
+      if (!previousTxid || txid !== previousTxid) return txid;
+    }
+    if (await isExistingId('BitAssetsError', 1000)) {
+      let errorText = '<unreadable>';
+      try {
+        errorText = await extractTextFromElementById('BitAssetsErrorText');
+      } catch (_) {}
+      throw new Error(`BitAssets submit failed: ${errorText}`);
+    }
+    await sleep(1000);
+  }
+  throw new Error('Timed out waiting for BitAssets submit txid');
+}
+
+async function resultHasTxid(timeout = 1000) {
+  if (!(await isExistingId('BitAssetsResultText', timeout))) return false;
+  try {
+    const result = await extractTextFromElementById('BitAssetsResultText');
+    return /[0-9a-f]{64}/i.test(String(result));
+  } catch (_) {
+    return false;
+  }
+}
+
+function extractTxid(text) {
+  const match = String(text).match(/[0-9a-f]{64}/i);
+  if (!match) throw new Error(`Could not extract txid from BitAssets result: ${text}`);
+  return match[0];
 }
 
 
