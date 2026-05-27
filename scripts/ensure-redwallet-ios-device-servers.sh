@@ -27,9 +27,42 @@ nohup env BITASSETS_RPC_URL="${BITASSETS_RPC_URL:-http://100.76.117.106:6004}" \
   node "$ROOT_DIR/scripts/redwallet-bitassets-command-server.js" >>"$SELFTEST_DIR/command-server-restart.log" 2>&1 &
 sleep 1
 
-health_v4="$(curl -sS -m 3 http://127.0.0.1:6123/health 2>/dev/null || true)"
-health_v6=""
-if [[ -n "$USB_HOST" ]]; then
-  health_v6="$(curl -g -sS -m 3 "http://[${USB_HOST}]:6123/health" 2>/dev/null || true)"
+LAN_HOST="${REDWALLET_PHONE_LAN_HOST:-192.168.1.50}"
+TS_HOST="$(command -v tailscale >/dev/null 2>&1 && tailscale ip -4 2>/dev/null | head -1 || true)"
+
+health_loopback="$(curl -sS -m 3 http://127.0.0.1:6123/health 2>/dev/null || true)"
+health_lan=""
+health_tailscale=""
+health_usb=""
+if [[ -n "$LAN_HOST" ]]; then
+  health_lan="$(curl -sS -m 3 "http://${LAN_HOST}:6123/health" 2>/dev/null || true)"
 fi
-printf 'usb_tunnel_mac=%s\nv4_collector=%s\nv6_collector=%s\n' "$USB_HOST" "$health_v4" "$health_v6"
+if [[ -n "$TS_HOST" ]]; then
+  health_tailscale="$(curl -sS -m 3 "http://${TS_HOST}:6123/health" 2>/dev/null || true)"
+fi
+if [[ -n "$USB_HOST" ]]; then
+  health_usb="$(curl -g -sS -m 3 "http://[${USB_HOST}]:6123/health" 2>/dev/null || true)"
+fi
+
+command_health_loopback="$(curl -sS -m 3 http://127.0.0.1:6124/health 2>/dev/null || true)"
+command_health_lan=""
+if [[ -n "$LAN_HOST" ]]; then
+  command_health_lan="$(curl -sS -m 3 "http://${LAN_HOST}:6124/health" 2>/dev/null || true)"
+fi
+
+printf 'usb_tunnel_mac=%s\n' "$USB_HOST"
+printf 'collector_loopback=%s\n' "$health_loopback"
+printf 'collector_lan_%s=%s\n' "$LAN_HOST" "$health_lan"
+printf 'collector_tailscale_%s=%s\n' "${TS_HOST:-none}" "$health_tailscale"
+printf 'collector_usb=%s\n' "$health_usb"
+printf 'command_loopback=%s\n' "$command_health_loopback"
+printf 'command_lan_%s=%s\n' "$LAN_HOST" "$command_health_lan"
+
+lan_ok=0
+if [[ "$health_lan" == ok* || "$health_lan" == *'"ok":true'* ]]; then
+  lan_ok=1
+fi
+if [[ "$lan_ok" -eq 0 && ( "$health_loopback" != ok* && "$health_loopback" != *'"ok":true'* ) ]]; then
+  echo "WARN collector not healthy on loopback or LAN; phones need ${LAN_HOST}:6123 reachable" >&2
+  exit 1
+fi
