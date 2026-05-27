@@ -28,6 +28,7 @@ import { setWalletIdMustUseBBQR } from '../../blue_modules/ur';
 import { redWalletEvent } from '../../helpers/redwalletDeviceLogger';
 import { REDWALLET_USB_TUNNEL_COMMAND, REDWALLET_USB_TUNNEL_HOST_FILE } from '../../helpers/redwalletRealDeviceEndpoints';
 import { isRedWalletIosRealDeviceProofEnabled } from '../../helpers/redwalletRealDeviceProof';
+import { REDWALLET_SIGNET_BITASSETS_RPC_URL } from '../../helpers/redwalletSignetEndpoints.generated';
 
 const BlueApp = BlueAppClass.getInstance();
 const BITASSETS_REAL_DEVICE_SELFTEST_COMMAND = `${RNFS.DocumentDirectoryPath}/redwallet-bitassets-selftest-command.json`;
@@ -52,7 +53,10 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: numbe
   }
 }
 
-async function probeBitAssetsRpc(rpcUrl: string, timeoutMs = BITASSETS_REAL_DEVICE_COMMAND_FETCH_TIMEOUT_MS): Promise<Record<string, unknown>> {
+async function probeBitAssetsRpc(
+  rpcUrl: string,
+  timeoutMs = BITASSETS_REAL_DEVICE_COMMAND_FETCH_TIMEOUT_MS,
+): Promise<Record<string, unknown>> {
   const startedAt = Date.now();
   try {
     const response = await fetchWithTimeout(
@@ -98,10 +102,7 @@ async function resolveBitAssetsRealDeviceCommandUrls(): Promise<string[]> {
   return urls;
 }
 
-async function fetchBitAssetsRealDeviceCommand(
-  walletID = '',
-  options: { consumeLocalFile?: boolean } = {},
-): Promise<string> {
+async function fetchBitAssetsRealDeviceCommand(walletID = '', options: { consumeLocalFile?: boolean } = {}): Promise<string> {
   const consumeLocalFile = options.consumeLocalFile !== false;
   const exists = await RNFS.exists(BITASSETS_REAL_DEVICE_SELFTEST_COMMAND);
   if (exists) {
@@ -801,7 +802,10 @@ export const StorageProvider = ({ children }: { children: React.ReactNode }) => 
         wallet.setLabel(String(command.label ?? 'iPhone BitAssets'));
         wallet.setUserHasSavedExport(true);
         const quicUrl = command.bitassetsLiteWalletQuicUrl === undefined ? undefined : String(command.bitassetsLiteWalletQuicUrl ?? '');
-        await wallet.generate(String(command.rpcUrl ?? command.bitassetsRpcUrl ?? ''), quicUrl);
+        const rpcUrl = normalizeBitAssetsRpcUrlForRuntime(
+          String(command.rpcUrl ?? command.bitassetsRpcUrl ?? REDWALLET_SIGNET_BITASSETS_RPC_URL),
+        );
+        await wallet.generate(rpcUrl, quicUrl);
         if (!command.skipSync) {
           await wallet.syncBitAssets();
         }

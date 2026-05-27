@@ -40,7 +40,8 @@ const defaultCommand = {
 };
 
 fs.mkdirSync(runDir, { recursive: true });
-if (!fs.existsSync(commandPath)) {
+// Leave command.json absent until proof scripts seed reserve/register — avoid phones polling createWallet.
+if (!fs.existsSync(commandPath) && process.env.REDWALLET_BITASSETS_COMMAND_SEED_DEFAULT === '1') {
   fs.writeFileSync(commandPath, `${JSON.stringify(defaultCommand, null, 2)}\n`);
 }
 try {
@@ -52,7 +53,7 @@ try {
 
 const summary = [
   `url=http://${host}:${port}/command`,
-  `command=${JSON.stringify(JSON.parse(fs.readFileSync(commandPath, 'utf8')))}`,
+  `command=${fs.existsSync(commandPath) ? JSON.stringify(JSON.parse(fs.readFileSync(commandPath, 'utf8'))) : '(none — 204 until seeded)'}`,
   `run_dir=${runDir}`,
 ].join('\n');
 fs.writeFileSync(path.join(runDir, 'SUMMARY.txt'), `${summary}\n`);

@@ -45,22 +45,35 @@ probe_bitassets_rpc_light() {
 
 log "START run_dir=$RUN_DIR"
 
+probe_usb_devicectl_copy() {
+  local udid="${REDWALLET_FORCE_LAUNCH_UDID:-}"
+  [[ -n "$udid" ]] || return 0
+  local tmp out="$RUN_DIR/probes/usb-devicectl-copy.txt"
+  mkdir -p "$RUN_DIR/probes"
+  tmp="$(mktemp)"
+  printf 'preflight-usb-probe\n' >"$tmp"
+  set +e
+  perl -e 'alarm 20; exec @ARGV' 20 xcrun devicectl device copy to \
+    --device "$udid" \
+    --domain-type appDataContainer \
+    --domain-identifier "$BUNDLE_ID" \
+    --source "$tmp" \
+    --destination "Documents/redwallet-preflight-usb-probe.txt" >"$out" 2>&1
+  local rc=$?
+  set -e
+  rm -f "$tmp"
+  log "PROBE usb-devicectl-copy exit=$rc -> $out"
+  return "$rc"
+}
+
 USB_TUNNEL_MAC="$("$ROOT_DIR/scripts/redwallet-usb-tunnel-mac-ipv6.sh" "${REDWALLET_FORCE_LAUNCH_UDID:-}" 2>/dev/null || true)"
 if [[ -n "$USB_TUNNEL_MAC" ]]; then
   log "USB_TUNNEL_MAC=$USB_TUNNEL_MAC"
   if [[ -n "${REDWALLET_FORCE_LAUNCH_UDID:-}" ]]; then
-    set +e
-    curl -g -sS -m 5 "http://[${USB_TUNNEL_MAC}]:6123/health" >/dev/null 2>&1
-    usb_preflight_rc=$?
-    set -e
-    if [[ "$usb_preflight_rc" -eq 28 ]] &&
-      ! curl -sS -m 5 http://192.168.1.50:6123/health 2>/dev/null | grep -qE '"ok":true|^ok$'; then
-      log "BLOCKER collector-health-usb timeout (curl 28) tunnel=$USB_TUNNEL_MAC and LAN collector down"
-      echo "blocker=usb_collector_timeout" >"$RUN_DIR/BLOCKER.txt"
+    if ! probe_usb_devicectl_copy; then
+      log "BLOCKER usb-devicectl-copy failed for $REDWALLET_FORCE_LAUNCH_UDID"
+      echo "blocker=usb_devicectl_copy_failed" >"$RUN_DIR/BLOCKER.txt"
       exit 2
-    fi
-    if [[ "$usb_preflight_rc" -eq 28 ]]; then
-      log "USB_TUNNEL_WARN curl_28 Mac self-probe (LAN collector ok)"
     fi
   fi
   probe ensure-servers bash -c "cd '$ROOT_DIR' && scripts/ensure-redwallet-ios-device-servers.sh" || true
@@ -69,9 +82,22 @@ fi
 # Latest phone-reachable signet endpoints (no docker ops here).
 probe signet-endpoints bash -c "cd '$ROOT_DIR' && scripts/redwallet-signet-endpoints.sh" || true
 if [[ "${REDWALLET_SKIP_BITASSETS_RESTART:-0}" == 1 ]]; then
-  probe ensure-bitassets-rpc probe_bitassets_rpc_light || true
+  if ! probe ensure-bitassets-rpc probe_bitassets_rpc_light; then
+    log "BLOCKER bitassets_rpc_down (light probe)"
+    echo "blocker=bitassets_rpc_down" >"$RUN_DIR/BLOCKER.txt"
+    exit 2
+  fi
 else
-  probe ensure-bitassets-rpc perl -e 'alarm 35; exec @ARGV' bash "$ROOT_DIR/scripts/ensure-bitassets-rpc-responsive.sh" || true
+  if ! probe ensure-bitassets-rpc perl -e 'alarm 60; exec @ARGV' bash "$ROOT_DIR/scripts/ensure-bitassets-rpc-responsive.sh"; then
+    log "BLOCKER bitassets_rpc_down (ensure-bitassets-rpc-responsive)"
+    echo "blocker=bitassets_rpc_down" >"$RUN_DIR/BLOCKER.txt"
+    exit 2
+  fi
+fi
+if ! grep -q '"result"' "$RUN_DIR/probes/ensure-bitassets-rpc.txt" 2>/dev/null; then
+  log "BLOCKER bitassets_rpc_no_result"
+  echo "blocker=bitassets_rpc_no_result" >"$RUN_DIR/BLOCKER.txt"
+  exit 2
 fi
 ENV_FILE="$(ls -t "$LOG_ROOT"/signet-endpoints-*/redwallet-signet.env 2>/dev/null | head -1 || true)"
 if [[ -n "$ENV_FILE" && -f "$ENV_FILE" ]]; then
@@ -116,55 +142,45 @@ resolve_command_server_dir() {
 }
 
 seed_bitassets_command() {
-  local cmd_dir host rpc quic
+  local cmd_dir rpc quic host_only quic_host
   cmd_dir="$(resolve_command_server_dir)"
   [[ -n "$cmd_dir" && -d "$cmd_dir" ]] || return 0
-  # Phone BitAssets proof uses Luke signet host (192.168.1.236) when reachable from device.
-  host="${REDWALLET_FORCE_PHONE_HOST:-${REDWALLET_PHONE_SIGNET_HOST:-192.168.1.236}}"
-  if [[ -z "${REDWALLET_FORCE_PHONE_HOST:-}" ]] &&
-    grep -qE '^[1-5][0-9]{2}$' "$RUN_DIR/probes/bitassets-rpc-lan.txt" 2>/dev/null; then
-    host="${REDWALLET_PHONE_LAN_HOST:-192.168.1.50}"
-  fi
-  if [[ -z "${REDWALLET_FORCE_PHONE_HOST:-}" ]] &&
-    ! grep -qE '^[1-5][0-9]{2}$' "$RUN_DIR/probes/bitassets-rpc-lan.txt" 2>/dev/null &&
-    ! grep -qE '^[1-5][0-9]{2}$' "$RUN_DIR/probes/bitassets-rpc-ts.txt" 2>/dev/null; then
-    host="100.76.117.106"
-  elif [[ -z "${REDWALLET_FORCE_PHONE_HOST:-}" ]] &&
-    ! grep -qE '^[1-5][0-9]{2}$' "$RUN_DIR/probes/bitassets-rpc-lan.txt" 2>/dev/null; then
-    host="100.76.117.106"
-  fi
-  rpc="http://${host}:6004"
-  quic="${host}:6104"
+  rpc="${REDWALLET_BITASSETS_RPC_MAC:-${BITASSETS_RPC_URL:-http://192.168.1.50:6004}}"
+  host_only="${rpc#http://}"
+  host_only="${host_only#https://}"
+  host_only="${host_only%%/*}"
+  quic_host="${host_only%%:*}"
+  quic="${quic_host}:6104"
   op="${REDWALLET_BITASSETS_COMMAND_OPERATION:-reserve}"
   asset_name="${REDWALLET_BITASSETS_ASSET_NAME:-RWF${STAMP}}"
   case "$op" in
     reserve)
       cat >"$cmd_dir/command.json" <<EOF
-{"operation":"reserve","commandId":"iphone12-reserve-${STAMP}","name":"${asset_name}","feeSats":0}
+{"operation":"reserve","commandId":"iphone12-reserve-${STAMP}","name":"${asset_name}","feeSats":0,"rpcUrl":"${rpc}","bitassetsLiteWalletQuicUrl":"${quic}"}
 EOF
       ;;
     register)
       cat >"$cmd_dir/command.json" <<EOF
-{"operation":"register","commandId":"iphone12-register-${STAMP}","name":"${asset_name}","initialSupply":1000,"feeSats":0}
+{"operation":"register","commandId":"iphone12-register-${STAMP}","name":"${asset_name}","initialSupply":1000,"feeSats":0,"rpcUrl":"${rpc}","bitassetsLiteWalletQuicUrl":"${quic}"}
 EOF
       ;;
     reserveRegister)
       cat >"$cmd_dir/command.json" <<EOF
-{"operation":"reserveRegister","commandId":"iphone12-reserve-register-${STAMP}","name":"${asset_name}","initialSupply":1000,"feeSats":0}
+{"operation":"reserveRegister","commandId":"iphone12-reserve-register-${STAMP}","name":"${asset_name}","initialSupply":1000,"feeSats":0,"rpcUrl":"${rpc}","bitassetsLiteWalletQuicUrl":"${quic}"}
 EOF
       ;;
     transfer)
       cat >"$cmd_dir/command.json" <<EOF
-{"operation":"transfer","commandId":"iphone12-transfer-${STAMP}","assetId":"${REDWALLET_BITASSETS_TRANSFER_ASSET_ID:-}","destinationAddress":"${REDWALLET_BITASSETS_TRANSFER_DEST:-}","amount":${REDWALLET_BITASSETS_TRANSFER_AMOUNT:-1},"feeSats":0}
+{"operation":"transfer","commandId":"iphone12-transfer-${STAMP}","assetId":"${REDWALLET_BITASSETS_TRANSFER_ASSET_ID:-}","destinationAddress":"${REDWALLET_BITASSETS_TRANSFER_DEST:-}","amount":${REDWALLET_BITASSETS_TRANSFER_AMOUNT:-1},"feeSats":0,"rpcUrl":"${rpc}","bitassetsLiteWalletQuicUrl":"${quic}"}
 EOF
       ;;
     *)
       cat >"$cmd_dir/command.json" <<EOF
-{"operation":"createWallet","commandId":"iphone12-proof-${STAMP}","label":"iPhone 12 BitAssets","rpcUrl":"$rpc","bitassetsLiteWalletQuicUrl":"$quic","skipSync":true}
+{"operation":"createWallet","commandId":"iphone12-proof-${STAMP}","label":"iPhone 12 BitAssets","rpcUrl":"${rpc}","bitassetsLiteWalletQuicUrl":"${quic}","skipSync":true}
 EOF
       ;;
   esac
-  log "SEEDED command.json operation=$op host=$host dir=$cmd_dir"
+  log "SEEDED command.json operation=$op rpc=$rpc dir=$cmd_dir"
 }
 
 # Do not GET /command during preflight — the server is one-shot and would steal the phone payload.

@@ -17,6 +17,7 @@ import { BiometricType, unlockWithBiometrics, useBiometrics } from '../hooks/use
 import loc from '../loc';
 import { useStorage } from '../hooks/context/useStorage';
 import { PasswordInput, PasswordInputHandle } from '../components/PasswordInput';
+import { isRedWalletIosRealDeviceProofEnabled } from '../helpers/redwalletRealDeviceProof';
 
 enum AuthType {
   Encrypted,
@@ -165,6 +166,12 @@ const UnlockWith: React.FC = () => {
   useEffect(() => {
     const startUnlock = async () => {
       const storageIsEncrypted = await isStorageEncrypted();
+      // Headless devicectl launch cannot complete Face ID; unlock storage for proof builds.
+      if (isRedWalletIosRealDeviceProofEnabled() && !storageIsEncrypted) {
+        await startAndDecrypt();
+        successfullyAuthenticated();
+        return;
+      }
       const biometricUseCapableAndEnabled = await isBiometricUseCapableAndEnabled();
       const biometricsUseEnabled = await isBiometricUseEnabled();
       const biometricType = biometricUseCapableAndEnabled ? deviceBiometricType : undefined;

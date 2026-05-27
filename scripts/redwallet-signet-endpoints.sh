@@ -12,6 +12,9 @@ BITASSETS_PLATFORM="${BITASSETS_PLATFORM:-linux/amd64}"
 
 mkdir -p "$OUT_DIR"
 
+# shellcheck source=redwallet-colima-docker-env.sh
+source "$ROOT_DIR/scripts/redwallet-colima-docker-env.sh"
+
 # LMDB services fail without Colima vm.overcommit_memory=1 on this Mac.
 if [[ -x "${LOCAL_DEV}/scripts/ensure-colima-overcommit.sh" ]]; then
   "${LOCAL_DEV}/scripts/ensure-colima-overcommit.sh" || true

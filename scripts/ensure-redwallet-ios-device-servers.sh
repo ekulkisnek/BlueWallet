@@ -7,7 +7,7 @@ LOG_ROOT="${REDWALLET_LOG_ROOT:-/Volumes/T705/redwallet-logs}"
 SELFTEST_DIR="${REDWALLET_IOS_SELFTEST_DIR:-$LOG_ROOT/ios-real-device-selftest-20260526-174300}"
 COLLECTOR_DIR="${REDWALLET_LOG_COLLECTOR_DIR:-$SELFTEST_DIR/js-event-collector}"
 COMMAND_DIR="${REDWALLET_BITASSETS_COMMAND_DIR:-$SELFTEST_DIR/command-server}"
-USB_HOST="$("$ROOT_DIR/scripts/redwallet-usb-tunnel-mac-ipv6.sh" 2>/dev/null || true)"
+USB_HOST="$("$ROOT_DIR/scripts/redwallet-usb-tunnel-mac-ipv6.sh" "${REDWALLET_FORCE_LAUNCH_UDID:-}" 2>/dev/null || true)"
 
 mkdir -p "$COLLECTOR_DIR" "$COMMAND_DIR"
 

@@ -4,6 +4,10 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOG_ROOT="${REDWALLET_LOG_ROOT:-/Volumes/T705/redwallet-logs}"
+LOCAL_DEV="${LOCAL_DEV:-/Volumes/T705/code/drivechain-wallet-dev/local-dev}"
+if [[ -x "$LOCAL_DEV/scripts/ensure-colima-overcommit.sh" ]]; then
+  bash "$LOCAL_DEV/scripts/ensure-colima-overcommit.sh" >/dev/null 2>&1 || true
+fi
 ENV_FILE="$(ls -t "$LOG_ROOT"/signet-endpoints-*/redwallet-signet.env 2>/dev/null | head -1 || true)"
 METRO_URL="${METRO_URL:-http://100.76.117.106:8081}"
 COLLECTOR_URL="${REDWALLET_LOG_COLLECTOR_HEALTH_URL:-http://192.168.1.50:6123/health}"

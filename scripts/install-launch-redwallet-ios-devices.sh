@@ -73,11 +73,13 @@ wait_for_signed_app() {
     log "DEVICE_LAUNCH_EXIT[$udid]:$launch_exit"
   done
 
-  if [ -x "$ROOT_DIR/scripts/monitor-redwallet-ios-real-devices.sh" ]; then
+  if [[ "${REDWALLET_SKIP_IOS_MONITOR:-0}" != 1 ]] && [ -x "$ROOT_DIR/scripts/monitor-redwallet-ios-real-devices.sh" ]; then
     log "MONITOR_START seconds=$MONITOR_SECONDS"
     REDWALLET_IOS_MONITOR_RUN_DIR="$RUN_DIR/real-device-monitor" \
       "$ROOT_DIR/scripts/monitor-redwallet-ios-real-devices.sh" "$BUNDLE_ID" "$MONITOR_SECONDS" "${DEVICES[@]}"
     log "MONITOR_EXIT:$?"
+  else
+    log "MONITOR_SKIP REDWALLET_SKIP_IOS_MONITOR=${REDWALLET_SKIP_IOS_MONITOR:-0}"
   fi
 
   xcrun devicectl list devices --columns '*' > "$RUN_DIR/devices-after.txt" 2>&1 || true

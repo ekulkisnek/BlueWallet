@@ -247,7 +247,7 @@ export function applyBitAssetsE2ETestDefaults(
   }
   if (operation === 'transfer') {
     nextValues.destinationAddress = nextValues.destinationAddress || defaults.walletAddress || '';
-    nextValues.assetId = nextValues.assetId || defaults.spendableAssetId || defaults.lastRegisterTxid || '';
+    nextValues.assetId = nextValues.assetId || defaults.spendableAssetId || '';
     nextValues.amount = nextValues.amount || '1';
   }
 

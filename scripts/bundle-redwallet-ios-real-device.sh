@@ -23,10 +23,15 @@ fi
 log "START app=$APP"
 cd "$ROOT_DIR"
 
-USB_HOST="$("$ROOT_DIR/scripts/redwallet-usb-tunnel-mac-ipv6.sh" 2>/dev/null || true)"
+# Physical iPhones on Wi‑Fi use Mac LAN docker ports; avoid Tailscale-only hosts in embedded bundle.
+export REDWALLET_BITASSETS_RPC_MAC="${REDWALLET_BITASSETS_RPC_MAC:-http://192.168.1.50:6004}"
+export REDWALLET_PHONE_HOST="${REDWALLET_PHONE_HOST:-192.168.1.50}"
+bash "$ROOT_DIR/scripts/generate-redwallet-signet-endpoints-ts.sh" | tee -a "$RUN_DIR/bundle.log"
+
+USB_HOST="$("$ROOT_DIR/scripts/redwallet-usb-tunnel-mac-ipv6.sh" "${REDWALLET_FORCE_LAUNCH_UDID:-}" 2>/dev/null || true)"
 if [[ -z "$USB_HOST" ]]; then
-  USB_HOST='fd26:d730:42fb::2'
-  log "WARN no fd* USB tunnel on Mac; using fallback $USB_HOST"
+  log "BLOCKER no Core Device USB tunnel for bundle (set REDWALLET_FORCE_LAUNCH_UDID or plug LiPhone)"
+  exit 1
 else
   log "USB_TUNNEL_MAC=$USB_HOST"
 fi

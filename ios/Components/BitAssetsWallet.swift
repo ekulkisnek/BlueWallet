@@ -65,10 +65,11 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
             let rpcUrl = normalizeRpcUrlForCurrentRuntime(requestedRpcUrl)
             try validateRpcUrl(rpcUrl)
             let requestedQuicUrl = ((config["bitassetsLiteWalletQuicUrl"] ?? config["bitassets_lite_wallet_quic_url"] ?? config["quicUrl"]) as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let quicUrl = normalizeQuicUrlForCurrentRuntime(requestedQuicUrl, rpcUrl: rpcUrl)
             var configureFields: [String: Any] = ["rpcUrl": rpcUrl]
-            if !requestedQuicUrl.isEmpty {
-                try validateQuicUrl(requestedQuicUrl)
-                configureFields["bitassetsLiteWalletQuicUrl"] = requestedQuicUrl
+            if !quicUrl.isEmpty {
+                try validateQuicUrl(quicUrl)
+                configureFields["bitassetsLiteWalletQuicUrl"] = quicUrl
             }
             if requestedRpcUrl != rpcUrl {
                 configureFields["requestedRpcUrl"] = requestedRpcUrl
@@ -76,17 +77,17 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
             eventLog("configure", "begin", configureFields)
             let groupDefaults = UserDefaults(suiteName: "group.com.layertwolabs.bluewallet") ?? UserDefaults.standard
             groupDefaults.set(rpcUrl, forKey: "bitassetsRpcUrl")
-            if requestedQuicUrl.isEmpty {
+            if quicUrl.isEmpty {
                 groupDefaults.removeObject(forKey: "bitassetsLiteWalletQuicUrl")
             } else {
-                groupDefaults.set(requestedQuicUrl, forKey: "bitassetsLiteWalletQuicUrl")
+                groupDefaults.set(quicUrl, forKey: "bitassetsLiteWalletQuicUrl")
             }
             groupDefaults.synchronize()
             if handle != 0 {
                 floresta_bitassets_wallet_free(handle)
                 handle = 0
             }
-            let configuredQuicUrl: Any = requestedQuicUrl.isEmpty ? NSNull() : requestedQuicUrl
+            let configuredQuicUrl: Any = quicUrl.isEmpty ? NSNull() : quicUrl
             let responseData = try JSONSerialization.data(withJSONObject: [
                 "configured": true,
                 "rpcUrl": rpcUrl,
@@ -413,21 +414,42 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
         }
     }
 
+    private let signetPhoneHost = "192.168.1.50"
+
     private func normalizeRpcUrlForCurrentRuntime(_ rpcUrl: String) -> String {
-        #if DEBUG
         #if targetEnvironment(simulator)
         return rpcUrl
         #else
         guard var components = URLComponents(string: rpcUrl),
               let host = components.host?.lowercased(),
-              host == "localhost" || host == "::1" || host.hasPrefix("127.") || host == "100.76.117.106" else {
+              host == "localhost" || host == "::1" || host.hasPrefix("127.") else {
             return rpcUrl
         }
-        components.host = "192.168.1.50"
+        components.host = signetPhoneHost
         return components.url?.absoluteString ?? rpcUrl
         #endif
+    }
+
+    private func normalizeQuicUrlForCurrentRuntime(_ quicUrl: String, rpcUrl: String) -> String {
+        #if targetEnvironment(simulator)
+        return quicUrl
         #else
-        return rpcUrl
+        let trimmed = quicUrl.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            guard let rpcComponents = URLComponents(string: rpcUrl), let rpcHost = rpcComponents.host else {
+                return ""
+            }
+            let port = rpcComponents.port ?? 6004
+            let quicPort = port == 6004 ? 6104 : port
+            return "\(rpcHost):\(quicPort)"
+        }
+        let host = trimmed.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? ""
+        let lowered = host.lowercased()
+        if lowered == "localhost" || lowered == "::1" || lowered.hasPrefix("127.") {
+            let port = trimmed.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false).dropFirst().first.map(String.init) ?? "6104"
+            return "\(signetPhoneHost):\(port)"
+        }
+        return trimmed
         #endif
     }
 

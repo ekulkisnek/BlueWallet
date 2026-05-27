@@ -10,6 +10,7 @@ RUN_DIR="${LOG_ROOT%/}/preflight-liphone-${STAMP}"
 LIPHONE_UDID="${REDWALLET_LIPHONE_UDID:-00008020-0011204911F3002E}"
 LIPHONE_HOST="${REDWALLET_LIPHONE_HOST:-192.168.1.149}"
 IPHONE12_UDID="${REDWALLET_IPHONE12_UDID:-00008101-000128643E28001E}"
+BUNDLE_ID="${REDWALLET_IOS_BUNDLE_ID:-com.lukekensik.redwallet.dev}"
 MAC_RPC="${REDWALLET_BITASSETS_RPC_MAC:-http://192.168.1.50:6004}"
 
 mkdir -p "$RUN_DIR/probes"
@@ -75,6 +76,25 @@ device_connected() {
   local line="$1"
   [[ "$line" == *connected* || "$line" == *"available (paired)"* || "$line" == *connecting* ]]
 }
+
+probe_usb_devicectl_copy() {
+  local tmp out="$RUN_DIR/probes/usb-devicectl-copy.txt"
+  tmp="$(mktemp)"
+  printf 'preflight-usb-probe\n' >"$tmp"
+  set +e
+  perl -e 'alarm 20; exec @ARGV' 20 xcrun devicectl device copy to \
+    --device "$REDWALLET_FORCE_LAUNCH_UDID" \
+    --domain-type appDataContainer \
+    --domain-identifier "$BUNDLE_ID" \
+    --source "$tmp" \
+    --destination "Documents/redwallet-preflight-usb-probe.txt" >"$out" 2>&1
+  local rc=$?
+  set -e
+  rm -f "$tmp"
+  log "PROBE usb-devicectl-copy exit=$rc -> $out"
+  return "$rc"
+}
+
 
 log "START run_dir=$RUN_DIR udid=$REDWALLET_FORCE_LAUNCH_UDID host=$REDWALLET_FORCE_PHONE_HOST rpc=$BITASSETS_RPC_URL"
 
@@ -143,35 +163,24 @@ if [[ -z "$USB_TUNNEL_MAC" ]]; then
 else
   log "USB_TUNNEL_MAC=$USB_TUNNEL_MAC"
   echo "$USB_TUNNEL_MAC" >"$RUN_DIR/usb-tunnel-mac.txt"
-  set +e
-  curl -g -sS -m 5 "http://[${USB_TUNNEL_MAC}]:6123/health" >"$RUN_DIR/probes/collector-health-usb.txt" 2>&1
-  usb_rc=$?
-  set -e
-  log "PROBE collector-health-usb exit=$usb_rc"
-  lan_collector_ok=0
-  if probe collector-health-lan curl -sS -m 5 http://192.168.1.50:6123/health &&
-    grep -qE '"ok":true|^ok$' "$RUN_DIR/probes/collector-health-lan.txt" 2>/dev/null; then
-    lan_collector_ok=1
+  if ! probe_usb_devicectl_copy; then
+    blocker usb_devicectl_copy_failed \
+      "Core Device USB copy failed for $REDWALLET_FORCE_LAUNCH_UDID (app path for command/tunnel push)" \
+      "Unlock LiPhone; confirm $BUNDLE_ID installed; re-seat USB"
   fi
-  if [[ "$usb_rc" -eq 28 ]]; then
-    if [[ "$lan_collector_ok" -eq 1 ]]; then
-      log "USB_TUNNEL_WARN curl_28 Mac self-probe tunnel=$USB_TUNNEL_MAC (LAN collector ok; phone may use Wi-Fi)"
-    else
-      blocker usb_collector_timeout \
-        "USB collector health timed out (curl 28) tunnel=$USB_TUNNEL_MAC and LAN collector down" \
+  probe command-health-usb curl -g -sS -m 8 "http://[${USB_TUNNEL_MAC}]:6124/health" || true
+  if ! grep -qE '"ok":true|^ok$' "$RUN_DIR/probes/command-health-usb.txt" 2>/dev/null; then
+    probe command-health-lan curl -sS -m 5 http://192.168.1.50:6124/health || true
+    if ! grep -qE '"ok":true|^ok$' "$RUN_DIR/probes/command-health-lan.txt" 2>/dev/null; then
+      blocker usb_command_path_down \
+        "Neither USB command health ([${USB_TUNNEL_MAC}]:6124) nor LAN command server reachable" \
         "Run: scripts/ensure-redwallet-ios-device-servers.sh" \
-        "Re-seat USB; confirm LiPhone unlocked"
+        "Run: BITASSETS_RPC_URL='$MAC_RPC' node scripts/redwallet-bitassets-command-server.js"
     fi
-  elif ! grep -qE '"ok":true|^ok$' "$RUN_DIR/probes/collector-health-usb.txt" 2>/dev/null; then
-    if [[ "$lan_collector_ok" -eq 0 ]]; then
-      blocker usb_collector_unhealthy \
-        "USB collector not ok at [$USB_TUNNEL_MAC]:6123/health and LAN collector down" \
-        "Run: scripts/ensure-redwallet-ios-device-servers.sh"
-    else
-      log "USB_TUNNEL_WARN unhealthy Mac self-probe (LAN collector ok)"
-    fi
+    log "USB_COMMAND_LAN_OK USB tunnel command probe inconclusive; LAN command server healthy (Wi-Fi backup path)"
+  else
+    log "USB_COMMAND_OK tunnel=$USB_TUNNEL_MAC"
   fi
-  probe command-health-usb curl -g -sS -m 5 "http://[${USB_TUNNEL_MAC}]:6124/health" || true
 fi
 
 if [[ ! -f "$RUN_DIR/probes/collector-health-lan.txt" ]]; then

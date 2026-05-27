@@ -30,12 +30,13 @@ import { LightningArkWallet } from '../../class/wallets/lightning-ark-wallet.ts'
 import { resetScanWasBBQR } from '../../helpers/scan-qr.ts';
 import { BitAssetsWallet, hasBitAssetsWallet } from '../../class/wallets/bitassets-wallet';
 import { validateBitAssetsRpcUrl } from '../../blue_modules/BitAssetsWalletForms';
+import { REDWALLET_SIGNET_BITASSETS_RPC_URL } from '../../helpers/redwalletSignetEndpoints.generated';
 
 const DEFAULT_BITASSETS_RPC_URL = (() => {
   if (Platform.OS === 'android') return 'http://10.0.2.2:6004';
   if (Platform.OS === 'ios') {
     try {
-      if (__DEV__ && !isEmulatorSync()) return 'http://192.168.1.50:6004';
+      if (!isEmulatorSync()) return REDWALLET_SIGNET_BITASSETS_RPC_URL;
     } catch {
       // Fall through to the simulator/local default if device detection is unavailable.
     }

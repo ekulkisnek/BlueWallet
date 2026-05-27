@@ -21,47 +21,63 @@ import { Transaction } from './types';
 import { Platform } from 'react-native';
 import { isEmulatorSync } from 'react-native-device-info';
 import {
+  canonicalBitAssetsQuicUrlForRuntime,
+  canonicalBitAssetsRpcUrlForRuntime,
   isRedWalletIosPhysicalDevice,
   isRedWalletIosRealDeviceProofEnabled,
-  REDWALLET_PHONE_SIGNET_RPC_HOST,
 } from '../../helpers/redwalletRealDeviceProof';
 
-export function normalizeBitAssetsRpcUrlForRuntime(rpcUrl: string): string {
-  if (Platform.OS !== 'ios') return rpcUrl;
-  const proof = isRedWalletIosRealDeviceProofEnabled();
-  if (!proof && !__DEV__) return rpcUrl;
+function isLoopbackBitAssetsHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  return host === 'localhost' || host === '::1' || host.startsWith('127.');
+}
+
+function isLoopbackBitAssetsRpcUrl(rpcUrl: string): boolean {
+  if (!rpcUrl.trim()) return true;
   try {
-    if (isEmulatorSync()) return rpcUrl;
+    return isLoopbackBitAssetsHost(new URL(validateBitAssetsRpcUrl(rpcUrl)).hostname);
   } catch {
-    return rpcUrl;
+    return true;
   }
-  const phoneHost = proof && isRedWalletIosPhysicalDevice() ? REDWALLET_PHONE_SIGNET_RPC_HOST : '192.168.1.50';
-  let normalized = rpcUrl.replace(
-    /^(https?:\/\/)(?:localhost|\[::1\]|127(?:\.\d{1,3}){3})(:\d+)?(\/.*)?$/i,
-    (_match, protocol: string, port = '', path = '') => `${protocol}${phoneHost}${port}${path}`.replace(/\/$/, ''),
-  );
-  if (proof && isRedWalletIosPhysicalDevice()) {
-    normalized = normalized.replace(
-      /^(https?:\/\/)(?:100\.76\.117\.106|192\.168\.1\.50)(:\d+)?(\/.*)?$/i,
-      (_match, protocol: string, port = '', path = '') => `${protocol}${phoneHost}${port}${path}`.replace(/\/$/, ''),
-    );
+}
+
+function isLoopbackBitAssetsQuicUrl(quicUrl: string): boolean {
+  if (!quicUrl.trim()) return true;
+  const host = quicUrl.split(':')[0] ?? '';
+  return isLoopbackBitAssetsHost(host);
+}
+
+function shouldUseCanonicalBitAssetsEndpoints(): boolean {
+  if (Platform.OS !== 'ios') return false;
+  try {
+    if (isEmulatorSync()) return false;
+  } catch {
+    return isRedWalletIosPhysicalDevice();
   }
-  return normalized;
+  // Embedded main.jsbundle is built with --dev false; physical iPhones must never keep loopback RPC.
+  return isRedWalletIosPhysicalDevice() || isRedWalletIosRealDeviceProofEnabled() || __DEV__;
+}
+
+export function normalizeBitAssetsRpcUrlForRuntime(rpcUrl: string): string {
+  if (!shouldUseCanonicalBitAssetsEndpoints()) {
+    return validateBitAssetsRpcUrl(rpcUrl);
+  }
+  if (!rpcUrl.trim() || isLoopbackBitAssetsRpcUrl(rpcUrl)) {
+    return canonicalBitAssetsRpcUrlForRuntime();
+  }
+  return validateBitAssetsRpcUrl(rpcUrl);
 }
 
 export function normalizeBitAssetsLiteWalletQuicUrlForRuntime(rpcUrl: string, quicUrl: string): string {
-  const derived = quicUrl || deriveBitAssetsLiteWalletQuicUrl(normalizeBitAssetsRpcUrlForRuntime(rpcUrl)) || '';
-  if (Platform.OS !== 'ios' || !isRedWalletIosRealDeviceProofEnabled()) return derived;
-  try {
-    if (isEmulatorSync()) return derived;
-  } catch {
+  const resolvedRpc = normalizeBitAssetsRpcUrlForRuntime(rpcUrl);
+  const derived = quicUrl || deriveBitAssetsLiteWalletQuicUrl(resolvedRpc) || '';
+  if (!shouldUseCanonicalBitAssetsEndpoints()) {
     return derived;
   }
-  if (!isRedWalletIosPhysicalDevice()) return derived;
-  const host = REDWALLET_PHONE_SIGNET_RPC_HOST;
-  const portMatch = derived.match(/:(\d+)$/);
-  const port = portMatch ? portMatch[1] : '6104';
-  return `${host}:${port}`;
+  if (!derived.trim() || isLoopbackBitAssetsQuicUrl(derived)) {
+    return canonicalBitAssetsQuicUrlForRuntime();
+  }
+  return derived;
 }
 
 export class BitAssetsWallet extends LegacyWallet {
@@ -95,14 +111,23 @@ export class BitAssetsWallet extends LegacyWallet {
     if (!this._address && this.secret.startsWith('bitassets://')) {
       this._address = this.secret.slice('bitassets://'.length);
     }
+    if (shouldUseCanonicalBitAssetsEndpoints() && this.bitassetsRpcUrl) {
+      this.bitassetsRpcUrl = normalizeBitAssetsRpcUrlForRuntime(this.bitassetsRpcUrl);
+      this.bitassetsLiteWalletQuicUrl = normalizeBitAssetsLiteWalletQuicUrlForRuntime(
+        this.bitassetsRpcUrl,
+        this.bitassetsLiteWalletQuicUrl,
+      );
+    }
   }
 
   async generate(rpcUrl?: string, bitassetsLiteWalletQuicUrl?: string | null): Promise<void> {
-    this.bitassetsRpcUrl = validateBitAssetsRpcUrl(rpcUrl ?? this.bitassetsRpcUrl);
-    this.bitassetsLiteWalletQuicUrl =
+    this.bitassetsRpcUrl = normalizeBitAssetsRpcUrlForRuntime(validateBitAssetsRpcUrl(rpcUrl ?? this.bitassetsRpcUrl));
+    this.bitassetsLiteWalletQuicUrl = normalizeBitAssetsLiteWalletQuicUrlForRuntime(
+      this.bitassetsRpcUrl,
       bitassetsLiteWalletQuicUrl === undefined
         ? (deriveBitAssetsLiteWalletQuicUrl(this.bitassetsRpcUrl) ?? '')
-        : (bitassetsLiteWalletQuicUrl ?? '');
+        : (bitassetsLiteWalletQuicUrl ?? ''),
+    );
     await this.withBitAssetsEvent('generate', { rpcUrl: this.bitassetsRpcUrl }, async () => {
       const client = await this.getConfiguredClient();
       const address = await client.getNewAddress();
@@ -286,13 +311,19 @@ export class BitAssetsWallet extends LegacyWallet {
   }
 
   private logBitAssetsEvent(operation: string, status: string, fields: Record<string, unknown> = {}): void {
+    const rpcUrl = normalizeBitAssetsRpcUrlForRuntime(this.bitassetsRpcUrl || canonicalBitAssetsRpcUrlForRuntime());
+    const liteWalletQuicUrl = normalizeBitAssetsLiteWalletQuicUrlForRuntime(
+      rpcUrl,
+      this.bitassetsLiteWalletQuicUrl || canonicalBitAssetsQuicUrlForRuntime(),
+    );
     const payload = {
       component: 'js.BitAssetsWallet',
       operation,
       status,
       walletID: this.getID?.(),
       address: this._address || undefined,
-      rpcUrl: this.bitassetsRpcUrl || undefined,
+      rpcUrl,
+      bitassetsLiteWalletQuicUrl: liteWalletQuicUrl,
       time: new Date().toISOString(),
       ...fields,
     };

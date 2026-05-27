@@ -162,15 +162,17 @@ done
 
 sleep "$SECONDS_TO_CAPTURE"
 
-for pid in "${pids[@]}"; do
-  if kill -0 "$pid" >/dev/null 2>&1; then
-    kill "$pid" >/dev/null 2>&1 || true
-  fi
-done
+if ((${#pids[@]} > 0)); then
+  for pid in "${pids[@]}"; do
+    if kill -0 "$pid" >/dev/null 2>&1; then
+      kill "$pid" >/dev/null 2>&1 || true
+    fi
+  done
 
-for pid in "${pids[@]}"; do
-  wait "$pid" >/dev/null 2>&1 || true
-done
+  for pid in "${pids[@]}"; do
+    wait "$pid" >/dev/null 2>&1 || true
+  done
+fi
 
 for udid in "${DEVICES[@]}"; do
   safe_udid="${udid//[^A-Za-z0-9._-]/_}"

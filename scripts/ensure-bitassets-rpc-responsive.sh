@@ -8,7 +8,7 @@ source "$ROOT_DIR/scripts/redwallet-colima-docker-env.sh"
 
 LOCAL_DEV="${LOCAL_DEV:-/Volumes/T705/code/drivechain-wallet-dev/local-dev}"
 COMPOSE_FILE="${COMPOSE_FILE:-$LOCAL_DEV/docker-compose.local-minimal.yml}"
-RPC_URL="${BITASSETS_RPC_URL:-http://127.0.0.1:6004}"
+RPC_URL="${BITASSETS_RPC_URL:-http://192.168.1.50:6004}"
 TIMEOUT_SEC="${BITASSETS_RPC_PROBE_TIMEOUT_SEC:-5}"
 MAX_WAIT_HEALTH="${BITASSETS_RPC_HEALTH_WAIT_SEC:-45}"
 

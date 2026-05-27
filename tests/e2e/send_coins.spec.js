@@ -16,7 +16,7 @@ describe('BitAssets Send Coins E2E', () => {
 
   it('creates wallet, funds it, and sends coins to BitWindow address', async () => {
     await device.disableSynchronization();
-    
+
     const onWalletScreen = await isVisibleId('BitAssetsWalletScreen', 3000);
     if (!onWalletScreen) {
       let onAddWallet = await isVisibleId('WalletNameInput', 3000);
@@ -34,7 +34,7 @@ describe('BitAssets Send Coins E2E', () => {
           onAddWallet = true;
         }
       }
-      
+
       if (onAddWallet) {
         await element(by.id('WalletNameInput')).replaceText(walletLabel);
         await waitForId('ActivateBitAssetsButton');
@@ -49,7 +49,7 @@ describe('BitAssets Send Coins E2E', () => {
           await element(by.id('BitAssetsRpcUrlInput')).tapReturnKey();
         }
         await sleep(500);
-        
+
         await waitFor(element(by.id('Create')))
           .toBeVisible()
           .whileElement(by.id('ScrollView'))
@@ -93,7 +93,9 @@ describe('BitAssets Send Coins E2E', () => {
     await waitFor(element(by.id(/^BitAssetsAssetPill-/)).atIndex(0))
       .toBeVisible()
       .withTimeout(20000);
-    await element(by.id(/^BitAssetsAssetPill-/)).atIndex(0).tap();
+    await element(by.id(/^BitAssetsAssetPill-/))
+      .atIndex(0)
+      .tap();
     await sleep(500);
 
     // Input destination address (BitWindow's address)
@@ -102,7 +104,9 @@ describe('BitAssets Send Coins E2E', () => {
     await dismissKeyboardIfPresent();
 
     // Input amount
-    await waitFor(element(by.id('BitAssetsAmountInput'))).toBeVisible().withTimeout(5000);
+    await waitFor(element(by.id('BitAssetsAmountInput')))
+      .toBeVisible()
+      .withTimeout(5000);
     await element(by.id('BitAssetsAmountInput')).tap();
     await sleep(300);
     await element(by.id('BitAssetsAmountInput')).typeText(process.env.BITASSETS_SEND_COINS_AMOUNT || '1');
@@ -112,20 +116,20 @@ describe('BitAssets Send Coins E2E', () => {
     await element(by.id('BitAssetsMemoInput')).tap();
     await element(by.id('BitAssetsMemoInput')).replaceText('Sent from RedWallet E2E');
     await dismissKeyboardIfPresent();
-    
+
     // Tap next/send
     await element(by.id('BitAssetsSendButton')).tap();
-    
+
     // Wait for success screen
     await waitFor(element(by.text('Success')))
       .toBeVisible()
       .withTimeout(20000);
-    
+
     console.log('[E2E TEST] Send transaction completed successfully on mobile!');
-    
+
     // Mine L1 and L2 blocks to confirm the transfer
     mineBlocks();
-    
+
     console.log('[E2E TEST] All steps finished successfully!');
   });
 });
@@ -184,8 +188,7 @@ function mineBlocks() {
     timeout: Number(process.env.BITASSETS_E2E_POST_L1_MINE_TIMEOUT_MS || 120000),
   });
   const waitDepositProof = process.env.BITASSETS_E2E_WAIT_DEPOSIT_CONFIRM === '1';
-  const confirmEnv =
-    waitDepositProof && lastDepositTxid ? `BITASSETS_CONFIRM_TXID=${lastDepositTxid}` : '';
+  const confirmEnv = waitDepositProof && lastDepositTxid ? `BITASSETS_CONFIRM_TXID=${lastDepositTxid}` : '';
   if (waitDepositProof && lastDepositTxid) {
     console.log('[E2E TEST] Mining sidechain block (BMM) until deposit proof...');
   } else {
@@ -351,5 +354,3 @@ function extractTxid(text) {
   if (!match) throw new Error(`Could not extract txid from BitAssets result: ${text}`);
   return match[0];
 }
-
-
