@@ -98,11 +98,17 @@ async function resolveBitAssetsRealDeviceCommandUrls(): Promise<string[]> {
   return urls;
 }
 
-async function fetchBitAssetsRealDeviceCommand(walletID = ''): Promise<string> {
+async function fetchBitAssetsRealDeviceCommand(
+  walletID = '',
+  options: { consumeLocalFile?: boolean } = {},
+): Promise<string> {
+  const consumeLocalFile = options.consumeLocalFile !== false;
   const exists = await RNFS.exists(BITASSETS_REAL_DEVICE_SELFTEST_COMMAND);
   if (exists) {
     const rawCommand = await RNFS.readFile(BITASSETS_REAL_DEVICE_SELFTEST_COMMAND, 'utf8');
-    await RNFS.unlink(BITASSETS_REAL_DEVICE_SELFTEST_COMMAND).catch(() => undefined);
+    if (consumeLocalFile) {
+      await RNFS.unlink(BITASSETS_REAL_DEVICE_SELFTEST_COMMAND).catch(() => undefined);
+    }
     return rawCommand;
   }
 
@@ -180,7 +186,9 @@ async function runBitAssetsRealDeviceSelftestCommand(wallet: BitAssetsWalletClas
       throw new Error(`Unsupported BitAssets real-device selftest operation: ${operation}`);
     }
 
-    await wallet.syncBitAssets();
+    if (!isRedWalletIosRealDeviceProofEnabled()) {
+      await wallet.syncBitAssets();
+    }
     await RNFS.writeFile(
       BITASSETS_REAL_DEVICE_SELFTEST_RESULT,
       JSON.stringify({ ok: true, operation, txid, durationMs: Date.now() - startedAt, ts: new Date().toISOString() }),
@@ -671,10 +679,10 @@ export const StorageProvider = ({ children }: { children: React.ReactNode }) => 
 
   useEffect(() => {
     if (!isRedWalletIosRealDeviceProofEnabled() || realDeviceBitAssetsCommandRef.current || !walletsInitialized) return;
-    if (wallets.some(wallet => wallet.type === BitAssetsWalletClass.type)) return;
+    if (wallets.length === 0 || wallets.some(wallet => wallet.type === BitAssetsWalletClass.type)) return;
 
     (async () => {
-      const rawCommand = await fetchBitAssetsRealDeviceCommand();
+      const rawCommand = await fetchBitAssetsRealDeviceCommand('', { consumeLocalFile: false });
       if (!rawCommand) return;
 
       const startedAt = Date.now();
