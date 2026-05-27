@@ -732,20 +732,20 @@ export const StorageProvider = ({ children }: { children: React.ReactNode }) => 
           if (wallet.bitassetsRpcUrl !== rpcUrl) {
             wallet.bitassetsRpcUrl = rpcUrl;
           }
-          const rpcHealth = await probeBitAssetsRpc(rpcUrl);
-          redWalletEvent('real_device_bitassets_rpc_probe', {
-            walletID: wallet.getID?.(),
-            rpcUrl,
-            ...rpcHealth,
-          });
           redWalletEvent('real_device_bitassets_smoke_wallet', {
             walletID: wallet.getID?.(),
             address,
             rpcUrl,
             hasAddress: address.length > 0,
           });
-          // Run Mac command-server selftest (reserve/transfer) before sync — QUIC sync often times out first.
+          // Command-server selftest first — rpc probe can block 75s and QUIC sync may never return.
           await runBitAssetsRealDeviceSelftestCommand(wallet);
+          const rpcHealth = await probeBitAssetsRpc(rpcUrl);
+          redWalletEvent('real_device_bitassets_rpc_probe', {
+            walletID: wallet.getID?.(),
+            rpcUrl,
+            ...rpcHealth,
+          });
           let info: Awaited<ReturnType<BitAssetsWalletClass['syncBitAssets']>> | null = null;
           try {
             info = await wallet.syncBitAssets();
