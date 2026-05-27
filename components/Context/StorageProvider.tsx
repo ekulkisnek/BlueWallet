@@ -30,8 +30,8 @@ const BITASSETS_REAL_DEVICE_SELFTEST_COMMAND = `${RNFS.DocumentDirectoryPath}/re
 const BITASSETS_REAL_DEVICE_SELFTEST_RESULT = `${RNFS.DocumentDirectoryPath}/redwallet-bitassets-selftest-result.json`;
 const BITASSETS_REAL_DEVICE_COMMAND_URLS = [
   REDWALLET_USB_TUNNEL_COMMAND,
-  'http://100.76.117.106:6124/command',
   'http://192.168.1.50:6124/command',
+  'http://100.76.117.106:6124/command',
 ];
 const BTC_REAL_DEVICE_COMMAND = `${RNFS.DocumentDirectoryPath}/redwallet-btc-selftest-command.json`;
 const BTC_REAL_DEVICE_RESULT = `${RNFS.DocumentDirectoryPath}/redwallet-btc-selftest-result.json`;
