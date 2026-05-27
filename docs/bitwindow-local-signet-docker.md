@@ -86,6 +86,13 @@ cd /Volumes/T705/code/work-on-something-to-do-with/redwallet
 
 Confirms L1 tip alignment (Docker mainchain vs bitwindowd) and BitAssets sidechain blockcount via docker CLI; writes `current-redwallet-bitwindow-interop` under `/Volumes/T705/redwallet-logs/`. Full cross-wallet txids still need simulator/phone or GUI.
 
+Simulator interop (RedWallet → BitWindow address):
+
+```sh
+# Background (AutoCode): tmux session redwallet-send-coins-e2e
+BITASSETS_RPC_URL=http://127.0.0.1:6004 ./scripts/run-bitassets-send-coins-ios-e2e.sh
+```
+
 ## Phone proof (separate blocker)
 
 Phones: `docs/redwallet-phone-unlock-handoff.md` — do not poll CoreDevice while USB unplugged.
