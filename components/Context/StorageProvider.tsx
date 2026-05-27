@@ -26,7 +26,10 @@ import { redWalletEvent } from '../../helpers/redwalletDeviceLogger';
 const BlueApp = BlueAppClass.getInstance();
 const BITASSETS_REAL_DEVICE_SELFTEST_COMMAND = `${RNFS.DocumentDirectoryPath}/redwallet-bitassets-selftest-command.json`;
 const BITASSETS_REAL_DEVICE_SELFTEST_RESULT = `${RNFS.DocumentDirectoryPath}/redwallet-bitassets-selftest-result.json`;
-const BITASSETS_REAL_DEVICE_SELFTEST_COMMAND_URL = 'http://192.168.1.50:6124/command';
+const BITASSETS_REAL_DEVICE_COMMAND_URLS = [
+  'http://100.76.117.106:6124/command',
+  'http://192.168.1.50:6124/command',
+];
 const BTC_REAL_DEVICE_COMMAND = `${RNFS.DocumentDirectoryPath}/redwallet-btc-selftest-command.json`;
 const BTC_REAL_DEVICE_RESULT = `${RNFS.DocumentDirectoryPath}/redwallet-btc-selftest-result.json`;
 const BTC_REAL_DEVICE_COMMAND_URL = 'http://192.168.1.50:6125/command';
@@ -75,31 +78,32 @@ async function fetchBitAssetsRealDeviceCommand(walletID = ''): Promise<string> {
 
   if (__DEV__ && Platform.OS === 'ios' && !Platform.isPad) {
     const startedAt = Date.now();
-    try {
-      const url = walletID
-        ? `${BITASSETS_REAL_DEVICE_SELFTEST_COMMAND_URL}?walletID=${encodeURIComponent(walletID)}`
-        : BITASSETS_REAL_DEVICE_SELFTEST_COMMAND_URL;
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: { accept: 'application/json' },
-      });
-      if (response.status === 204 || response.status === 404) return '';
-      const rawCommand = await response.text();
-      redWalletEvent('real_device_bitassets_selftest_command_fetch', {
-        walletID,
-        ok: response.ok,
-        status: response.status,
-        durationMs: Date.now() - startedAt,
-        responseBytes: rawCommand.length,
-      });
-      return response.ok ? rawCommand : '';
-    } catch (error: any) {
-      redWalletEvent('real_device_bitassets_selftest_command_fetch_error', {
-        walletID,
-        error: error?.message ?? String(error),
-        durationMs: Date.now() - startedAt,
-      });
-      return '';
+    for (const baseUrl of BITASSETS_REAL_DEVICE_COMMAND_URLS) {
+      try {
+        const url = walletID ? `${baseUrl}?walletID=${encodeURIComponent(walletID)}` : baseUrl;
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: { accept: 'application/json' },
+        });
+        if (response.status === 204 || response.status === 404) continue;
+        const rawCommand = await response.text();
+        redWalletEvent('real_device_bitassets_selftest_command_fetch', {
+          walletID,
+          url: baseUrl,
+          ok: response.ok,
+          status: response.status,
+          durationMs: Date.now() - startedAt,
+          responseBytes: rawCommand.length,
+        });
+        if (response.ok && rawCommand.trim()) return rawCommand;
+      } catch (error: any) {
+        redWalletEvent('real_device_bitassets_selftest_command_fetch_error', {
+          walletID,
+          url: baseUrl,
+          error: error?.message ?? String(error),
+          durationMs: Date.now() - startedAt,
+        });
+      }
     }
   }
 
