@@ -153,6 +153,13 @@ fi
 COLLECTOR_DIR="$(readlink "${LOG_ROOT%/}/current-js-event-collector" 2>/dev/null || true)"
 if [[ -n "$COLLECTOR_DIR" && -f "$COLLECTOR_DIR/events.ndjson" ]]; then
   phone_events="$(grep -v '"remote":"::ffff:127' "$COLLECTOR_DIR/events.ndjson" 2>/dev/null | grep -v '"remote":"127' || true)"
+  # Prefer real-device iOS 26.2.x events; ignore simulator 26.3.x noise from shared collector.
+  if [[ -n "$phone_events" ]]; then
+    filtered="$(printf '%s\n' "$phone_events" | grep '"platformVersion":"26.2' || true)"
+    if [[ -n "$filtered" ]]; then
+      phone_events="$filtered"
+    fi
+  fi
   if [[ -n "$phone_events" ]]; then
     log "SUCCESS phone-origin JS events detected"
     printf '%s\n' "$phone_events" >"$RUN_DIR/phone-origin-events.ndjson"

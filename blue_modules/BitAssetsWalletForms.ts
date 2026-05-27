@@ -264,6 +264,12 @@ function isLocalBitAssetsRpcHost(hostname: string): boolean {
   if (host.startsWith('127.')) return true;
   if (host.startsWith('10.')) return true;
   if (host.startsWith('192.168.')) return true;
+  // Tailscale / CGNAT dev range (100.64.0.0/10) — Luke signet over Tailscale
+  const tailscaleMatch = /^100\.(\d{1,3})\./.exec(host);
+  if (tailscaleMatch) {
+    const secondOctet = Number(tailscaleMatch[1]);
+    if (Number.isInteger(secondOctet) && secondOctet >= 64 && secondOctet <= 127) return true;
+  }
 
   const match = /^172\.(\d{1,2})\./.exec(host);
   if (!match) return false;

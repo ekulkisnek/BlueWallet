@@ -284,6 +284,10 @@ class BitAssetsWalletModule(private val reactContext: ReactApplicationContext) :
         if (host == "localhost" || host == "::1" || host.startsWith("127.")) return true
         if (host.startsWith("10.") || host.startsWith("192.168.")) return true
         val parts = host.split(".")
+        if (parts.size >= 2 && parts[0] == "100") {
+            val secondOctet = parts[1].toIntOrNull() ?: return false
+            if (secondOctet in 64..127) return true
+        }
         if (parts.size < 2 || parts[0] != "172") return false
         val secondOctet = parts[1].toIntOrNull() ?: return false
         return secondOctet in 16..31
