@@ -205,6 +205,26 @@ push_usb_tunnel_host_file() {
 }
 push_usb_tunnel_host_file || true
 
+push_bitassets_selftest_command() {
+  local cmd_dir tmp
+  cmd_dir="$(resolve_command_server_dir)"
+  [[ -n "$cmd_dir" && -f "$cmd_dir/command.json" ]] || return 0
+  tmp="$(mktemp)"
+  cp "$cmd_dir/command.json" "$tmp"
+  if perl -e 'alarm 15; exec @ARGV' 15 xcrun devicectl device copy to \
+    --device "$LAUNCH_UDID" \
+    --domain-type appDataContainer \
+    --domain-identifier "$BUNDLE_ID" \
+    --source "$tmp" \
+    --destination "Documents/redwallet-bitassets-selftest-command.json" >>"$RUN_DIR/push-selftest-command.log" 2>&1; then
+    log "PUSHED command.json -> Documents/redwallet-bitassets-selftest-command.json"
+  else
+    log "WARN push selftest command failed (see push-selftest-command.log)"
+  fi
+  rm -f "$tmp"
+}
+push_bitassets_selftest_command || true
+
 probe device-details xcrun devicectl device info details --device "$LAUNCH_UDID"
 if grep -q 'passcodeRequired: true' "$RUN_DIR/probes/device-details.txt" 2>/dev/null; then
   log "NOTE passcodeRequired=true on device; SpringBoard may still deny launch unless actively unlocked."
