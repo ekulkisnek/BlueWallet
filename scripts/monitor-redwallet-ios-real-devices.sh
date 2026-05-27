@@ -116,15 +116,23 @@ for udid in "${DEVICES[@]}"; do
   event "device.launch_console.start" "ok" "$udid"
   launch_extra=()
   if [[ "${REDWALLET_MONITOR_TERMINATE_EXISTING:-0}" == "1" ]]; then
-    launch_extra+=(--terminate-existing)
+    launch_extra=(--terminate-existing)
   fi
   (
     set +e
-    xcrun devicectl device process launch \
-      --device "$udid" \
-      "${launch_extra[@]}" \
-      --console \
-      "$BUNDLE_ID"
+    set +u
+    if ((${#launch_extra[@]})); then
+      xcrun devicectl device process launch \
+        --device "$udid" \
+        "${launch_extra[@]}" \
+        --console \
+        "$BUNDLE_ID"
+    else
+      xcrun devicectl device process launch \
+        --device "$udid" \
+        --console \
+        "$BUNDLE_ID"
+    fi
     code=$?
     echo "DEVICE_CONSOLE_EXIT[$udid]:$code"
     exit "$code"
