@@ -1,6 +1,10 @@
 /* global jest */
 
 import mockClipboard from '@react-native-clipboard/clipboard/jest/clipboard-mock.js';
+import { setNetworkType } from '../models/network';
+
+// App defaults to signet; legacy unit fixtures use mainnet addresses and xpubs.
+setNetworkType('mainnet');
 
 const consoleWarnOrig = console.warn;
 console.warn = (...args) => {

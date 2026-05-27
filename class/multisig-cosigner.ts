@@ -34,7 +34,7 @@ export class MultisigCosigner {
       this._valid = true;
       this._cosigners = [true];
       return;
-    } else if (data.startsWith('xpub') && MultisigCosigner.isXpubValid(data)) {
+    } else if ((data.startsWith('xpub') || data.startsWith('tpub')) && MultisigCosigner.isXpubValid(data)) {
       this._fp = '00000000';
       this._xpub = data;
       this._path = "m/45'";
@@ -77,7 +77,7 @@ export class MultisigCosigner {
         // the actual type of segwit can be inferred from the path
         assert(this._xpub);
         if (
-          this._xpub.startsWith('xpub') &&
+          (this._xpub.startsWith('xpub') || this._xpub.startsWith('tpub')) &&
           [MultisigHDWallet.PATH_NATIVE_SEGWIT, MultisigHDWallet.PATH_WRAPPED_SEGWIT].includes(this._path)
         ) {
           const w = new MultisigHDWallet();

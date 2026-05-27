@@ -412,11 +412,11 @@ export class MultisigHDWallet extends AbstractHDElectrumWallet {
   }
 
   static isXpubString(xpub: string): boolean {
-    return ['xpub', 'ypub', 'zpub', 'Ypub', 'Zpub'].includes(xpub.substring(0, 4));
+    return ['xpub', 'tpub', 'ypub', 'zpub', 'Ypub', 'Zpub', 'Upub', 'Vpub'].includes(xpub.substring(0, 4));
   }
 
   static isXprvString(xpub: string): boolean {
-    return ['xprv', 'yprv', 'zprv', 'Yprv', 'Zprv'].includes(xpub.substring(0, 4));
+    return ['xprv', 'tprv', 'yprv', 'zprv', 'Yprv', 'Zprv', 'Uprv', 'Vprv'].includes(xpub.substring(0, 4));
   }
 
   /**

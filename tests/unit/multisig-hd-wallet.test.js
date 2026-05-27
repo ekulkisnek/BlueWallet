@@ -1,6 +1,7 @@
 import assert from 'assert';
 import * as bitcoin from 'bitcoinjs-lib';
 
+import { setNetworkType } from '../../models/network';
 import Base43 from '../../blue_modules/base43';
 import { BlueURDecoder, decodeUR, encodeUR } from '../../blue_modules/ur';
 import { MultisigHDWallet } from '../../class/';
@@ -12,6 +13,8 @@ const Zpub1 = 'Zpub74ijpfhERJNjhCKXRspTdLJV5eoEmSRZdHqDvp9kVtdVEyiXk7pXxRbfZzQvs
 
 const fp2coldcard = '168DD603';
 const Zpub2 = 'Zpub75mAE8EjyxSzoyPmGnd5E6MyD7ALGNndruWv52xpzimZQKukwvEfXTHqmH8nbbc6ccP5t2aM3mws3pKYSnKpKMMytdbNEZFUxKzztYFM8Pn';
+
+const signetMultisigAddresses = require('./fixtures/signet-multisig-addresses.json');
 
 const txtFileFormatMultisigLegacy =
   'UR:BYTES/TYQHZGEQGDHKYM6KV96KCAPQF46KCARFWD5KWGRNV4682UPQVE5KCEFQ9P3HYETPW3JKGGR0DCSYGVEHG4Q5GWPC9Y9ZXZJWV9KK2W3QGDT97DPNGVER2VEJGF0NYTFJPFGX7MRFVDUN5GPJYPHKVGPJPFZX2UNFWESHG6T0DCAZQMF0XS6JWZJXDAEX6CT58GS9QVJNFQ9Q53PNXAZ5Z3PC8QAZQ7RSW43RVW2NVERXS3E4V4QNJCM30PYYKNFKVGC5S6ZCF4CYG7NFWP24Q3ZZFEX5YUN2FEN4W4MZVFAYKUTWW9MHSVNDWEXHJS34VFFXWM2VG95NWC6ZVAERSET4W4ARGNRK0GEK6C2H0PCXV4TDV3XNWVTY09GH2AN3XCUX64ZPGU6YXUQ2XYMRS3ZYXCCRXW3Q0PC82C3K8Q6RW4EKVDV42UT3X35HSCMDGE3RSVMFW9G8GJJ6VEHY65Z5DDC9J62RWD6427TZ0FR8QUZ2WQE8Z7NGXD95X4JGWDXYW5TEX3TKSCTCGACKKJEEV9ZYGKNW2DNXSS3EXFGXKJZYFD5KSCJGXET5C7N50FK5UD6H2UU5WKTS2G9QHU0U3D';
@@ -2248,6 +2251,7 @@ describe('multisig-cosigner', () => {
   });
 
   it('can parse files from sparrow wallet', () => {
+    setNetworkType('signet');
     const secrets = [
       [JSON.stringify(require('./fixtures/fromsparrow-electrum.json')), false],
       [require('fs').readFileSync('./tests/unit/fixtures/fromsparrow-coldcard.txt', 'ascii'), true],
@@ -2266,11 +2270,13 @@ describe('multisig-cosigner', () => {
       }
 
       assert.ok(w.isNativeSegwit());
-      assert.strictEqual(w._getExternalAddressByIndex(0), 'bc1qtysquqsjqjfqvhd6l2h470hdgwhcahs4nq2ca49cyxftwjnjt9ssh8emel');
+      assert.strictEqual(w._getExternalAddressByIndex(0), signetMultisigAddresses.sparrowExternalAddress0);
     }
+    setNetworkType('mainnet');
   });
 
   it('can parse files from Nunchuck', () => {
+    setNetworkType('signet');
     const secrets = [[require('fs').readFileSync('./tests/unit/fixtures/nunchuck-bsms.txt', 'ascii'), true]];
 
     for (const [s, verifyFingerprints] of secrets) {
@@ -2284,8 +2290,9 @@ describe('multisig-cosigner', () => {
       }
 
       assert.ok(w.isNativeSegwit());
-      assert.strictEqual(w._getExternalAddressByIndex(0), 'bc1qjppd555998lvpgdew30kdrvu2qg90n5gg684khrc2u5g7kj8cnuqujvz3p');
+      assert.strictEqual(w._getExternalAddressByIndex(0), signetMultisigAddresses.nunchuckExternalAddress0);
     }
+    setNetworkType('mainnet');
   });
 
   it('can export to json', () => {
