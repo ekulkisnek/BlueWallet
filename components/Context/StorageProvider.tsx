@@ -744,16 +744,26 @@ export const StorageProvider = ({ children }: { children: React.ReactNode }) => 
             rpcUrl,
             hasAddress: address.length > 0,
           });
-          const info = await wallet.syncBitAssets();
-          await wallet.fetchBalance();
-          await wallet.fetchTransactions();
+          // Run Mac command-server selftest (reserve/transfer) before sync — QUIC sync often times out first.
           await runBitAssetsRealDeviceSelftestCommand(wallet);
+          let info: Awaited<ReturnType<BitAssetsWalletClass['syncBitAssets']>> | null = null;
+          try {
+            info = await wallet.syncBitAssets();
+            await wallet.fetchBalance();
+            await wallet.fetchTransactions();
+          } catch (syncError: any) {
+            redWalletEvent('real_device_bitassets_smoke_sync_error', {
+              walletID: wallet.getID?.(),
+              rpcUrl: wallet.bitassetsRpcUrl,
+              error: syncError?.message ?? String(syncError),
+            });
+          }
           redWalletEvent('real_device_bitassets_smoke_ok', {
             walletID: wallet.getID?.(),
             address: wallet.getAddress() || '',
             rpcUrl: wallet.bitassetsRpcUrl,
-            tip: info.last_tip_height ?? null,
-            balanceAssetCount: Object.keys(info.balances ?? {}).length,
+            tip: info?.last_tip_height ?? null,
+            balanceAssetCount: Object.keys(info?.balances ?? {}).length,
             utxoCount: wallet.bitassetsUtxos.length,
           });
         } catch (error: any) {
