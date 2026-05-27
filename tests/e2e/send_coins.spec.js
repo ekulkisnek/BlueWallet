@@ -171,15 +171,26 @@ function mineBlocks() {
     return;
   }
   const localDev = process.env.BITASSETS_E2E_LOCAL_DEV_DIR || '/Volumes/T705/code/drivechain-wallet-dev/local-dev';
-  const confirmEnv = lastDepositTxid ? `BITASSETS_CONFIRM_TXID=${lastDepositTxid}` : '';
-  console.log('[E2E TEST] Mining sidechain block (BMM) to confirm deposit...');
+  const postL1 = Number(process.env.BITASSETS_E2E_POST_DEPOSIT_L1_BLOCKS || 6);
+  console.log(`[E2E TEST] Mining ${postL1} L1 block(s) after deposit...`);
+  execFileSync('bash', ['-lc', `cd "${localDev}" && ./scripts/mine-private-signet-blocks.sh ${postL1}`], {
+    timeout: Number(process.env.BITASSETS_E2E_POST_L1_MINE_TIMEOUT_MS || 120000),
+  });
+  const waitDepositProof = process.env.BITASSETS_E2E_WAIT_DEPOSIT_CONFIRM === '1';
+  const confirmEnv =
+    waitDepositProof && lastDepositTxid ? `BITASSETS_CONFIRM_TXID=${lastDepositTxid}` : '';
+  if (waitDepositProof && lastDepositTxid) {
+    console.log('[E2E TEST] Mining sidechain block (BMM) until deposit proof...');
+  } else {
+    console.log('[E2E TEST] Mining sidechain block (BMM) without deposit-proof wait...');
+  }
   execFileSync(
     'bash',
     [
       '-lc',
       `cd "${localDev}" && ${confirmEnv} BITASSETS_IMAGE=\${BITASSETS_IMAGE:-local/plain-bitassets:codex-proof} ./scripts/mine-bitassets-block.sh`,
     ],
-    { timeout: Number(process.env.BITASSETS_E2E_MINE_TIMEOUT_MS || 120000) },
+    { timeout: Number(process.env.BITASSETS_E2E_MINE_TIMEOUT_MS || 180000) },
   );
   console.log('[E2E TEST] Mining complete');
 }
