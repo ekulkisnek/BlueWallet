@@ -12,7 +12,7 @@ LOG_ROOT="${REDWALLET_LOG_ROOT:-/Volumes/T705/redwallet-logs}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 RUN_DIR="${LOG_ROOT%/}/headless-bitassets-deposit-${STAMP}"
 VALUE_SATS="${DEPOSIT_VALUE_SATS:-5000000}"
-FEE_SATS="${DEPOSIT_FEE_SATS:-10000}"
+FEE_SATS="${DEPOSIT_FEE_SATS:-50000}"
 
 mkdir -p "$RUN_DIR"
 exec > >(tee -a "$RUN_DIR/run.log") 2>&1

@@ -127,7 +127,7 @@ function fundAddressFromMainchain(address, amountSats) {
   console.log(`[E2E TEST] Funding ${address} with ${amountSats} sats`);
   const localDev = process.env.BITASSETS_E2E_LOCAL_DEV_DIR || '/Volumes/T705/code/drivechain-wallet-dev/local-dev';
   const composeFile = process.env.BITASSETS_E2E_COMPOSE_FILE || 'docker-compose.local-minimal.yml';
-  const feeSats = 10000;
+  const feeSats = Number(process.env.BITASSETS_E2E_DEPOSIT_FEE_SATS || 50000);
   // orchestrator CreateDeposit often hangs on Colima; docker CLI matches headless deposit smoke.
   const txid = execFileSync(
     'bash',
