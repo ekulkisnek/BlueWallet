@@ -77,6 +77,15 @@ v2 `bitcoin.conf` template (`scripts/bitwindow-local-signet-bitcoin.conf.templat
 
 After BitWindow syncs, use the same signet for cross-wallet tests (txids in `STATUS.md`).
 
+## RedWallet interop (headless)
+
+```sh
+cd /Volumes/T705/code/work-on-something-to-do-with/redwallet
+./scripts/verify-redwallet-bitwindow-shared-signet.sh
+```
+
+Confirms L1 tip alignment (Docker mainchain vs bitwindowd) and BitAssets sidechain blockcount via docker CLI; writes `current-redwallet-bitwindow-interop` under `/Volumes/T705/redwallet-logs/`. Full cross-wallet txids still need simulator/phone or GUI.
+
 ## Phone proof (separate blocker)
 
 Phones: `docs/redwallet-phone-unlock-handoff.md` — do not poll CoreDevice while USB unplugged.

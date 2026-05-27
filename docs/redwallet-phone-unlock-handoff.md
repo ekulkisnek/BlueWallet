@@ -83,7 +83,7 @@ Inspect `current-js-event-collector/events.ndjson` for non-localhost client IPs.
 
 ## BitWindow P1 (not phone work)
 
-Blocked without product change: `orchestratord` has no `local-signet` network; Docker owns `127.0.0.1:38332`. Evidence: `/Volumes/T705/redwallet-logs/bitwindow-gui-local-signet-20260526-172859/`. Composer documents; GUI fix is out of scope for headless Cursor.
+**Resolved headless (2026-05-26):** drivechaind sidecar + RPC bridge on `38335`; orchestrator `network=local-signet`; bitwindowd `blockHeight=481`. Evidence: `/Volumes/T705/redwallet-logs/bitwindow-headless-20260526-193242/`. Doc: `docs/bitwindow-local-signet-docker.md`. Shared-stack interop probe: `scripts/verify-redwallet-bitwindow-shared-signet.sh`.
 
 ## Master checklist
 
