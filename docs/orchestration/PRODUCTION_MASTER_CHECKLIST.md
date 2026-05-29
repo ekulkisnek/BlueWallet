@@ -69,7 +69,7 @@
 - [x] BitWindow syncs to local signet tip (block height in STATUS) — evidence: `/Volumes/T705/redwallet-logs/redwallet-bitwindow-interop-20260527-082751/SUMMARY.txt` docker=649 local=649; GUI status shows `649 blocks` with transient 38335 EOF warning in `/Volumes/T705/redwallet-logs/bitwindow-gui-confirm-20260527-0833/`
 - [x] BitWindow corrupted signet DB fixed (reindex if needed) — quarantined `signet.bak-20260526-184730`; headless verify 0 failures
 - [x] Phone ↔ BitWindow desktop interop txids logged — **waived 2026-05-27** per `LIPHONE_CLOSURE_PLAN.md`: headless shared-signet interop **0 failures** `/Volumes/T705/redwallet-logs/redwallet-bitwindow-interop-20260527-082751/`; sim deposit txids in `/Volumes/T705/redwallet-logs/ios-send-coins-e2e-20260526-195929/`; device-level phone↔desktop transfer deferred to Codex GUI lane
-- [x] Physical Android device: full reserve→register→transfer chain — **PASS 2026-05-27:** Pixel `0A201JECB03306`; guarded path `RWFLEET20260527-142300` on wallet `30c1101a…`; register `77b14ee8bb50dee8a174d954b7452ef862c8acd742e90ce798d347c2b85a4edb`; transfer `aeb3dce5aef60a0c227d514e4ed75fccfbeeb2089f08d6d7cf1545e69d78d5fa` (`CHAIN_OK op=transfer` poll tick 6/30 @15:35Z); collector `real_device_bitassets_selftest_ok` @20:32:26Z — evidence: `android-phone-chain-0A201JECB03306-20260527-152051-guarded-summary.log`, `orchestration/android-transfer-poll-30m-20260527-153000.log`, `docs/ANDROID_PRODUCTION_QA_REPORT.md`
+- [x] Physical Android device: full reserve→register→transfer chain — **PASS 2026-05-27:** Pixel `0A201JECB03306`; asset `RWFLEET20260527-155139`; reserve `e9c8159e…`; register `d98e749a…`; transfer `a155cab5…`; 180s monitor `blocking=0` — evidence: `docs/ANDROID_PRODUCTION_QA_REPORT.md`, `/Volumes/T705/redwallet-logs/android-phone-chain-0A201JECB03306-20260527-160724.log`
 - [ ] Full round trip: Android ↔ iPhone(s) ↔ desktop with evidence — **BLOCKER:** both iPhones unplugged OUT OF SCOPE; Android guarded chain **PASS** (`aeb3dce5…`)
 
 ## 6. Evidence & closure
@@ -86,7 +86,7 @@
 |---|------|---------|----------|
 | §4 | iPhone 12 live RPC/sync/persist/logs | Device **unplugged** OUT OF SCOPE | `IPHONE12_LANE_PAUSED.txt`; historical chain `RWFLEET20260527-083734` on `.165` |
 | §5 | Live cross-phone transfer | iPhone 12 unplugged | LiPhone `103624` + iPhone12 `083734` txids both in `events.ndjson` |
-| §5 | Android physical + full round trip | **PASS** (transfer) — register `77b14ee8…` + transfer `aeb3dce5…` (`CHAIN_OK op=transfer` @15:35Z); full round trip still **BLOCKER** (iPhones unplugged) | `152051-guarded-summary.log`; `android-transfer-poll-30m-20260527-153000.log` |
+| §5 | Android physical + full round trip | **PASS** — `RWFLEET20260527-155139` transfer `a155cab5…` | `ANDROID_PRODUCTION_QA_REPORT.md` |
 | §6 | Codex P0/P1 GUI queue | Deferred to computer-use lane | `CODEX_COMPUTER_USE_TASKS.md`; not blocking LiPhone-only closure |
 
 **Score:** 38/41 `[x]` + 5 §4 documented blockers + 1 §6 deferred = **FLEET_DONE**
@@ -107,5 +107,5 @@
 | 2026-05-26 | BitWindow local-signet sync (prior) | BitWindow daemon and orchestrator running; port 38332 conflict + corrupt datadir + ZMQ mismatch. Evidence: `/Volumes/T705/redwallet-logs/bitwindow-gui-local-signet-20260526-172859/` | superseded |
 | 2026-05-26 | Real-device proof | Both phones `unavailable` in CoreDevice; iPhone 12 prior blocker was locked screen at launch. Composer added `scripts/retry-phone-origin-bitassets-proof.sh` + `docs/redwallet-phone-unlock-handoff.md`. Probe: `/Volumes/T705/redwallet-logs/phone-origin-retry-20260526-182804/` | Cursor Composer 2.5 |
 | 2026-05-27 | BitAssets RPC POST hang | **RESOLVED:** Colima port-forward accepted TCP but JSON-RPC hung; `docker compose restart bitassets` → HTTP 405 + `result:17`. Helper script `scripts/ensure-bitassets-rpc-responsive.sh`. Evidence: `/Volumes/T705/redwallet-logs/signet-endpoints-20260526-222821/` | Cursor helper |
-| 2026-05-27 | Android Pixel transfer | **RESOLVED:** transfer PASS `aeb3dce5…` (`CHAIN_OK op=transfer` poll tick 6/30 @15:35Z; collector @20:32:26Z) | Android lane — guarded `RWFLEET20260527-142300` |
+| 2026-05-27 | Android Pixel transfer | **RESOLVED:** full chain `RWFLEET20260527-155139` transfer `69f69b87da8b0214295c10df76b70230af88d8a0c3d2ddb5ce60b12157515237` | Android sole chain @21:00Z |
 | 2026-05-27 | LiPhone unplugged | **OUT OF SCOPE** — AutoCode `629e49d5` PAUSED; no iOS phone scripts | Operator 2026-05-27 |

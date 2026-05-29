@@ -21,6 +21,17 @@ Evidence bundle: `/Volumes/T705/redwallet-logs/bitwindow-gui-local-signet-202605
 `local-signet` **is** supported in orchestrator (`local-signet=1` in bitcoin.conf); the failure
 was configuration/port/datadir, not "unknown network".
 
+## Startup order (critical)
+
+1. Docker `mainchain` → `enforcer` → `bitassets` (`ensure-local-signet-stack.sh`)
+2. `bitwindow-bitcoin.conf` from template
+3. Stop stray `bitwindowd` / `orchestratord` / host `bitcoind`
+4. **Drivechaind sidecar + RPC bridge on 38335** (`start-bitwindow-local-bitcoind.sh`)
+5. **orchestratord** (`30400`)
+6. **bitwindowd**
+
+Full detail: `drivechain-wallet-dev/local-dev/docs/BITWINDOW_STARTUP_ORDER.md`
+
 ## Fixed launch path (drivechain-wallet-dev)
 
 **2026-05-26:** BitWindow ships **stock Bitcoin Core** (`bitcoind` v29), which ignores

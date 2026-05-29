@@ -3,8 +3,10 @@ import { execFileSync } from 'child_process';
 import { extractTextFromElementById, sleep, tapAndTapAgainIfElementIsNotVisible, waitForId } from './helperz';
 import { mineBitAssetsTx } from './bitassetsE2eShared';
 
-const rpcUrl = process.env.BITASSETS_RPC_URL || 'http://192.168.1.50:6004';
+const rpcUrl = process.env.BITASSETS_RPC_URL || 'http://127.0.0.1:6004';
 const walletLabel = 'BitAssets-Send-E2E';
+const destinationAddress =
+  process.env.BITASSETS_SEND_COINS_DESTINATION || '3AEJkR1vnY6jbQBN3oUgay7PNsUo';
 let lastDepositTxid = '';
 
 describe('BitAssets Send Coins E2E', () => {
@@ -100,7 +102,8 @@ describe('BitAssets Send Coins E2E', () => {
 
     // Input destination address (BitWindow's address)
     await element(by.id('AddressInput')).tap();
-    await element(by.id('AddressInput')).replaceText('3AEJkR1vnY6jbQBN3oUgay7PNsUo');
+    console.log('[E2E TEST] BitWindow destination address:', destinationAddress);
+    await element(by.id('AddressInput')).replaceText(destinationAddress);
     await dismissKeyboardIfPresent();
 
     // Input amount
@@ -312,11 +315,25 @@ async function ensureRegisteredBitAssetForSend() {
 }
 
 async function submitViaE2ETop(operation) {
+  await dismissKeyboardIfPresent();
   await openBitAssetsTools();
   try {
     await element(by.id('BitAssetsWalletScreen')).scroll(1200, 'up');
   } catch (_) {}
-  await element(by.id(`BitAssetsE2ETopSubmit-${operation}`)).tap();
+
+  try {
+    await element(by.id(`BitAssetsE2ETopSubmit-${operation}`)).tap();
+  } catch (topError) {
+    try {
+      await waitFor(element(by.id(`BitAssetsE2ESubmit-${operation}`)))
+        .toBeVisible()
+        .whileElement(by.id('BitAssetsWalletScreen'))
+        .scroll(700, 'up');
+      await element(by.id(`BitAssetsE2ESubmit-${operation}`)).tap();
+    } catch (_) {
+      throw topError;
+    }
+  }
   return waitForSubmitTxid();
 }
 

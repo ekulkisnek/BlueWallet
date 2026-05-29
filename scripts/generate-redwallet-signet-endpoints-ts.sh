@@ -7,7 +7,8 @@ OUT="$ROOT_DIR/helpers/redwalletSignetEndpoints.generated.ts"
 LOG_ROOT="${REDWALLET_LOG_ROOT:-/Volumes/T705/redwallet-logs}"
 
 # Real-device bundles must match Mac LAN RPC (not Tailscale-first default from signet-endpoints).
-MAC_RPC="${REDWALLET_BITASSETS_RPC_MAC:-http://192.168.1.50:6004}"
+MAC_LAN_IP="$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true)"
+MAC_RPC="${REDWALLET_BITASSETS_RPC_MAC:-http://${MAC_LAN_IP:-192.168.1.50}:6004}"
 PHONE_HOST="${REDWALLET_PHONE_HOST:-${MAC_RPC#http://}}"
 PHONE_HOST="${PHONE_HOST#https://}"
 PHONE_HOST="${PHONE_HOST%%/*}"

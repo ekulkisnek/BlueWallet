@@ -3,7 +3,13 @@ import { AppState, Dimensions, PixelRatio, ScrollView, StyleSheet, View } from '
 import { RouteProp, useFocusEffect, useLocale, useRoute } from '@react-navigation/native';
 
 import { BlueCard, BlueText } from '../../BlueComponents';
-import { BitAssetsUtxo, BitAssetsWalletInfo, summarizeBitAssetsProofState } from '../../blue_modules/BitAssetsWallet';
+import {
+  BitAssetsChainInfo,
+  BitAssetsUtxo,
+  BitAssetsWalletInfo,
+  fetchBitAssetsChainInfo,
+  summarizeBitAssetsProofState,
+} from '../../blue_modules/BitAssetsWallet';
 import { normalizeBitAssetsError } from '../../blue_modules/BitAssetsWalletForms';
 import Button from '../../components/Button';
 import { FButton, FContainer } from '../../components/FloatButtons';
@@ -36,6 +42,7 @@ const BitAssetsWallet: React.FC = () => {
 
   const [info, setInfo] = useState<BitAssetsWalletInfo | undefined>(wallet?.bitassetsInfo);
   const [utxos, setUtxos] = useState<BitAssetsUtxo[]>(wallet?.bitassetsUtxos ?? []);
+  const [chainInfo, setChainInfo] = useState<BitAssetsChainInfo | undefined>();
   const [syncError, setSyncError] = useState('');
 
   const stylesHook = useMemo(
@@ -51,7 +58,10 @@ const BitAssetsWallet: React.FC = () => {
     if (!wallet || syncInFlight.current) return;
     syncInFlight.current = true;
     try {
-      const nextInfo = await wallet.syncBitAssets();
+      const [nextInfo] = await Promise.all([
+        wallet.syncBitAssets(),
+        fetchBitAssetsChainInfo(wallet.bitassetsRpcUrl).then(setChainInfo).catch(() => {}),
+      ]);
       await wallet.fetchTransactions();
       await saveToDisk();
       setInfo(nextInfo);
@@ -102,11 +112,29 @@ const BitAssetsWallet: React.FC = () => {
             {wallet.bitassetsRpcUrl}
           </BlueText>
           <View style={styles.statusGrid}>
-            <StatusItem label="Tip" value={String(info?.last_tip_height ?? 'not synced')} />
+            <StatusItem label="Sidechain tip" value={String(info?.last_tip_height ?? 'not synced')} />
             <StatusItem label="Confirmed" value={String(confirmedCount)} />
             <StatusItem label="Mempool" value={String(mempoolCount)} />
             <StatusItem label="Proof-backed" value={String(proofSummary.proofBacked)} testID="BitAssetsProofBackedUtxoCount" />
             <StatusItem label="Proof status" value={proofSummary.label} testID="BitAssetsProofBackedUtxoStatus" />
+          </View>
+          <View style={styles.statusGrid}>
+            <StatusItem
+              label="Mainchain"
+              value={chainInfo?.mainchain_hash ? chainInfo.mainchain_hash.slice(0, 8) + '…' : '—'}
+            />
+            <StatusItem
+              label="Peers"
+              value={chainInfo != null ? String(chainInfo.peer_count) : '—'}
+            />
+            <StatusItem
+              label="BTC (sats)"
+              value={chainInfo?.bitcoin_total_sats != null ? String(chainInfo.bitcoin_total_sats) : '—'}
+            />
+            <StatusItem
+              label="QUIC"
+              value={info?.quic != null ? (info.quic.connected ? 'connected' : 'disconnected') : '—'}
+            />
           </View>
         </BlueCard>
 

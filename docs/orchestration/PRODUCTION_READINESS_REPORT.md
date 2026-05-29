@@ -1,7 +1,7 @@
 # RedWallet Production Readiness Report
 
 **Generated:** 2026-05-27 (Cursor Composer 2.5 — evidence cleanup lane)  
-**Last refreshed:** 2026-05-27T20:35Z (Android transfer PASS; LiPhone unplugged 2026-05-27)  
+**Last refreshed:** 2026-05-27T21:11Z (Android transfer PASS; LiPhone unplugged 2026-05-27)  
 **Purpose:** Single durable summary for AutoCode workers. Read this first; drill into linked bundles only when needed.
 
 **Related files:**
@@ -24,8 +24,8 @@
 | Cross-device transfer | **Blocked** | iPhone12 unplugged; historical txids both sides; live test deferred |
 | BitWindow headless sync | **Done** | docker=649 local=649 |
 | BitWindow GUI / interop | **Partial** | shared headless interop **0 failures** (waived for closure); GUI tasks in Codex queue |
-| Physical Android device | **Done** | Guarded full chain `RWFLEET20260527-142300`: register `77b14ee8…` + transfer `aeb3dce5…` (`CHAIN_OK op=transfer` poll @15:35Z; collector @20:32:26Z) |
-| **FLEET_DONE** | **Declared 2026-05-27** | LiPhone-only per `LIPHONE_CLOSURE_PLAN.md`; Android transfer **PASS** |
+| Physical Android device | **Done** | Full chain `RWFLEET20260527-155139`: register `d98e749a…` + transfer `a155cab5…`; 180s monitor blocking=0 |
+| **FLEET_DONE** | **Declared 2026-05-27** | LiPhone-only per `LIPHONE_CLOSURE_PLAN.md`; Android transfer **PASS** (`a155cab59851205d…`) |
 
 Headless signet + CI path is production-ready. **FLEET_DONE declared** for LiPhone-only closure with documented blockers for cross-phone round-trip and iPhone12 unplugged scope; Android guarded transfer **PASS**.
 

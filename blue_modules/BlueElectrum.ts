@@ -12,6 +12,8 @@ import { GROUP_IO_BLUEWALLET } from './currency';
 import { ElectrumServerItem } from '../screen/settings/ElectrumSettings';
 import { triggerWarningHapticFeedback } from './hapticFeedback';
 import { AlertButton } from 'react-native';
+import { isEmulatorSync } from 'react-native-device-info';
+import { REDWALLET_SIGNET_PHONE_HOST } from '../helpers/redwalletSignetEndpoints.generated';
 import { uint8ArrayToHex, stringToUint8Array, hexToUint8Array } from './uint8array-extras/index';
 import { getNetwork, NetworkType } from '../models/network';
 
@@ -105,8 +107,19 @@ function getHardcodedPeersForNetwork(network: NetworkType): Peer[] {
       // For some reason SSL is not working here. SSL works via Sparrow, but
       // this throws kCFStreamSSLPeerName with an error code indicating an
       // internal SSL error
-      // Local dev iPhone builds use Luke's private signet Floresta bridge.
-      if (__DEV__) return [{ host: '192.168.1.50', tcp: 60101 }];
+      // Local dev: Floresta on Mac :60101. Simulator + USB Android use loopback first.
+      if (__DEV__) {
+        const peers: Peer[] = [{ host: '127.0.0.1', tcp: 60101 }];
+        try {
+          if (isEmulatorSync()) return peers;
+        } catch {
+          // physical device — try loopback (adb reverse) then LAN host from signet endpoints
+        }
+        if (REDWALLET_SIGNET_PHONE_HOST && REDWALLET_SIGNET_PHONE_HOST !== '127.0.0.1') {
+          peers.push({ host: REDWALLET_SIGNET_PHONE_HOST, tcp: 60101 });
+        }
+        return peers;
+      }
       return [{ host: 'node.signet.drivechain.info', tcp: 50001 }];
     case 'mainnet':
     default:

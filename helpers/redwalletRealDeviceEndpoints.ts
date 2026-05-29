@@ -18,6 +18,8 @@ export const REDWALLET_TAILSCALE_MAC_HOST = '100.76.117.106';
 
 export const REDWALLET_LAN_COLLECTOR_EVENTS = `http://${REDWALLET_SIGNET_PHONE_HOST}:6123/events`;
 export const REDWALLET_LAN_BITASSETS_COMMAND = `http://${REDWALLET_SIGNET_PHONE_HOST}:6124/command`;
+export const REDWALLET_LAN_BTC_COMMAND = `http://${REDWALLET_SIGNET_PHONE_HOST}:6125/command`;
+export const REDWALLET_LAN_BTC_RESULT = `http://${REDWALLET_SIGNET_PHONE_HOST}:6125/result`;
 export const REDWALLET_TAILSCALE_COLLECTOR_EVENTS = `http://${REDWALLET_TAILSCALE_MAC_HOST}:6123/events`;
 
 /** Android emulator host loopback via adb reverse (optional dev path). */
@@ -25,6 +27,18 @@ const REDWALLET_ANDROID_EMULATOR_COMMAND_URLS = [
   `http://10.0.2.2:6124/command`,
   `http://127.0.0.1:6124/command`,
   REDWALLET_LAN_BITASSETS_COMMAND,
+];
+
+const REDWALLET_ANDROID_EMULATOR_BTC_COMMAND_URLS = [
+  `http://10.0.2.2:6125/command`,
+  `http://127.0.0.1:6125/command`,
+  REDWALLET_LAN_BTC_COMMAND,
+];
+
+const REDWALLET_ANDROID_EMULATOR_BTC_RESULT_URLS = [
+  `http://10.0.2.2:6125/result`,
+  `http://127.0.0.1:6125/result`,
+  REDWALLET_LAN_BTC_RESULT,
 ];
 
 export function isRedWalletCoreDeviceUsbTunnelHost(hostname: string): boolean {
@@ -60,4 +74,35 @@ export async function resolveRedWalletBitAssetsCommandUrls(): Promise<string[]> 
   }
   urls.push(REDWALLET_USB_TUNNEL_COMMAND, REDWALLET_LAN_BITASSETS_COMMAND);
   return urls;
+}
+
+export async function resolveRedWalletBtcCommandUrls(): Promise<string[]> {
+  if (isRedWalletAndroidLanMacEndpointsOnly()) {
+    // USB adb reverse (127.0.0.1) first — works when Mac LAN IP is unreachable on Wi‑Fi.
+    return [`http://127.0.0.1:6125/command`, REDWALLET_LAN_BTC_COMMAND];
+  }
+  if (Platform.OS === 'android') {
+    return [...REDWALLET_ANDROID_EMULATOR_BTC_COMMAND_URLS];
+  }
+
+  const urls: string[] = [];
+  const tunnelFile = `${RNFS.DocumentDirectoryPath}/${REDWALLET_USB_TUNNEL_HOST_FILE}`;
+  if (await RNFS.exists(tunnelFile)) {
+    const host = (await RNFS.readFile(tunnelFile, 'utf8')).trim();
+    if (host) {
+      urls.push(`http://[${host}]:6125/command`);
+    }
+  }
+  urls.push(`http://[${REDWALLET_USB_TUNNEL_MAC_IPV6}]:6125/command`, REDWALLET_LAN_BTC_COMMAND);
+  return urls;
+}
+
+export function resolveRedWalletBtcResultUrls(): string[] {
+  if (isRedWalletAndroidLanMacEndpointsOnly()) {
+    return [`http://127.0.0.1:6125/result`, REDWALLET_LAN_BTC_RESULT];
+  }
+  if (Platform.OS === 'android') {
+    return [...REDWALLET_ANDROID_EMULATOR_BTC_RESULT_URLS];
+  }
+  return [`http://[${REDWALLET_USB_TUNNEL_MAC_IPV6}]:6125/result`, REDWALLET_LAN_BTC_RESULT];
 }

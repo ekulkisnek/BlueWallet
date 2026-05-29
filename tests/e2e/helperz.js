@@ -319,8 +319,13 @@ export async function scrollUpOnHomeScreen() {
   try {
     await element(by.type('RCTEnhancedScrollView').withDescendant(by.type('RCTEnhancedScrollView'))).swipe('down', 'slow', 0.5);
   } catch (_) {
-    // if no wallets there will be just one scroll
-    await element(by.type('RCTEnhancedScrollView')).swipe('down', 'slow', 0.5);
+    try {
+      await element(by.type('RCTEnhancedScrollView'))
+        .atIndex(0)
+        .swipe('down', 'slow', 0.5);
+    } catch (_) {
+      await element(by.id('WalletsList')).swipe('down', 'slow', 0.5);
+    }
   }
   await sleep(200); // bounce animation
 }

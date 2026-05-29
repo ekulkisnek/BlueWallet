@@ -30,6 +30,11 @@ function sendJson(res, statusCode, payload) {
 }
 
 const server = http.createServer((req, res) => {
+  if (req.method === 'GET' && req.url === '/health') {
+    sendJson(res, 200, { ok: true, commandReady: fs.existsSync(commandPath) && !commandServed });
+    return;
+  }
+
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
       'access-control-allow-origin': '*',

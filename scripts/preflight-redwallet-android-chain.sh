@@ -96,7 +96,7 @@ if ! probe ensure-bitassets-rpc perl -e 'alarm 90; exec @ARGV' bash "$ROOT_DIR/s
     "BitAssets RPC not responding on $MAC_RPC" \
     "Run: scripts/ensure-bitassets-rpc-responsive.sh"
 fi
-if ! grep -q '"result"' "$RUN_DIR/probes/ensure-bitassets-rpc.txt" 2>/dev/null; then
+if ! grep -qE '"result"|OK rpc=' "$RUN_DIR/probes/ensure-bitassets-rpc.txt" 2>/dev/null; then
   blocker bitassets_rpc_no_result \
     "JSON-RPC getblockcount missing result" \
     "Restart bitassets; confirm Mac LAN $MAC_RPC"
@@ -133,7 +133,7 @@ if ! grep -qE '"ok":true|^ok$' "$RUN_DIR/probes/command-health-lan.txt" 2>/dev/n
   fi
 fi
 
-if ! grep -q '"result"' "$RUN_DIR/probes/ensure-bitassets-rpc.txt" 2>/dev/null; then
+if ! grep -qE '"result"|OK rpc=' "$RUN_DIR/probes/ensure-bitassets-rpc.txt" 2>/dev/null; then
   probe bitassets-rpc-lan curl -sS -m 15 -X POST "${MAC_RPC%/}/" \
     -H 'Content-Type: application/json' \
     -d '{"jsonrpc":"2.0","id":1,"method":"getblockcount","params":[]}'

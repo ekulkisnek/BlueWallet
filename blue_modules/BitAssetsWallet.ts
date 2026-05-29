@@ -12,6 +12,15 @@ export interface BitAssetsWalletQuicStatus {
   last_error?: string | null;
 }
 
+export interface BitAssetsChainInfo {
+  sidechain_height: number | null;
+  mainchain_hash: string | null;
+  sidechain_hash: string | null;
+  peer_count: number;
+  bitcoin_total_sats: number | null;
+  bitcoin_available_sats: number | null;
+}
+
 export interface BitAssetsWalletInfo {
   enabled: boolean;
   address_count: number;
@@ -425,6 +434,49 @@ export class JsonRpcBitAssetsWalletClient implements BitAssetsWalletClient {
       clearTimeout(timeout);
     }
   }
+}
+
+export async function fetchBitAssetsChainInfo(rpcUrl: string, timeoutMs = 8000): Promise<BitAssetsChainInfo> {
+  const call = async (method: string): Promise<unknown> => {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const r = await fetch(rpcUrl, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 'chain-info', method, params: [] }),
+        signal: controller.signal,
+      });
+      const env = await r.json();
+      if (env.error) throw new Error(env.error.message);
+      return env.result;
+    } finally {
+      clearTimeout(t);
+    }
+  };
+
+  const [blockcount, mainHash, sideHash, peers, btcBalance] = await Promise.allSettled([
+    call('getblockcount'),
+    call('get_best_mainchain_block_hash'),
+    call('get_best_sidechain_block_hash'),
+    call('list_peers'),
+    call('bitcoin_balance'),
+  ]);
+
+  return {
+    sidechain_height: blockcount.status === 'fulfilled' ? Number(blockcount.value) : null,
+    mainchain_hash: mainHash.status === 'fulfilled' && typeof mainHash.value === 'string' ? mainHash.value : null,
+    sidechain_hash: sideHash.status === 'fulfilled' && typeof sideHash.value === 'string' ? sideHash.value : null,
+    peer_count: peers.status === 'fulfilled' && Array.isArray(peers.value) ? peers.value.length : 0,
+    bitcoin_total_sats:
+      btcBalance.status === 'fulfilled' && btcBalance.value != null && typeof (btcBalance.value as any).total_sats === 'number'
+        ? (btcBalance.value as any).total_sats
+        : null,
+    bitcoin_available_sats:
+      btcBalance.status === 'fulfilled' && btcBalance.value != null && typeof (btcBalance.value as any).available_sats === 'number'
+        ? (btcBalance.value as any).available_sats
+        : null,
+  };
 }
 
 function requireNative() {
