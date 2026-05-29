@@ -2,6 +2,7 @@ import { element, waitFor } from 'detox';
 import * as bitcoin from 'bitcoinjs-lib';
 import {
   dismissGeneralAlerts,
+  dismissPostFundAlerts,
   extractTextFromElementById,
   goBack,
   helperCreateWallet,
@@ -13,31 +14,11 @@ import {
 } from './helperz';
 import { fundL1Address, mineL1Blocks, waitForElectrumBalance } from './l1SignetShared';
 
-const receiveAddress =
-  process.env.ANDROID_L1_RECEIVE_ADDRESS || process.env.L1_RECEIVE_ADDRESS || '';
+const receiveAddress = process.env.ANDROID_L1_RECEIVE_ADDRESS || process.env.L1_RECEIVE_ADDRESS || '';
 const walletLabel = process.env.L1_E2E_WALLET_LABEL || 'L1SendE2E';
 const sendSats = Number(process.env.L1_E2E_SEND_SATS || 10000);
 const fundSats = Number(process.env.L1_E2E_FUND_SATS || 100000);
 const sendBtc = (sendSats / 1e8).toFixed(8);
-
-/** Post-fund dismiss: omit Skip/Continue — those waits wedge Detox "app busy" on main queue. */
-async function dismissPostFundAlerts() {
-  const labels = ['Cancel', 'Try again', 'Reset', 'Reset to default', 'OK', 'Ok', 'Not Now', 'Not now', 'Later', 'Close', 'Dismiss'];
-  for (let round = 0; round < 2; round++) {
-    for (const label of labels) {
-      try {
-        await waitFor(element(by.text(label)))
-          .toBeVisible()
-          .withTimeout(1000);
-        await element(by.text(label)).tap();
-        await sleep(300);
-      } catch (_) {}
-    }
-    try {
-      await element(by.id('NavigationCloseButton')).atIndex(0).tap();
-    } catch (_) {}
-  }
-}
 
 async function dismissReceiveNotificationPrompts() {
   try {
@@ -90,7 +71,7 @@ async function openWalletReceiveScreen(walletName) {
 
 async function openWalletSendScreen(walletName) {
   await device.disableSynchronization();
-  await resetToWalletsList(8);
+  await resetToWalletsList(8, true);
   await dismissPostFundAlerts();
   await scrollWalletIntoView(walletName);
   await tapAndTapAgainIfElementIsNotVisible(walletName, 'SendButton');
@@ -122,7 +103,11 @@ describe('L1 signet iOS simulator to Android receive', () => {
     await helperCreateWallet(walletLabel);
 
     if (process.env.L1_E2E_POST_CREATE_RELAUNCH === '1') {
-      await device.launchApp({ newInstance: true, permissions: { notifications: 'YES' }, launchArgs: { detoxEnableSynchronization: 'NO' } });
+      await device.launchApp({
+        newInstance: true,
+        permissions: { notifications: 'YES' },
+        launchArgs: { detoxEnableSynchronization: 'NO' },
+      });
       await device.disableSynchronization();
       await waitForId('WalletsList');
       await expect(element(by.id(walletLabel))).toBeVisible();
@@ -143,9 +128,10 @@ describe('L1 signet iOS simulator to Android receive', () => {
     if (process.env.L1_E2E_POST_FUND_RELAUNCH === '1') {
       await device.launchApp({ newInstance: false, launchArgs: { detoxEnableSynchronization: 'NO' } });
       await device.disableSynchronization();
-      await waitForId('WalletsList', 120000);
+      await sleep(3000);
+      await dismissPostFundAlerts();
     }
-    await resetToWalletsList(8);
+    await resetToWalletsList(12, true);
     await dismissPostFundAlerts();
     await sleep(2000);
     try {
@@ -167,7 +153,9 @@ describe('L1 signet iOS simulator to Android receive', () => {
 
     // Post-balance-wait refresh in case UI still busy after Electrum sync; ensures SendButton and L1SendE2E context
     await dismissPostFundAlerts();
-    try { await element(by.id('WalletsList')).swipe('down', 'slow'); } catch (_) {}
+    try {
+      await element(by.id('WalletsList')).swipe('down', 'slow');
+    } catch (_) {}
     await sleep(800);
 
     await element(by.id('SendButton')).tap();

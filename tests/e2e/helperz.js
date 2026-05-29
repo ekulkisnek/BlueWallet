@@ -123,8 +123,45 @@ export async function sleep(ms) {
  * Safe to call anytime; swallows errors.
  */
 export async function dismissGeneralAlerts() {
-  const labels = ['Cancel', 'Try again', 'Reset', 'Reset to default', 'OK', 'Ok', 'Continue', 'Skip', 'Not Now', 'Not now', 'Later', 'Close', 'Dismiss'];
+  const labels = [
+    'Cancel',
+    'Try again',
+    'Reset',
+    'Reset to default',
+    'OK',
+    'Ok',
+    'Continue',
+    'Skip',
+    'Not Now',
+    'Not now',
+    'Later',
+    'Close',
+    'Dismiss',
+  ];
   for (let round = 0; round < 5; round++) {
+    for (const label of labels) {
+      try {
+        await waitFor(element(by.text(label)))
+          .toBeVisible()
+          .withTimeout(1000);
+        await element(by.text(label)).tap();
+        await sleep(300);
+      } catch (_) {}
+    }
+    try {
+      await element(by.id('NavigationCloseButton')).atIndex(0).tap();
+    } catch (_) {}
+  }
+}
+
+/**
+ * Safe post-fund dismiss that deliberately omits 'Skip'/'Continue' (and similar backup/rate prompts).
+ * Waiting/tapping those after external L1 fund+ mine can leave dispatch work items, causing persistent
+ * "app is busy" in Detox and blocking subsequent waits/taps. Use via resetToWalletsList(..., true).
+ */
+export async function dismissPostFundAlerts() {
+  const labels = ['Cancel', 'Try again', 'Reset', 'Reset to default', 'OK', 'Ok', 'Not Now', 'Not now', 'Later', 'Close', 'Dismiss'];
+  for (let round = 0; round < 2; round++) {
     for (const label of labels) {
       try {
         await waitFor(element(by.text(label)))
@@ -144,8 +181,9 @@ export async function dismissGeneralAlerts() {
  * Robustly reset nav stack back to WalletsList root after fund/mine or receive flows.
  * Addresses "L1SendE2E not found" / app busy main queue after external block mine.
  * Uses disableSync + back taps + dismiss.
+ * Pass safePostFund=true after L1 fund/mine to use dismissPostFundAlerts (avoids Skip/Continue waits that wedge Detox).
  */
-export async function resetToWalletsList(maxAttempts = 6) {
+export async function resetToWalletsList(maxAttempts = 6, safePostFund = false) {
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
       await waitFor(element(by.id('WalletsList')))
@@ -159,13 +197,15 @@ export async function resetToWalletsList(maxAttempts = 6) {
       try {
         await element(by.id('NavigationCloseButton')).atIndex(0).tap();
       } catch (_) {}
-      await dismissGeneralAlerts();
+      await (safePostFund ? dismissPostFundAlerts() : dismissGeneralAlerts());
       await sleep(350);
     }
   }
   // Final best-effort
   try {
-    await waitFor(element(by.id('WalletsList'))).toBeVisible().withTimeout(3000);
+    await waitFor(element(by.id('WalletsList')))
+      .toBeVisible()
+      .withTimeout(3000);
     return true;
   } catch (_) {
     return false;
@@ -384,9 +424,7 @@ export async function scrollUpOnHomeScreen() {
     await element(by.type('RCTEnhancedScrollView').withDescendant(by.type('RCTEnhancedScrollView'))).swipe('down', 'slow', 0.5);
   } catch (_) {
     try {
-      await element(by.type('RCTEnhancedScrollView'))
-        .atIndex(0)
-        .swipe('down', 'slow', 0.5);
+      await element(by.type('RCTEnhancedScrollView')).atIndex(0).swipe('down', 'slow', 0.5);
     } catch (_) {
       await element(by.id('WalletsList')).swipe('down', 'slow', 0.5);
     }

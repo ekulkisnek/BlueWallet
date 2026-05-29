@@ -2,6 +2,7 @@ import { element, waitFor } from 'detox';
 import * as bitcoin from 'bitcoinjs-lib';
 import {
   dismissGeneralAlerts,
+  dismissPostFundAlerts,
   extractTextFromElementById,
   goBack,
   resetToWalletsList,
@@ -11,7 +12,7 @@ import {
   waitForId,
   waitForText,
 } from './helperz';
-import { fundL1Address, mineL1Blocks } from './l1SignetShared';
+import { fundL1Address, mineL1Blocks, waitForElectrumBalance } from './l1SignetShared';
 
 const receiveAddress = process.env.IOS_L1_RECEIVE_ADDRESS || process.env.L1_RECEIVE_ADDRESS || '';
 const walletLabel = process.env.L1_E2E_WALLET_LABEL || 'L1AndroidSendE2E';
@@ -142,8 +143,8 @@ describe('L1 signet Android phone to iOS simulator receive', () => {
     // Re-disable sync + settle after external fund/mine (parity with ios-sim leg; addresses app busy + nav flakes on Android device)
     await device.disableSynchronization();
     await sleep(2500);
-    await dismissGeneralAlerts();
-    await resetToWalletsList(5);
+    await resetToWalletsList(8, true);
+    await dismissPostFundAlerts();
     await dismissBlockingAlerts();
 
     try {
@@ -156,7 +157,18 @@ describe('L1 signet Android phone to iOS simulator receive', () => {
         await element(by.id('WalletTransactionsScrollView')).swipe('down', 'slow');
       } catch (_) {}
     }
+
+    waitForElectrumBalance(androidReceiveAddress, sendSats);
     await sleep(Number(process.env.L1_E2E_BALANCE_WAIT_MS || 120000));
+
+    // Post-balance-wait reset + safe dismiss to clear any lingering app-busy state before send flow
+    await device.disableSynchronization();
+    await resetToWalletsList(5, true);
+    await dismissPostFundAlerts();
+    try {
+      await element(by.id('WalletTransactionsScrollView')).swipe('down', 'slow');
+    } catch (_) {}
+    await sleep(800);
 
     await waitForId('SendButton', 30000);
     await element(by.id('SendButton')).tap();
@@ -167,8 +179,17 @@ describe('L1 signet Android phone to iOS simulator receive', () => {
     await element(by.id('BitcoinAmountInput')).replaceText(sendBtc);
     await sleep(500);
 
-    await element(by.id('CreateTransactionButton')).tap();
-    await waitForId('TransactionValue', 90000);
+    await device.disableSynchronization();
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await element(by.id('CreateTransactionButton')).tap();
+      try {
+        await waitForId('TransactionValue', 90000);
+        break;
+      } catch (_) {
+        if (attempt === 4) throw new Error('CreateTransactionButton did not produce TransactionValue');
+        await sleep(8000);
+      }
+    }
     await element(by.id('TransactionDetailsButton')).tap();
     const txhex = await extractTextFromElementById('TxhexInput');
     const txid = bitcoin.Transaction.fromHex(txhex).getId();
