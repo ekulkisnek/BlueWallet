@@ -45,6 +45,13 @@ exec > >(tee -a "$RUN_DIR/run.log") 2>&1
 
 log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
 
+# shellcheck source=l1-e2e-lock.sh
+source "$ROOT_DIR/scripts/l1-e2e-lock.sh"
+l1_lock_maybe_acquire "$RUN_DIR" "ios-sim-android-phone" || {
+  log "FAIL another L1 E2E run holds the lock"
+  exit 2
+}
+
 detect_lan_host() {
   local ip
   ip="$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true)"
@@ -239,6 +246,9 @@ fund_sats=$L1_E2E_FUND_SATS
 EOF
 
 final_rc=$detox_rc
+if [[ "$IOS_TO_ANDROID_VERIFY" == fail || "$ANDROID_TO_IOS_VERIFY" == fail ]]; then
+  final_rc=1
+fi
 if [[ "$L1_E2E_BIDIRECTIONAL" == 1 ]]; then
   if [[ "$IOS_TO_ANDROID_VERIFY" != ok || "$ANDROID_TO_IOS_VERIFY" != ok ]]; then
     final_rc=1

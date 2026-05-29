@@ -37,6 +37,13 @@ exec > >(tee -a "$RUN_DIR/run.log") 2>&1
 
 log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
 
+# shellcheck source=l1-e2e-lock.sh
+source "$ROOT_DIR/scripts/l1-e2e-lock.sh"
+l1_lock_maybe_acquire "$RUN_DIR" "android-phone-ios-sim" || {
+  log "FAIL another L1 E2E run holds the lock"
+  exit 2
+}
+
 detect_lan_host() {
   local ip
   ip="$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true)"
@@ -187,14 +194,20 @@ log "detox_exit=$detox_rc"
 TXID="$(parse_detox_txid "$RUN_DIR/detox.log")"
 echo "txid=${TXID:-unset}" >"$RUN_DIR/txid.txt"
 
+VERIFY=skip
 if [[ "$detox_rc" -eq 0 && -n "$TXID" ]]; then
   log "post_test mine + verify"
   (cd "$LOCAL_DEV" && ./scripts/mine-private-signet-blocks.sh "${L1_E2E_POST_SEND_MINE_BLOCKS:-3}") >>"$RUN_DIR/post-mine.log" 2>&1
-  node -e "
+  if node -e "
 const { verifyTxPaysAddress } = require('./tests/e2e/l1SignetShared');
 verifyTxPaysAddress(process.argv[1], process.argv[2], Number(process.argv[3]));
-" "$TXID" "$IOS_L1_RECEIVE_ADDRESS" "$L1_E2E_SEND_SATS" >>"$RUN_DIR/verify.log" 2>&1 && \
-    echo "verify=ok" >>"$RUN_DIR/SUMMARY.txt" || echo "verify=fail" >>"$RUN_DIR/SUMMARY.txt"
+" "$TXID" "$IOS_L1_RECEIVE_ADDRESS" "$L1_E2E_SEND_SATS" >>"$RUN_DIR/verify.log" 2>&1; then
+    VERIFY=ok
+    echo "verify=ok" >>"$RUN_DIR/SUMMARY.txt"
+  else
+    VERIFY=fail
+    echo "verify=fail" >>"$RUN_DIR/SUMMARY.txt"
+  fi
 fi
 
 cat >>"$RUN_DIR/SUMMARY.txt" <<EOF
@@ -206,5 +219,10 @@ send_sats=$L1_E2E_SEND_SATS
 fund_sats=$L1_E2E_FUND_SATS
 EOF
 
-log "done run_dir=$RUN_DIR"
-exit "$detox_rc"
+final_rc=$detox_rc
+if [[ "$VERIFY" == fail ]]; then
+  final_rc=1
+fi
+
+log "done run_dir=$RUN_DIR final_exit=$final_rc"
+exit "$final_rc"

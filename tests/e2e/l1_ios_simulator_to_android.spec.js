@@ -130,10 +130,15 @@ describe('L1 signet iOS simulator to Android receive', () => {
     await dismissGeneralAlerts();
     await helperCreateWallet(walletLabel);
 
-    await device.launchApp({ newInstance: true, permissions: { notifications: 'YES' }, launchArgs: { detoxEnableSynchronization: 'NO' } });
-    await device.disableSynchronization();
-    await waitForId('WalletsList');
-    await expect(element(by.id(walletLabel))).toBeVisible();
+    if (process.env.L1_E2E_POST_CREATE_RELAUNCH === '1') {
+      await device.launchApp({ newInstance: true, permissions: { notifications: 'YES' }, launchArgs: { detoxEnableSynchronization: 'NO' } });
+      await device.disableSynchronization();
+      await waitForId('WalletsList');
+      await expect(element(by.id(walletLabel))).toBeVisible();
+    } else {
+      await dismissGeneralAlerts();
+      await expect(element(by.id(walletLabel))).toBeVisible();
+    }
 
     await openWalletReceiveScreen(walletLabel);
     const iosReceiveAddress = await extractTextFromElementById('AddressValue');

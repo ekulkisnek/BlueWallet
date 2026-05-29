@@ -17,22 +17,22 @@ log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
 # Exclusive L1 lock — kill duplicate orchestrators, pause competing autocode fleets.
 # shellcheck source=l1-e2e-lock.sh
 source "$ROOT_DIR/scripts/l1-e2e-lock.sh"
-l1_lock_acquire "$RUN_DIR" "physical-bidirectional" || {
+l1_lock_maybe_acquire "$RUN_DIR" "physical-bidirectional" || {
   log "FAIL another L1 E2E run holds the lock"
   exit 2
 }
-l1_pause_autocode_competitors
-trap 'l1_lock_release' EXIT
 
 log "physical_bidirectional start run_dir=$RUN_DIR"
 
-L1_IOS_ANDROID_E2E_LOG_DIR="$RUN_DIR/ios-to-android" \
+L1_E2E_SKIP_LOCK=1 \
+  L1_IOS_ANDROID_E2E_LOG_DIR="$RUN_DIR/ios-to-android" \
   L1_E2E_BIDIRECTIONAL=0 \
   bash "$ROOT_DIR/scripts/run-l1-ios-phone-to-android-phone-e2e.sh" "$@"
 ios_rc=$?
 log "ios_to_android_exit=$ios_rc"
 
-L1_ANDROID_IOS_E2E_LOG_DIR="$RUN_DIR/android-to-ios" \
+L1_E2E_SKIP_LOCK=1 \
+  L1_ANDROID_IOS_E2E_LOG_DIR="$RUN_DIR/android-to-ios" \
   bash "$ROOT_DIR/scripts/run-l1-android-phone-to-ios-phone-e2e.sh" "$@"
 android_rc=$?
 log "android_to_ios_exit=$android_rc"
