@@ -14,6 +14,16 @@ exec > >(tee -a "$RUN_DIR/run.log") 2>&1
 
 log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
 
+# Exclusive L1 lock — kill duplicate orchestrators, pause competing autocode fleets.
+# shellcheck source=l1-e2e-lock.sh
+source "$ROOT_DIR/scripts/l1-e2e-lock.sh"
+l1_lock_acquire "$RUN_DIR" "physical-bidirectional" || {
+  log "FAIL another L1 E2E run holds the lock"
+  exit 2
+}
+l1_pause_autocode_competitors
+trap 'l1_lock_release' EXIT
+
 log "physical_bidirectional start run_dir=$RUN_DIR"
 
 L1_IOS_ANDROID_E2E_LOG_DIR="$RUN_DIR/ios-to-android" \
