@@ -19,6 +19,8 @@ const walletLabel = process.env.L1_E2E_WALLET_LABEL || 'L1SendE2E';
 const sendSats = Number(process.env.L1_E2E_SEND_SATS || 10000);
 const fundSats = Number(process.env.L1_E2E_FUND_SATS || 100000);
 const sendBtc = (sendSats / 1e8).toFixed(8);
+const BALANCE_WAIT_MS = Number(process.env.L1_E2E_BALANCE_WAIT_MS || 120000);
+const TEST_TIMEOUT_MS = Number(process.env.L1_E2E_TEST_TIMEOUT_MS || 1200000);
 
 async function dismissReceiveNotificationPrompts() {
   try {
@@ -96,101 +98,124 @@ describe('L1 signet iOS simulator to Android receive', () => {
     await waitForId('WalletsList', 120000);
   }, 600000);
 
-  it('creates wallet, receives L1 funding, sends to Android address', async () => {
-    await device.disableSynchronization();
-    await sleep(2000);
-    await dismissGeneralAlerts();
-    await helperCreateWallet(walletLabel);
-
-    if (process.env.L1_E2E_POST_CREATE_RELAUNCH === '1') {
-      await device.launchApp({
-        newInstance: true,
-        permissions: { notifications: 'YES' },
-        launchArgs: { detoxEnableSynchronization: 'NO' },
-      });
+  it(
+    'creates wallet, receives L1 funding, sends to Android address',
+    async () => {
       await device.disableSynchronization();
-      await waitForId('WalletsList');
-      await expect(element(by.id(walletLabel))).toBeVisible();
-    } else {
+      await sleep(2000);
       await dismissGeneralAlerts();
-      await expect(element(by.id(walletLabel))).toBeVisible();
-    }
-
-    await openWalletReceiveScreen(walletLabel);
-    const iosReceiveAddress = await extractTextFromElementById('AddressValue');
-    console.log('[L1_IOS_ANDROID_E2E] ios_receive_address=' + iosReceiveAddress);
-
-    fundL1Address(iosReceiveAddress, fundSats);
-    mineL1Blocks(Number(process.env.L1_E2E_POST_FUND_MINE_BLOCKS || 3));
-
-    // Re-disable sync + settle after external fund/mine (addresses "app busy" + L1SendE2E not found on main queue pending)
-    await device.disableSynchronization();
-    if (process.env.L1_E2E_POST_FUND_RELAUNCH === '1') {
-      await device.launchApp({ newInstance: false, launchArgs: { detoxEnableSynchronization: 'NO' } });
+      await resetToWalletsList(5);
+      await dismissGeneralAlerts();
       await device.disableSynchronization();
-      await sleep(3000);
-      await dismissPostFundAlerts();
-    }
-    await resetToWalletsList(12, true);
-    await dismissPostFundAlerts();
-    await sleep(2000);
-    try {
-      await element(by.id('WalletsList')).swipe('down', 'slow');
-    } catch (_) {}
-
-    waitForElectrumBalance(iosReceiveAddress, sendSats);
-
-    await openWalletSendScreen(walletLabel);
-
-    try {
-      await element(by.id('TransactionsListEmpty')).swipe('down', 'slow');
-    } catch (_) {
+      await helperCreateWallet(walletLabel);
+      // Post-create cleanup: extra dismiss/reset/swipe to survive transient modal overlays (RNSModalScreen snapshots) that make WalletsList unhittable on iOS sim
+      await dismissGeneralAlerts();
+      await resetToWalletsList(5);
       try {
-        await element(by.id('WalletTransactionsScrollView')).swipe('down', 'slow');
+        await element(by.id('WalletsList')).swipe('down', 'slow', 0.5);
       } catch (_) {}
-    }
-    await sleep(Number(process.env.L1_E2E_BALANCE_WAIT_MS || 120000));
+      await sleep(300);
 
-    // Post-balance-wait reset + safe dismiss (use resetToWalletsList with safePostFund=true to avoid Skip/Continue alert loops that cause Detox app-busy after L1 fund/mine). Matches Android leg and L1_E2E requirements.
-    await device.disableSynchronization();
-    await resetToWalletsList(8, true);
-    await dismissPostFundAlerts();
-    try {
-      await element(by.id('WalletsList')).swipe('down', 'slow');
-    } catch (_) {}
-    await sleep(800);
-
-    await waitForId('SendButton', 30000);
-    await element(by.id('SendButton')).tap();
-    await waitForId('AddressInput');
-    await element(by.id('AddressInput')).replaceText(receiveAddress);
-    await element(by.id('BitcoinAmountInput')).replaceText(sendBtc);
-    if (device.getPlatform() === 'ios') {
-      await element(by.id('BitcoinAmountInput')).tapReturnKey();
-    }
-    await sleep(500);
-
-    await device.disableSynchronization();
-    await dismissPostFundAlerts();
-    for (let attempt = 0; attempt < 5; attempt++) {
-      await element(by.id('CreateTransactionButton')).tap();
-      try {
-        await waitForId('TransactionValue', 120000);
-        break;
-      } catch (_) {
-        if (attempt === 4) throw new Error('CreateTransactionButton did not produce TransactionValue');
-        await sleep(8000);
+      if (process.env.L1_E2E_POST_CREATE_RELAUNCH === '1') {
+        await device.launchApp({
+          newInstance: true,
+          permissions: { notifications: 'YES' },
+          launchArgs: { detoxEnableSynchronization: 'NO' },
+        });
+        await device.disableSynchronization();
+        await waitForId('WalletsList');
+        await expect(element(by.id(walletLabel))).toBeVisible();
+      } else {
+        await dismissGeneralAlerts();
+        await expect(element(by.id(walletLabel))).toBeVisible();
       }
-    }
-    await element(by.id('TransactionDetailsButton')).tap();
-    const txhex = await extractTextFromElementById('TxhexInput');
-    const txid = bitcoin.Transaction.fromHex(txhex).getId();
-    console.log('[L1_IOS_ANDROID_E2E] txid=' + txid);
 
-    await goBack();
-    await waitForText('Send now');
-    await element(by.text('Send now')).tap();
-    await waitForText('Done', 60000);
-    await element(by.text('Done')).tap();
-  }, 1200000);
+      await openWalletReceiveScreen(walletLabel);
+      const iosReceiveAddress = await extractTextFromElementById('AddressValue');
+      console.log('[L1_IOS_ANDROID_E2E] ios_receive_address=' + iosReceiveAddress);
+
+      fundL1Address(iosReceiveAddress, fundSats);
+      mineL1Blocks(Number(process.env.L1_E2E_POST_FUND_MINE_BLOCKS || 3));
+
+      // Re-disable sync + settle after external fund/mine (addresses "app busy" + L1SendE2E not found on main queue pending)
+      await device.disableSynchronization();
+      if (process.env.L1_E2E_POST_FUND_RELAUNCH === '1') {
+        await device.launchApp({ newInstance: false, launchArgs: { detoxEnableSynchronization: 'NO' } });
+        await device.disableSynchronization();
+        await sleep(3000);
+        await dismissPostFundAlerts();
+        // Fix: WalletsList timeout after L1_E2E_POST_FUND_RELAUNCH - robust wait + sync disable + reset to clear post-relaunch state / modals
+        await waitForId('WalletsList', 120000);
+        await resetToWalletsList(6, true);
+      }
+      await resetToWalletsList(8, true);
+      await dismissPostFundAlerts();
+      await sleep(2000);
+      try {
+        await element(by.id('WalletsList')).swipe('down', 'slow');
+      } catch (_) {}
+
+      waitForElectrumBalance(iosReceiveAddress, sendSats);
+
+      await openWalletSendScreen(walletLabel);
+
+      try {
+        await element(by.id('TransactionsListEmpty')).swipe('down', 'slow');
+      } catch (_) {
+        try {
+          await element(by.id('WalletTransactionsScrollView')).swipe('down', 'slow');
+        } catch (_) {}
+      }
+      await sleep(BALANCE_WAIT_MS);
+
+      // Post-balance-wait reset + safe dismiss (use resetToWalletsList with safePostFund=true to avoid Skip/Continue alert loops that cause Detox app-busy after L1 fund/mine). Matches Android leg and L1_E2E requirements.
+      await device.disableSynchronization();
+      await resetToWalletsList(8, true);
+      await dismissPostFundAlerts();
+      try {
+        await element(by.id('WalletsList')).swipe('down', 'slow');
+      } catch (_) {}
+      await sleep(800);
+
+      // After resetToWalletsList (for app-busy post-fund), must re-enter wallet from list before SendButton is hittable.
+      // This completes the safe post-fund reset path (using dismissPostFundAlerts inside reset to avoid Skip/Continue loops).
+      await scrollWalletIntoView(walletLabel);
+      await tapAndTapAgainIfElementIsNotVisible(walletLabel, 'SendButton');
+      await waitForId('SendButton', 30000);
+      await element(by.id('SendButton')).tap();
+      await waitForId('AddressInput');
+      await element(by.id('AddressInput')).replaceText(receiveAddress);
+      await element(by.id('BitcoinAmountInput')).replaceText(sendBtc);
+      if (device.getPlatform() === 'ios') {
+        await element(by.id('BitcoinAmountInput')).tapReturnKey();
+      }
+      await sleep(500);
+
+      await device.disableSynchronization();
+      await dismissPostFundAlerts();
+      for (let attempt = 0; attempt < 5; attempt++) {
+        await element(by.id('CreateTransactionButton')).tap();
+        try {
+          await waitForId('TransactionValue', 180000);
+          break;
+        } catch (_) {
+          if (attempt === 4) throw new Error('CreateTransactionButton did not produce TransactionValue');
+          await dismissPostFundAlerts();
+          await device.disableSynchronization();
+          await sleep(10000);
+        }
+      }
+      await element(by.id('TransactionDetailsButton')).tap();
+      const txhex = await extractTextFromElementById('TxhexInput');
+      const txid = bitcoin.Transaction.fromHex(txhex).getId();
+      console.log('[L1_IOS_ANDROID_E2E] txid=' + txid);
+
+      await goBack();
+      await waitForText('Send now');
+      await element(by.text('Send now')).tap();
+      await waitForText('Done', 60000);
+      await element(by.text('Done')).tap();
+    },
+    TEST_TIMEOUT_MS,
+  );
 });
