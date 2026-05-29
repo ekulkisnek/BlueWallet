@@ -11,7 +11,7 @@ import {
   waitForId,
   waitForText,
 } from './helperz';
-import { fundL1Address, mineL1Blocks } from './l1SignetShared';
+import { fundL1Address, mineL1Blocks, waitForElectrumBalance } from './l1SignetShared';
 
 const receiveAddress =
   process.env.ANDROID_L1_RECEIVE_ADDRESS || process.env.L1_RECEIVE_ADDRESS || '';
@@ -151,6 +151,8 @@ describe('L1 signet iOS simulator to Android receive', () => {
     try {
       await element(by.id('WalletsList')).swipe('down', 'slow');
     } catch (_) {}
+
+    waitForElectrumBalance(iosReceiveAddress, sendSats);
 
     await openWalletSendScreen(walletLabel);
 

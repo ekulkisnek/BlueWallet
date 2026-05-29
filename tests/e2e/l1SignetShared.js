@@ -57,6 +57,18 @@ function sumPaidSatsToAddress(tx, address) {
   return paidSats;
 }
 
+function waitForElectrumBalance(address, minSats) {
+  const rootDir = process.env.L1_E2E_ROOT_DIR || '/Volumes/T705/code/work-on-something-to-do-with/redwallet';
+  const script = `${rootDir}/scripts/preflight-electrum-balance.sh`;
+  const timeoutSec = Math.ceil(Number(process.env.L1_E2E_BALANCE_WAIT_MS || 120000) / 1000);
+  console.log(`[L1 E2E] Waiting for Electrum balance >= ${minSats} sats on ${address} (timeout ${timeoutSec}s)`);
+  execFileSync('bash', [script, address, String(minSats), String(timeoutSec)], {
+    encoding: 'utf8',
+    timeout: Number(process.env.L1_E2E_BALANCE_WAIT_MS || 120000) + 30000,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+}
+
 function verifyTxPaysAddress(txid, address, minSats) {
   const { localDev, composeFile } = localDevPaths();
   const raw = execFileSync(
@@ -80,4 +92,11 @@ function verifyTxPaysAddress(txid, address, minSats) {
   return paidSats;
 }
 
-module.exports = { fundL1Address, mineL1Blocks, verifyTxPaysAddress, sumPaidSatsToAddress, shellQuote };
+module.exports = {
+  fundL1Address,
+  mineL1Blocks,
+  waitForElectrumBalance,
+  verifyTxPaysAddress,
+  sumPaidSatsToAddress,
+  shellQuote,
+};
