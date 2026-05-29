@@ -49,7 +49,6 @@
     "simulator": {
       "type": "ios.simulator",
       "device": {
-        "name": "iPhone 16e-Detox",
         "id": "FC7DDD6B-DFCB-432A-98CE-48C453E6EF48"
       }
     },

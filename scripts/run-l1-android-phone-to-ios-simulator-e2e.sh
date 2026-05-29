@@ -139,6 +139,10 @@ parse_detox_txid() {
 
 seed_ios_receive_address() {
   log "ios_seed_start"
+  # Shutdown duplicate iOS sims before seed (ensures Detox + id in .detoxrc targets exactly FC7D iPhone 16e-Detox)
+  local target_udid="FC7DDD6B-DFCB-432A-98CE-48C453E6EF48"
+  for dup in $(xcrun simctl list devices 2>/dev/null | grep -oE '[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}' | grep -v "$target_udid" | head -6); do xcrun simctl shutdown "$dup" 2>/dev/null || true; done
+  xcrun simctl boot "$target_udid" 2>/dev/null || true
   set +e
   npx detox test -c ios.debug.nosync tests/e2e/l1_ios_simulator_seed_receive.spec.js \
     --loglevel "${DETOX_LOGLEVEL:-info}" \

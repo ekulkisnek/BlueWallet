@@ -137,19 +137,30 @@ export async function dismissGeneralAlerts() {
     'Later',
     'Close',
     'Dismiss',
+    'Yes, I have.',
+    'No, and do not ask me again.',
+    'Allow',
+    'Don\'t Allow',
+    'Maybe Later',
+    'Set up later',
+    'Not Now',
+    'Remind Me Later',
   ];
-  for (let round = 0; round < 5; round++) {
+  for (let round = 0; round < 8; round++) {
     for (const label of labels) {
       try {
         await waitFor(element(by.text(label)))
           .toBeVisible()
-          .withTimeout(1000);
+          .withTimeout(800);
         await element(by.text(label)).tap();
-        await sleep(300);
+        await sleep(250);
       } catch (_) {}
     }
     try {
       await element(by.id('NavigationCloseButton')).atIndex(0).tap();
+    } catch (_) {}
+    try {
+      await element(by.id('CloseButton')).atIndex(0).tap();
     } catch (_) {}
   }
 }
@@ -160,19 +171,22 @@ export async function dismissGeneralAlerts() {
  * "app is busy" in Detox and blocking subsequent waits/taps. Use via resetToWalletsList(..., true).
  */
 export async function dismissPostFundAlerts() {
-  const labels = ['Cancel', 'Try again', 'Reset', 'Reset to default', 'OK', 'Ok', 'Not Now', 'Not now', 'Later', 'Close', 'Dismiss'];
-  for (let round = 0; round < 2; round++) {
+  const labels = ['Cancel', 'Try again', 'Reset', 'Reset to default', 'OK', 'Ok', 'Not Now', 'Not now', 'Later', 'Close', 'Dismiss', 'Continue', 'Yes, I have.', 'No, and do not ask me again.'];
+  for (let round = 0; round < 4; round++) {
     for (const label of labels) {
       try {
         await waitFor(element(by.text(label)))
           .toBeVisible()
-          .withTimeout(1000);
+          .withTimeout(800);
         await element(by.text(label)).tap();
-        await sleep(300);
+        await sleep(250);
       } catch (_) {}
     }
     try {
       await element(by.id('NavigationCloseButton')).atIndex(0).tap();
+    } catch (_) {}
+    try {
+      await element(by.id('CloseButton')).atIndex(0).tap();
     } catch (_) {}
   }
 }

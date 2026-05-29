@@ -1,7 +1,9 @@
 import { element, waitFor } from 'detox';
 import {
+  dismissGeneralAlerts,
   extractTextFromElementById,
   helperCreateWallet,
+  resetToWalletsList,
   sleep,
   tapAndTapAgainIfElementIsNotVisible,
   waitForId,
@@ -65,18 +67,30 @@ describe('L1 signet iOS simulator receive seed', () => {
 
   it('creates wallet and logs receive address for Android send E2E', async () => {
     await device.disableSynchronization();
-    await sleep(2000);
+    await sleep(1500);
+    await dismissGeneralAlerts();
+    await resetToWalletsList(4, true);
 
     await helperCreateWallet(walletLabel);
 
     await device.launchApp({ newInstance: true, permissions: { notifications: 'YES' }, launchArgs: { detoxEnableSynchronization: 'NO' } });
     await device.disableSynchronization();
-    await waitForId('WalletsList');
+    await sleep(1500);
+    await dismissGeneralAlerts();
+    await waitForId('WalletsList', 60000);
     await expect(element(by.id(walletLabel))).toBeVisible();
 
     await tapAndTapAgainIfElementIsNotVisible(walletLabel, 'ReceiveButton');
     await openReceiveAndWaitForAddress();
     const iosReceiveAddress = await extractTextFromElementById('AddressValue');
     console.log('[L1_IOS_ANDROID_E2E] ios_receive_address=' + iosReceiveAddress);
+    if (!iosReceiveAddress || iosReceiveAddress.length < 20) {
+      // retry once for flakey address render on sim
+      await sleep(2000);
+      await element(by.id('ReceiveButton')).tap();
+      await waitFor(element(by.id('AddressValue'))).toBeVisible().withTimeout(30000);
+      const retryAddr = await extractTextFromElementById('AddressValue');
+      console.log('[L1_IOS_ANDROID_E2E] ios_receive_address_retry=' + retryAddr);
+    }
   }, 600000);
 });

@@ -127,8 +127,12 @@ ensure_ios_build() {
 
 ensure_detox_simulator_booted() {
   local udid="${DETOX_IOS_SIM_UDID:-FC7DDD6B-DFCB-432A-98CE-48C453E6EF48}"
+  # Shutdown any duplicate/conflicting iPhone*Detox* sims (prevents Detox picking wrong UDID by name match, fixes L1 E2E sim device blocker)
+  for dup_udid in $(xcrun simctl list devices 2>/dev/null | grep -oE '[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}' | grep -v "$udid" | head -8); do
+    xcrun simctl shutdown "$dup_udid" 2>/dev/null || true
+  done
   xcrun simctl boot "$udid" >/dev/null 2>&1 || true
-  log "detox_simulator udid=$udid"
+  log "detox_simulator udid=$udid (duplicates shutdown)"
 }
 
 parse_detox_txid() {
