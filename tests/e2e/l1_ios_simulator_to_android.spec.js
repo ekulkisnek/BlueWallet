@@ -89,28 +89,26 @@ async function openWalletSendScreen(walletName) {
   await dismissGeneralAlerts();
   await device.disableSynchronization();
   // Robust reset to WalletsList after fund/receive (handles busy main queue, receive subview, nav stack after external mine)
-  for (let attempt = 0; attempt < 6; attempt++) {
+  // Increased attempts + timeouts + extra gestures to defeat post-fund app-busy / L1SendE2E not found
+  for (let attempt = 0; attempt < 10; attempt++) {
     try {
       await waitFor(element(by.id('WalletsList')))
         .toBeVisible()
-        .withTimeout(2500);
+        .withTimeout(4000);
       break;
     } catch (_) {
-      try {
-        await element(by.id('BackButton')).atIndex(0).tap();
-      } catch (_) {}
-      try {
-        await element(by.id('NavigationCloseButton')).atIndex(0).tap();
-      } catch (_) {}
+      try { await element(by.id('BackButton')).atIndex(0).tap(); } catch (_) {}
+      try { await element(by.id('NavigationCloseButton')).atIndex(0).tap(); } catch (_) {}
+      try { await element(by.id('WalletsList')).swipe('down', 'slow'); } catch (_) {} // pull to refresh list
       await dismissGeneralAlerts();
-      await sleep(350);
+      await sleep(450);
     }
   }
   await scrollWalletIntoView(walletName);
   await tapAndTapAgainIfElementIsNotVisible(walletName, 'SendButton');
   await waitFor(element(by.id('SendButton')))
     .toBeVisible()
-    .withTimeout(45000);
+    .withTimeout(60000);
 }
 
 describe('L1 signet iOS simulator to Android receive', () => {
@@ -154,7 +152,15 @@ describe('L1 signet iOS simulator to Android receive', () => {
 
     // Re-disable sync + settle after external fund/mine (addresses "app busy" + L1SendE2E not found on main queue pending)
     await device.disableSynchronization();
-    await sleep(2500);
+    await sleep(3000);
+
+    // Extra refresh of wallet list + dismiss to ensure L1SendE2E row is interactable post-fund (common Detox/RN main-queue blocker)
+    try {
+      await waitFor(element(by.id('WalletsList'))).toBeVisible().withTimeout(5000);
+      await element(by.id('WalletsList')).swipe('down', 'slow');
+    } catch (_) {}
+    await dismissGeneralAlerts();
+    await sleep(1500);
 
     await openWalletSendScreen(walletLabel);
 
@@ -166,6 +172,11 @@ describe('L1 signet iOS simulator to Android receive', () => {
       } catch (_) {}
     }
     await sleep(Number(process.env.L1_E2E_BALANCE_WAIT_MS || 45000));
+
+    // Post-balance-wait refresh in case UI still busy after Electrum sync; ensures SendButton and L1SendE2E context
+    await dismissGeneralAlerts();
+    try { await element(by.id('WalletsList')).swipe('down', 'slow'); } catch (_) {}
+    await sleep(800);
 
     await element(by.id('SendButton')).tap();
     await waitForId('AddressInput');
