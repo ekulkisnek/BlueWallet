@@ -118,6 +118,60 @@ export async function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+/**
+ * Aggressive dismiss for common RN/Detox alert/prompt/nav modals after launch or fund/mine.
+ * Safe to call anytime; swallows errors.
+ */
+export async function dismissGeneralAlerts() {
+  const labels = ['Cancel', 'Try again', 'Reset', 'Reset to default', 'OK', 'Ok', 'Continue', 'Skip', 'Not Now', 'Not now', 'Later', 'Close', 'Dismiss'];
+  for (let round = 0; round < 5; round++) {
+    for (const label of labels) {
+      try {
+        await waitFor(element(by.text(label)))
+          .toBeVisible()
+          .withTimeout(1000);
+        await element(by.text(label)).tap();
+        await sleep(300);
+      } catch (_) {}
+    }
+    try {
+      await element(by.id('NavigationCloseButton')).atIndex(0).tap();
+    } catch (_) {}
+  }
+}
+
+/**
+ * Robustly reset nav stack back to WalletsList root after fund/mine or receive flows.
+ * Addresses "L1SendE2E not found" / app busy main queue after external block mine.
+ * Uses disableSync + back taps + dismiss.
+ */
+export async function resetToWalletsList(maxAttempts = 6) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      await waitFor(element(by.id('WalletsList')))
+        .toBeVisible()
+        .withTimeout(2500);
+      return true;
+    } catch (_) {
+      try {
+        await element(by.id('BackButton')).atIndex(0).tap();
+      } catch (_) {}
+      try {
+        await element(by.id('NavigationCloseButton')).atIndex(0).tap();
+      } catch (_) {}
+      await dismissGeneralAlerts();
+      await sleep(350);
+    }
+  }
+  // Final best-effort
+  try {
+    await waitFor(element(by.id('WalletsList'))).toBeVisible().withTimeout(3000);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 export function hashIt(s) {
   return Buffer.from(sha256(s)).toString('hex');
 }
@@ -158,12 +212,22 @@ export const expectToBeVisible = async id => {
 };
 
 export async function helperCreateWallet(walletName) {
+  // Early disable + aggressive dismiss for fresh delete:true sim launches (addresses WalletsList/CreateAWallet flakes post-wip)
+  try {
+    if (device.getPlatform() === 'ios') {
+      await device.disableSynchronization();
+    }
+  } catch (_) {}
+  await dismissGeneralAlerts();
+  await resetToWalletsList(4);
+
   await waitFor(element(by.id('CreateAWallet')))
     .toBeVisible()
     .whileElement(by.id('WalletsList'))
     .scroll(500, 'right'); // in case emu screen is small and it doesnt fit
 
   await sleep(200); // Wait until bounce animation finishes.
+  await dismissGeneralAlerts();
   await tapAndTapAgainIfElementIsNotVisible('CreateAWallet', 'WalletNameInput');
   await element(by.id('WalletNameInput')).replaceText(walletName || 'cr34t3d');
   await waitForId('ActivateBitcoinButton');

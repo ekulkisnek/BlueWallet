@@ -1,8 +1,10 @@
 import { element, waitFor } from 'detox';
 import * as bitcoin from 'bitcoinjs-lib';
 import {
+  dismissGeneralAlerts,
   extractTextFromElementById,
   goBack,
+  resetToWalletsList,
   scrollUpOnHomeScreen,
   sleep,
   tapAndTapAgainIfElementIsNotVisible,
@@ -117,12 +119,14 @@ describe('L1 signet Android phone to iOS simulator receive', () => {
       launchArgs: { detoxEnableSynchronization: 'NO' },
     });
     await device.disableSynchronization();
+    await dismissGeneralAlerts();
     await waitForId('WalletsList', 120000);
   }, 600000);
 
   it('creates wallet, receives L1 funding, sends to iOS simulator address', async () => {
     await device.disableSynchronization();
     await sleep(2000);
+    await dismissGeneralAlerts();
 
     await waitForId('WalletsList');
     await createBitcoinWallet(walletLabel);
@@ -135,7 +139,11 @@ describe('L1 signet Android phone to iOS simulator receive', () => {
     fundL1Address(androidReceiveAddress, fundSats);
     mineL1Blocks(Number(process.env.L1_E2E_POST_FUND_MINE_BLOCKS || 3));
 
-    await goBack();
+    // Re-disable sync + settle after external fund/mine (parity with ios-sim leg; addresses app busy + nav flakes on Android device)
+    await device.disableSynchronization();
+    await sleep(2500);
+    await dismissGeneralAlerts();
+    await resetToWalletsList(5);
     await dismissBlockingAlerts();
 
     try {
@@ -148,9 +156,9 @@ describe('L1 signet Android phone to iOS simulator receive', () => {
         await element(by.id('WalletTransactionsScrollView')).swipe('down', 'slow');
       } catch (_) {}
     }
-    await sleep(Number(process.env.L1_E2E_BALANCE_WAIT_MS || 8000));
+    await sleep(Number(process.env.L1_E2E_BALANCE_WAIT_MS || 15000));
 
-    await waitForId('SendButton');
+    await waitForId('SendButton', 30000);
     await element(by.id('SendButton')).tap();
     await waitForId('AddressInput');
     await element(by.id('AddressInput')).tap();
