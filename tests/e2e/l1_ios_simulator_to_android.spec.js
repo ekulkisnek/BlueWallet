@@ -151,13 +151,16 @@ describe('L1 signet iOS simulator to Android receive', () => {
     }
     await sleep(Number(process.env.L1_E2E_BALANCE_WAIT_MS || 120000));
 
-    // Post-balance-wait refresh in case UI still busy after Electrum sync; ensures SendButton and L1SendE2E context
+    // Post-balance-wait reset + safe dismiss (use resetToWalletsList with safePostFund=true to avoid Skip/Continue alert loops that cause Detox app-busy after L1 fund/mine). Matches Android leg and L1_E2E requirements.
+    await device.disableSynchronization();
+    await resetToWalletsList(8, true);
     await dismissPostFundAlerts();
     try {
       await element(by.id('WalletsList')).swipe('down', 'slow');
     } catch (_) {}
     await sleep(800);
 
+    await waitForId('SendButton', 30000);
     await element(by.id('SendButton')).tap();
     await waitForId('AddressInput');
     await element(by.id('AddressInput')).replaceText(receiveAddress);
@@ -167,10 +170,12 @@ describe('L1 signet iOS simulator to Android receive', () => {
     }
     await sleep(500);
 
+    await device.disableSynchronization();
+    await dismissPostFundAlerts();
     for (let attempt = 0; attempt < 5; attempt++) {
       await element(by.id('CreateTransactionButton')).tap();
       try {
-        await waitForId('TransactionValue', 90000);
+        await waitForId('TransactionValue', 120000);
         break;
       } catch (_) {
         if (attempt === 4) throw new Error('CreateTransactionButton did not produce TransactionValue');

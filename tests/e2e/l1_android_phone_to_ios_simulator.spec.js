@@ -180,10 +180,11 @@ describe('L1 signet Android phone to iOS simulator receive', () => {
     await sleep(500);
 
     await device.disableSynchronization();
+    await dismissPostFundAlerts();
     for (let attempt = 0; attempt < 5; attempt++) {
       await element(by.id('CreateTransactionButton')).tap();
       try {
-        await waitForId('TransactionValue', 90000);
+        await waitForId('TransactionValue', 120000);
         break;
       } catch (_) {
         if (attempt === 4) throw new Error('CreateTransactionButton did not produce TransactionValue');
