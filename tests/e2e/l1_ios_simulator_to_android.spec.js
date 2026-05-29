@@ -84,7 +84,7 @@ async function openWalletReceiveScreen(walletName) {
 
 async function openWalletSendScreen(walletName) {
   await device.disableSynchronization();
-  await resetToWalletsList(15, true);
+  await resetToWalletsList(6, true);
   await dismissPostFundAlerts();
   // Extra recovery swipe + re-scroll + reload for L1SendE2E not found after fund (list may need bounce/refresh post-balance update) + Detox app busy
   try { await element(by.id('WalletsList')).swipe('down', 'slow', 0.4); } catch (_) {}
@@ -180,10 +180,10 @@ describe('L1 signet iOS simulator to Android receive', () => {
         await device.disableSynchronization();
         await sleep(4000);
         await dismissPostFundAlerts();
-        await resetToWalletsList(15, true);
+        await resetToWalletsList(6, true);
         await waitForId('WalletsList', 60000);
       }
-      await resetToWalletsList(8, true);
+      await resetToWalletsList(5, true);
       await dismissPostFundAlerts();
       await sleep(2000);
       try {
@@ -207,17 +207,10 @@ describe('L1 signet iOS simulator to Android receive', () => {
 
       // Post-balance-wait reset + safe dismiss (use resetToWalletsList with safePostFund=true to avoid Skip/Continue alert loops that cause Detox app-busy after L1 fund/mine). Matches Android leg and L1_E2E requirements.
       await device.disableSynchronization();
-      await resetToWalletsList(15, true);
-      await dismissPostFundAlerts();
-      try {
-        await element(by.id('WalletsList')).swipe('down', 'slow');
-      } catch (_) {}
-      await sleep(600);
-      try { await device.reloadReactNative(); } catch (_) {}
-      try { await device.disableSynchronization(); } catch (_) {}
+      await resetToWalletsList(5, true);
       await dismissPostFundAlerts();
       try { await element(by.id('WalletsList')).swipe('down', 'slow', 0.3); } catch (_) {}
-      try { await goBack(); } catch (_) {}
+      await sleep(400);
 
       // After resetToWalletsList (for app-busy post-fund), must re-enter wallet from list before SendButton is hittable.
       // This completes the safe post-fund reset path (using dismissPostFundAlerts inside reset to avoid Skip/Continue loops).

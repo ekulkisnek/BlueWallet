@@ -118,6 +118,31 @@ export async function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+/** Best-effort tap; short waitFor so Detox does not queue hundreds of pending expectations. */
+async function tapIfVisible(matcher, timeoutMs = 120) {
+  try {
+    await waitFor(matcher).toBeVisible().withTimeout(timeoutMs);
+    await matcher.tap();
+    await sleep(80);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function dismissAlertLabels(labels, { rounds = 2, timeoutMs = 120 } = {}) {
+  try { await device.disableSynchronization(); } catch (_) {}
+  for (let round = 0; round < rounds; round++) {
+    for (const label of labels) {
+      await tapIfVisible(element(by.text(label)), timeoutMs);
+    }
+    await tapIfVisible(element(by.id('NavigationCloseButton')).atIndex(0), 80);
+    await tapIfVisible(element(by.id('CloseButton')).atIndex(0), 80);
+    if (device.getPlatform() === 'android') { try { await device.pressBack(); } catch (_) {} }
+    await sleep(60);
+  }
+}
+
 /**
  * Aggressive dismiss for common RN/Detox alert/prompt/nav modals after launch or fund/mine.
  * Safe to call anytime; swallows errors.
@@ -149,7 +174,6 @@ export async function dismissGeneralAlerts() {
       'Set Up Later',
       'Setup Later',
       'Set up Later',
-      'Not Now',
       'Remind Me Later',
       'Remind me later',
       'Skip for now',
@@ -158,29 +182,9 @@ export async function dismissGeneralAlerts() {
       'Open Settings',
       'Keep Using',
     ];
-    for (let round = 0; round < 8; round++) {
-      for (const label of labels) {
-        try {
-          await waitFor(element(by.text(label)))
-            .toBeVisible()
-            .withTimeout(300);
-          await element(by.text(label)).tap();
-          await sleep(120);
-        } catch (_) {}
-      }
-      try { await element(by.id('NavigationCloseButton')).atIndex(0).tap(); } catch (_) {}
-      try { await element(by.id('CloseButton')).atIndex(0).tap(); } catch (_) {}
-      if (device.getPlatform() === 'android') { try { await device.pressBack(); } catch (_) {} }
-      await sleep(80);
-    }
-    // Extra pass for iOS system permission dialogs (notifications, etc) that may use curly apostrophe or appear late; swallow all
-    try { await device.disableSynchronization(); } catch (_) {}
+    await dismissAlertLabels(labels, { rounds: 2, timeoutMs: 120 });
     for (const permLabel of ["Don't Allow", "Don\u2019t Allow", "Don‘t Allow", 'Allow', 'Allow While Using App']) {
-      try {
-        await waitFor(element(by.text(permLabel))).toBeVisible().withTimeout(400);
-        await element(by.text(permLabel)).tap();
-        await sleep(150);
-      } catch (_) {}
+      await tapIfVisible(element(by.text(permLabel)), 150);
     }
   } catch (_) {
     // Never let dismiss unhandled errors (app busy, detox comms, permission race) escape and fail the test
@@ -193,28 +197,8 @@ export async function dismissGeneralAlerts() {
  * "app is busy" in Detox and blocking subsequent waits/taps. Use via resetToWalletsList(..., true).
  */
 export async function dismissPostFundAlerts() {
-  const labels = ['Cancel', 'Try again', 'Reset', 'Reset to default', 'OK', 'Ok', 'Not Now', 'Not now', 'Later', 'Close', 'Dismiss', 'Continue', 'Yes, I have.', 'No, and do not ask me again.', 'Set up later', 'Set Up Later', 'Maybe Later', 'Remind Me Later', 'Skip for now'];
-  try { await device.disableSynchronization(); } catch (_) {}
-  for (let round = 0; round < 8; round++) {
-    if (round % 3 === 2) {
-      try { await device.reloadReactNative(); } catch (_) {}
-      try { await device.disableSynchronization(); } catch (_) {}
-      await sleep(300);
-    }
-    for (const label of labels) {
-      try {
-        await waitFor(element(by.text(label)))
-          .toBeVisible()
-          .withTimeout(400);
-        await element(by.text(label)).tap();
-        await sleep(150);
-      } catch (_) {}
-    }
-    try { await element(by.id('NavigationCloseButton')).atIndex(0).tap(); } catch (_) {}
-    try { await element(by.id('CloseButton')).atIndex(0).tap(); } catch (_) {}
-    if (device.getPlatform() === 'android') { try { await device.pressBack(); } catch (_) {} }
-    await sleep(100);
-  }
+  const labels = ['Cancel', 'Try again', 'OK', 'Ok', 'Not Now', 'Not now', 'Later', 'Close', 'Dismiss', 'Yes, I have.', 'No, and do not ask me again.', 'Set up later', 'Set Up Later', 'Maybe Later', 'Remind Me Later'];
+  await dismissAlertLabels(labels, { rounds: 2, timeoutMs: 100 });
 }
 
 /**
@@ -226,7 +210,7 @@ export async function dismissPostFundAlerts() {
 export async function resetToWalletsList(maxAttempts = 6, safePostFund = false) {
   if (safePostFund) {
     try { await device.disableSynchronization(); } catch (_) {}
-    await sleep(600);
+    await sleep(400);
   }
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
@@ -236,15 +220,21 @@ export async function resetToWalletsList(maxAttempts = 6, safePostFund = false) 
       try { await element(by.id('WalletsList')).swipe('down', 'slow', 0.3); } catch (_) {}
       return true;
     } catch (_) {
-      try {
-        await element(by.id('BackButton')).atIndex(0).tap();
-      } catch (_) {}
-      try {
-        await element(by.id('NavigationCloseButton')).atIndex(0).tap();
-      } catch (_) {}
-      await (safePostFund ? dismissPostFundAlerts() : dismissGeneralAlerts());
-      await sleep(450);
-      if (safePostFund && (attempt % 2 === 1)) {
+      // Stuck on wallet tx/send/receive screens: back out before alert loops (avoids 20min Detox wedge on Reset).
+      for (let back = 0; back < 3; back++) {
+        try { await element(by.id('BackButton')).atIndex(0).tap(); } catch (_) {}
+        try { await element(by.id('NavigationCloseButton')).atIndex(0).tap(); } catch (_) {}
+        if (device.getPlatform() === 'android') { try { await device.pressBack(); } catch (_) {} }
+        try {
+          await waitFor(element(by.id('WalletsList'))).toBeVisible().withTimeout(800);
+          return true;
+        } catch (_) {}
+      }
+      if (attempt === maxAttempts - 1) {
+        await (safePostFund ? dismissPostFundAlerts() : dismissGeneralAlerts());
+      }
+      await sleep(300);
+      if (safePostFund && attempt === maxAttempts - 2) {
         try { await device.reloadReactNative(); } catch (_) {}
         try { await device.disableSynchronization(); } catch (_) {}
       }
@@ -302,17 +292,14 @@ export const expectToBeVisible = async id => {
 };
 
 export async function helperCreateWallet(walletName) {
-  // Early disable + aggressive dismiss for fresh delete:true sim launches (addresses WalletsList/CreateAWallet flakes post-wip + modal snapshot blockers + Set up later system prompts)
+  // Early disable + dismiss for fresh delete:true sim launches (addresses WalletsList/CreateAWallet flakes post-wip + modal snapshot blockers + Set up later system prompts)
   try {
     if (device.getPlatform() === 'ios') {
       await device.disableSynchronization();
     }
   } catch (_) {}
-  for (let i = 0; i < 2; i++) {
-    try { await dismissGeneralAlerts(); } catch (_) {}
-    try { await dismissPostFundAlerts(); } catch (_) {}
-  }
-  await resetToWalletsList(6, true);
+  try { await dismissGeneralAlerts(); } catch (_) {}
+  await resetToWalletsList(4, false);
   // Additional overlay clear for RNSModalScreen hit-test issues on simulator
   try { await element(by.type('RCTModalHostView')).atIndex(0).tap(); } catch (_) {}
   if (device.getPlatform() === 'android') { try { await device.pressBack(); } catch (_) {} }
