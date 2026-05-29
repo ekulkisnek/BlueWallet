@@ -143,18 +143,15 @@ describe('L1 signet iOS simulator to Android receive', () => {
       // Re-disable sync + settle after external fund/mine (addresses "app busy" + L1SendE2E not found on main queue pending)
       await device.disableSynchronization();
       if (process.env.L1_E2E_POST_FUND_RELAUNCH === '1') {
-        await device.launchApp({ newInstance: false, launchArgs: { detoxEnableSynchronization: 'NO' } });
+        await device.terminateApp();
+        await device.launchApp({
+          newInstance: true,
+          permissions: { notifications: 'NO' },
+          launchArgs: { detoxEnableSynchronization: 'NO' },
+        });
         await device.disableSynchronization();
-        await sleep(4000);
+        await sleep(5000);
         await dismissPostFundAlerts();
-        // Hardened: L1SendE2E/WalletsList post-fund app-busy (dispatch queue) + not-found. reloadReactNative + extra reset + disableSync settles RN bridge after external mine/fund.
-        try {
-          await device.reloadReactNative();
-        } catch (_) {}
-        await device.disableSynchronization();
-        await sleep(2000);
-        await dismissPostFundAlerts();
-        await waitForId('WalletsList', 180000);
         await resetToWalletsList(10, true);
       }
       await resetToWalletsList(8, true);
