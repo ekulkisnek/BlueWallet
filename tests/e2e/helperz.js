@@ -142,6 +142,8 @@ export async function dismissGeneralAlerts() {
       'No, and do not ask me again.',
       'Allow',
       'Don\'t Allow',
+      'Don\u2019t Allow',
+      'Don‘t Allow',
       'Maybe Later',
       'Set up later',
       'Set Up Later',
@@ -170,6 +172,15 @@ export async function dismissGeneralAlerts() {
       try { await element(by.id('CloseButton')).atIndex(0).tap(); } catch (_) {}
       if (device.getPlatform() === 'android') { try { await device.pressBack(); } catch (_) {} }
       await sleep(80);
+    }
+    // Extra pass for iOS system permission dialogs (notifications, etc) that may use curly apostrophe or appear late; swallow all
+    try { await device.disableSynchronization(); } catch (_) {}
+    for (const permLabel of ["Don't Allow", "Don\u2019t Allow", "Don‘t Allow", 'Allow', 'Allow While Using App']) {
+      try {
+        await waitFor(element(by.text(permLabel))).toBeVisible().withTimeout(400);
+        await element(by.text(permLabel)).tap();
+        await sleep(150);
+      } catch (_) {}
     }
   } catch (_) {
     // Never let dismiss unhandled errors (app busy, detox comms, permission race) escape and fail the test

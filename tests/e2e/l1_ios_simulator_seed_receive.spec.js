@@ -12,8 +12,8 @@ import {
 const walletLabel = process.env.L1_E2E_IOS_RECEIVE_WALLET_LABEL || 'L1IosReceiveSeed';
 
 async function dismissBlockingAlerts() {
-  const labels = ['Cancel', 'OK', 'Ok', 'Not Now', 'Not now', 'Later', 'Close', 'Yes, I have.', 'No, and do not ask me again.'];
-  for (let round = 0; round < 3; round++) {
+  const labels = ['Cancel', 'OK', 'Ok', 'Not Now', 'Not now', 'Later', 'Close', 'Yes, I have.', 'No, and do not ask me again.', "Don't Allow", 'Don\u2019t Allow', 'Don‘t Allow', 'Allow', 'Allow While Using App'];
+  for (let round = 0; round < 4; round++) {
     for (const label of labels) {
       try {
         await waitFor(element(by.text(label)))
@@ -33,10 +33,9 @@ async function dismissReceiveNotificationPrompts() {
       .withTimeout(5000);
     await element(by.text('Yes, I have.')).tap();
   } catch (_) {}
-  try {
-    await element(by.text('No, and do not ask me again.')).tap();
-    await element(by.text('No, and do not ask me again.')).tap();
-  } catch (_) {}
+  for (const label of ['No, and do not ask me again.', "Don't Allow", 'Don\u2019t Allow', 'Don‘t Allow', 'Allow', 'Allow While Using App']) {
+    try { await element(by.text(label)).tap(); await sleep(100); } catch (_) {}
+  }
 }
 
 async function openReceiveAndWaitForAddress() {

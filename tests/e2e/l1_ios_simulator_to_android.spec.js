@@ -29,10 +29,9 @@ async function dismissReceiveNotificationPrompts() {
       .withTimeout(5000);
     await element(by.text('Yes, I have.')).tap();
   } catch (_) {}
-  try {
-    await element(by.text('No, and do not ask me again.')).tap();
-    await element(by.text('No, and do not ask me again.')).tap();
-  } catch (_) {}
+  for (const label of ['No, and do not ask me again.', "Don't Allow", 'Don\u2019t Allow', 'Don‘t Allow', 'Allow', 'Allow While Using App']) {
+    try { await element(by.text(label)).tap(); await sleep(100); } catch (_) {}
+  }
 }
 
 async function scrollWalletIntoView(walletName) {
@@ -188,7 +187,9 @@ describe('L1 signet iOS simulator to Android receive', () => {
           await element(by.id('WalletTransactionsScrollView')).swipe('down', 'slow');
         } catch (_) {}
       }
-      await sleep(BALANCE_WAIT_MS);
+      // Short UI settle instead of full BALANCE_WAIT_MS (electrum preflight already waited for chain; long blind sleep was causing 20min jest timeout + leftover permission expectations like "Don't Allow").
+      // Keep some settle for balance render in send form on iOS sim post-mine.
+      await sleep(Math.min(15000, BALANCE_WAIT_MS));
 
       // Post-balance-wait reset + safe dismiss (use resetToWalletsList with safePostFund=true to avoid Skip/Continue alert loops that cause Detox app-busy after L1 fund/mine). Matches Android leg and L1_E2E requirements.
       await device.disableSynchronization();

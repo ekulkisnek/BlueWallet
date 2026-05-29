@@ -41,6 +41,11 @@ async function dismissBlockingAlerts() {
     'Maybe Later',
     'Remind Me Later',
     'Skip for now',
+    "Don't Allow",
+    'Don\u2019t Allow',
+    'Don‘t Allow',
+    'Allow',
+    'Allow While Using App',
   ];
   for (let round = 0; round < 4; round++) {
     for (const label of labels) {
@@ -56,16 +61,15 @@ async function dismissBlockingAlerts() {
 }
 
 async function dismissReceiveNotificationPrompts() {
-  for (const label of ['Yes, I have.', 'No, and do not ask me again.']) {
+  for (const label of ['Yes, I have.', 'No, and do not ask me again.', "Don't Allow", 'Don\u2019t Allow', 'Don‘t Allow', 'Allow', 'Allow While Using App']) {
     try {
       await waitFor(element(by.text(label)))
         .toBeVisible()
         .withTimeout(3000);
       await element(by.text(label)).tap();
-      if (label.startsWith('No,')) {
-        try {
-          await element(by.text(label)).tap();
-        } catch (_) {}
+      await sleep(100);
+      if (label.startsWith('No,') || label.includes('Allow')) {
+        try { await element(by.text(label)).tap(); } catch (_) {}
       }
     } catch (_) {}
   }
