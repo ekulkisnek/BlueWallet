@@ -35,17 +35,29 @@ async function dismissReceiveNotificationPrompts() {
 }
 
 async function scrollWalletIntoView(walletName) {
-  try {
-    await waitFor(element(by.id(walletName)))
-      .toBeVisible()
-      .whileElement(by.id('WalletsList'))
-      .scroll(400, 'right');
-  } catch (_) {
-    await waitFor(element(by.id(walletName)))
-      .toBeVisible()
-      .whileElement(by.id('WalletsList'))
-      .scroll(400, 'left');
+  console.log('[L1_IOS_ANDROID_E2E] scrollWalletIntoView start for ' + walletName);
+  const dirs = ['right', 'left', 'down', 'up'];
+  for (let round = 0; round < 4; round++) {
+    for (const dir of dirs) {
+      try {
+        await waitFor(element(by.id(walletName)))
+          .toBeVisible()
+          .whileElement(by.id('WalletsList'))
+          .scroll(450, dir);
+        console.log('[L1_IOS_ANDROID_E2E] scrollWalletIntoView found via ' + dir);
+        return;
+      } catch (_) {}
+      try {
+        await element(by.id('WalletsList')).swipe(dir === 'right' || dir === 'left' ? dir : 'right', 'slow', 0.5);
+      } catch (_) {}
+      await sleep(200);
+    }
+    // pull-to-refresh simulation to force list update post-fund
+    try { await element(by.id('WalletsList')).swipe('down', 'slow', 0.6); } catch (_) {}
+    await sleep(400);
+    try { await device.disableSynchronization(); } catch (_) {}
   }
+  console.log('[L1_IOS_ANDROID_E2E] scrollWalletIntoView giving up after retries');
 }
 
 async function openWalletReceiveScreen(walletName) {
