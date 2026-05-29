@@ -150,9 +150,10 @@ describe('L1 signet iOS simulator to Android receive', () => {
           launchArgs: { detoxEnableSynchronization: 'NO' },
         });
         await device.disableSynchronization();
-        await sleep(5000);
+        await sleep(4000);
         await dismissPostFundAlerts();
-        await resetToWalletsList(10, true);
+        await resetToWalletsList(15, true);
+        await waitForId('WalletsList', 60000);
       }
       await resetToWalletsList(8, true);
       await dismissPostFundAlerts();
