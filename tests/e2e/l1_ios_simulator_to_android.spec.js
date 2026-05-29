@@ -107,13 +107,27 @@ describe('L1 signet iOS simulator to Android receive', () => {
     async () => {
       await device.disableSynchronization();
       await sleep(2000);
-      await dismissGeneralAlerts();
+      try {
+        await dismissGeneralAlerts();
+      } catch (e) {
+        console.log('[L1_IOS_ANDROID_E2E] pre-create dismiss skipped (app busy/permission):', (e && e.message ? e.message.slice(0, 120) : e));
+        try { await device.disableSynchronization(); } catch (_) {}
+      }
       await resetToWalletsList(5);
-      await dismissGeneralAlerts();
+      try {
+        await dismissGeneralAlerts();
+      } catch (e) {
+        console.log('[L1_IOS_ANDROID_E2E] post-reset dismiss skipped:', (e && e.message ? e.message.slice(0, 120) : e));
+      }
       await device.disableSynchronization();
       await helperCreateWallet(walletLabel);
       // Post-create cleanup: extra dismiss/reset/swipe to survive transient modal overlays (RNSModalScreen snapshots) that make WalletsList unhittable on iOS sim
-      await dismissGeneralAlerts();
+      try {
+        await dismissGeneralAlerts();
+      } catch (e) {
+        console.log('[L1_IOS_ANDROID_E2E] post-create dismiss skipped:', (e && e.message ? e.message.slice(0, 120) : e));
+        try { await device.disableSynchronization(); } catch (_) {}
+      }
       await resetToWalletsList(5);
       try {
         await element(by.id('WalletsList')).swipe('down', 'slow', 0.5);

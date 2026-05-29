@@ -123,48 +123,56 @@ export async function sleep(ms) {
  * Safe to call anytime; swallows errors.
  */
 export async function dismissGeneralAlerts() {
-  const labels = [
-    'Cancel',
-    'Try again',
-    'Reset',
-    'Reset to default',
-    'OK',
-    'Ok',
-    'Continue',
-    'Skip',
-    'Not Now',
-    'Not now',
-    'Later',
-    'Close',
-    'Dismiss',
-    'Yes, I have.',
-    'No, and do not ask me again.',
-    'Allow',
-    'Don\'t Allow',
-    'Maybe Later',
-    'Set up later',
-    'Set Up Later',
-    'Setup Later',
-    'Set up Later',
-    'Not Now',
-    'Remind Me Later',
-    'Remind me later',
-    'Skip for now',
-  ];
-  for (let round = 0; round < 10; round++) {
-    for (const label of labels) {
-      try {
-        await waitFor(element(by.text(label)))
-          .toBeVisible()
-          .withTimeout(600);
-        await element(by.text(label)).tap();
-        await sleep(200);
-      } catch (_) {}
+  try {
+    const labels = [
+      'Cancel',
+      'Try again',
+      'Reset',
+      'Reset to default',
+      'OK',
+      'Ok',
+      'Continue',
+      'Skip',
+      'Not Now',
+      'Not now',
+      'Later',
+      'Close',
+      'Dismiss',
+      'Yes, I have.',
+      'No, and do not ask me again.',
+      'Allow',
+      'Don\'t Allow',
+      'Maybe Later',
+      'Set up later',
+      'Set Up Later',
+      'Setup Later',
+      'Set up Later',
+      'Not Now',
+      'Remind Me Later',
+      'Remind me later',
+      'Skip for now',
+      'Allow While Using App',
+      'Allow Once',
+      'Open Settings',
+      'Keep Using',
+    ];
+    for (let round = 0; round < 8; round++) {
+      for (const label of labels) {
+        try {
+          await waitFor(element(by.text(label)))
+            .toBeVisible()
+            .withTimeout(300);
+          await element(by.text(label)).tap();
+          await sleep(120);
+        } catch (_) {}
+      }
+      try { await element(by.id('NavigationCloseButton')).atIndex(0).tap(); } catch (_) {}
+      try { await element(by.id('CloseButton')).atIndex(0).tap(); } catch (_) {}
+      if (device.getPlatform() === 'android') { try { await device.pressBack(); } catch (_) {} }
+      await sleep(80);
     }
-    try { await element(by.id('NavigationCloseButton')).atIndex(0).tap(); } catch (_) {}
-    try { await element(by.id('CloseButton')).atIndex(0).tap(); } catch (_) {}
-    if (device.getPlatform() === 'android') { try { await device.pressBack(); } catch (_) {} }
-    await sleep(150);
+  } catch (_) {
+    // Never let dismiss unhandled errors (app busy, detox comms, permission race) escape and fail the test
   }
 }
 
