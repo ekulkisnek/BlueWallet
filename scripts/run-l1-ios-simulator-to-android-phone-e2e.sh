@@ -125,6 +125,12 @@ ensure_ios_build() {
   npx detox build -c ios.debug >>"$RUN_DIR/detox-build.log" 2>&1
 }
 
+ensure_detox_simulator_booted() {
+  local udid="${DETOX_IOS_SIM_UDID:-FC7DDD6B-DFCB-432A-98CE-48C453E6EF48}"
+  xcrun simctl boot "$udid" >/dev/null 2>&1 || true
+  log "detox_simulator udid=$udid"
+}
+
 parse_detox_txid() {
   local log_file="$1"
   rg -o 'L1_IOS_ANDROID_E2E\] txid=[0-9a-f]{64}' "$log_file" 2>/dev/null | tail -1 | sed 's/.*txid=//' || true
@@ -153,6 +159,7 @@ else
 fi
 
 ensure_ios_build
+ensure_detox_simulator_booted
 
 export ANDROID_L1_RECEIVE_ADDRESS L1_RECEIVE_ADDRESS
 export L1_E2E_ROOT_DIR="$ROOT_DIR"
