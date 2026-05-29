@@ -252,14 +252,18 @@ export const expectToBeVisible = async id => {
 };
 
 export async function helperCreateWallet(walletName) {
-  // Early disable + aggressive dismiss for fresh delete:true sim launches (addresses WalletsList/CreateAWallet flakes post-wip)
+  // Early disable + aggressive dismiss for fresh delete:true sim launches (addresses WalletsList/CreateAWallet flakes post-wip + modal snapshot blockers)
   try {
     if (device.getPlatform() === 'ios') {
       await device.disableSynchronization();
     }
   } catch (_) {}
   await dismissGeneralAlerts();
-  await resetToWalletsList(4);
+  await dismissPostFundAlerts();
+  await resetToWalletsList(6, true);
+  // Additional overlay clear for RNSModalScreen hit-test issues on simulator
+  try { await element(by.type('RCTModalHostView')).atIndex(0).tap(); } catch (_) {}
+  try { await device.pressBack(); } catch (_) {}
 
   await waitFor(element(by.id('CreateAWallet')))
     .toBeVisible()
@@ -423,11 +427,22 @@ export async function scrollUpOnHomeScreen() {
     return;
   }
   await dismissGeneralAlerts();
-  await resetToWalletsList(4);
+  await resetToWalletsList(6, true);
+  await dismissPostFundAlerts();
+  // Extra pass to clear RNSModalScreen snapshot overlays / ghost modals that block hit tests on WalletsList
+  for (let i = 0; i < 3; i++) {
+    try {
+      await element(by.id('NavigationCloseButton')).atIndex(0).tap();
+    } catch (_) {}
+    try {
+      await element(by.id('CloseButton')).atIndex(0).tap();
+    } catch (_) {}
+    await sleep(150);
+  }
   try {
     await waitFor(element(by.id('WalletsList')))
       .toBeVisible()
-      .withTimeout(3000);
+      .withTimeout(4000);
     await element(by.id('WalletsList')).swipe('down', 'slow', 0.5);
     await sleep(200);
     return;
