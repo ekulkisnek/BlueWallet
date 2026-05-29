@@ -85,9 +85,24 @@ async function openWalletReceiveScreen(walletName) {
     .withTimeout(90000);
 }
 
-async function waitForSendButtonAfterReceive() {
+async function openWalletSendScreen(walletName) {
+  await dismissGeneralAlerts();
+  try {
+    await waitFor(element(by.id('SendButton')))
+      .toBeVisible()
+      .withTimeout(5000);
+    return;
+  } catch (_) {}
   await goBack();
   await dismissGeneralAlerts();
+  try {
+    await waitFor(element(by.id('SendButton')))
+      .toBeVisible()
+      .withTimeout(5000);
+    return;
+  } catch (_) {}
+  await scrollWalletIntoView(walletName);
+  await tapAndTapAgainIfElementIsNotVisible(walletName, 'SendButton');
   await waitFor(element(by.id('SendButton')))
     .toBeVisible()
     .withTimeout(60000);
@@ -127,7 +142,7 @@ describe('L1 signet iOS simulator to Android receive', () => {
     fundL1Address(iosReceiveAddress, fundSats);
     mineL1Blocks(Number(process.env.L1_E2E_POST_FUND_MINE_BLOCKS || 3));
 
-    await waitForSendButtonAfterReceive();
+    await openWalletSendScreen(walletLabel);
 
     try {
       await element(by.id('TransactionsListEmpty')).swipe('down', 'slow');
