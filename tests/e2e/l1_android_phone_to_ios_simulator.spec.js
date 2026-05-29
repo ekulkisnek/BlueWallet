@@ -202,6 +202,12 @@ describe('L1 signet Android phone to iOS simulator receive', () => {
 
       await device.disableSynchronization();
       await dismissPostFundAlerts();
+      // Harden against CreateTransactionButton not found after fund on Android device (app busy / balance render lag post-mine).
+      try { await element(by.id('SendDetailsScroll')).swipe('up', 'fast', 0.3); } catch (_) {}
+      try { await element(by.type('RCTScrollView')).atIndex(0).swipe('up', 'fast', 0.3); } catch (_) {}
+      await waitFor(element(by.id('CreateTransactionButton')))
+        .toBeVisible()
+        .withTimeout(45000);
       for (let attempt = 0; attempt < 5; attempt++) {
         await element(by.id('CreateTransactionButton')).tap();
         try {

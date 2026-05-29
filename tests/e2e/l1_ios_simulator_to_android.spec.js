@@ -203,6 +203,13 @@ describe('L1 signet iOS simulator to Android receive', () => {
 
       await device.disableSynchronization();
       await dismissPostFundAlerts();
+      // Harden against L1SendE2E not found / CreateTransactionButton missing after fund (app busy or slow balance render on iOS sim post-mine).
+      // Explicit wait + scroll + re-enable before taps. Matches known simulator blocker.
+      try { await element(by.id('SendDetailsScroll')).swipe('up', 'fast', 0.3); } catch (_) {}
+      try { await element(by.type('RCTScrollView')).atIndex(0).swipe('up', 'fast', 0.3); } catch (_) {}
+      await waitFor(element(by.id('CreateTransactionButton')))
+        .toBeVisible()
+        .withTimeout(45000);
       for (let attempt = 0; attempt < 5; attempt++) {
         await element(by.id('CreateTransactionButton')).tap();
         try {
