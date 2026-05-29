@@ -42,7 +42,6 @@ l1_lock_acquire() {
     fi
     rm -f "$LOCK_FILE"
   fi
-  l1_kill_duplicates "$$"
   python3 - <<PY
 import json, os, time
 payload = {
