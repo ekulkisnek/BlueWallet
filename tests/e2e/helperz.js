@@ -282,6 +282,8 @@ export async function helperCreateWallet(walletName) {
     .scroll(500, 'down'); // in case emu screen is small and it doesnt fit
 
   await element(by.id('PleasebackupOk')).tap();
+  await dismissGeneralAlerts();
+  await resetToWalletsList(6);
   await scrollUpOnHomeScreen();
   await expect(element(by.id('WalletsList'))).toBeVisible();
   await element(by.id('WalletsList')).swipe('right', 'fast', 1); // in case emu screen is small and it doesnt fit
@@ -420,13 +422,25 @@ export async function scrollUpOnHomeScreen() {
   if (device.getPlatform() !== 'ios') {
     return;
   }
+  await dismissGeneralAlerts();
+  await resetToWalletsList(4);
+  try {
+    await waitFor(element(by.id('WalletsList')))
+      .toBeVisible()
+      .withTimeout(3000);
+    await element(by.id('WalletsList')).swipe('down', 'slow', 0.5);
+    await sleep(200);
+    return;
+  } catch (_) {}
   try {
     await element(by.type('RCTEnhancedScrollView').withDescendant(by.type('RCTEnhancedScrollView'))).swipe('down', 'slow', 0.5);
   } catch (_) {
     try {
       await element(by.type('RCTEnhancedScrollView')).atIndex(0).swipe('down', 'slow', 0.5);
     } catch (_) {
-      await element(by.id('WalletsList')).swipe('down', 'slow', 0.5);
+      try {
+        await element(by.id('WalletsList')).swipe('down', 'slow', 0.5);
+      } catch (_) {}
     }
   }
   await sleep(200); // bounce animation
