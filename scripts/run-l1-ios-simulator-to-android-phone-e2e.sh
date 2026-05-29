@@ -166,8 +166,11 @@ export L1_E2E_ROOT_DIR="$ROOT_DIR"
 export L1_E2E_LOCAL_DEV_DIR="$LOCAL_DEV"
 export L1_E2E_COMPOSE_FILE="$COMPOSE_FILE"
 export L1_E2E_SEND_SATS L1_E2E_FUND_SATS
+export L1_E2E_BALANCE_WAIT_MS="${L1_E2E_BALANCE_WAIT_MS:-120000}"
+export L1_E2E_POST_FUND_RELAUNCH="${L1_E2E_POST_FUND_RELAUNCH:-1}"
+export REDWALLET_SKIP_IOS_SEED="${REDWALLET_SKIP_IOS_SEED:-1}"
 
-log "detox_start"
+log "detox_start balance_wait_ms=$L1_E2E_BALANCE_WAIT_MS post_fund_relaunch=$L1_E2E_POST_FUND_RELAUNCH"
 set +e
 npx detox test -c ios.debug.nosync tests/e2e/l1_ios_simulator_to_android.spec.js \
   --loglevel "${DETOX_LOGLEVEL:-info}" \

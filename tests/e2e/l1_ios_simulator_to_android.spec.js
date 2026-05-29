@@ -1,9 +1,11 @@
 import { element, waitFor } from 'detox';
 import * as bitcoin from 'bitcoinjs-lib';
 import {
+  dismissGeneralAlerts,
   extractTextFromElementById,
   goBack,
   helperCreateWallet,
+  resetToWalletsList,
   sleep,
   tapAndTapAgainIfElementIsNotVisible,
   waitForId,
@@ -18,9 +20,10 @@ const sendSats = Number(process.env.L1_E2E_SEND_SATS || 10000);
 const fundSats = Number(process.env.L1_E2E_FUND_SATS || 100000);
 const sendBtc = (sendSats / 1e8).toFixed(8);
 
-async function dismissGeneralAlerts() {
-  const labels = ['Cancel', 'Try again', 'Reset', 'Reset to default', 'OK', 'Ok', 'Continue', 'Skip', 'Not Now', 'Not now', 'Later', 'Close', 'Dismiss'];
-  for (let round = 0; round < 5; round++) {
+/** Post-fund dismiss: omit Skip/Continue — those waits wedge Detox "app busy" on main queue. */
+async function dismissPostFundAlerts() {
+  const labels = ['Cancel', 'Try again', 'Reset', 'Reset to default', 'OK', 'Ok', 'Not Now', 'Not now', 'Later', 'Close', 'Dismiss'];
+  for (let round = 0; round < 2; round++) {
     for (const label of labels) {
       try {
         await waitFor(element(by.text(label)))
@@ -86,24 +89,9 @@ async function openWalletReceiveScreen(walletName) {
 }
 
 async function openWalletSendScreen(walletName) {
-  await dismissGeneralAlerts();
   await device.disableSynchronization();
-  // Robust reset to WalletsList after fund/receive (handles busy main queue, receive subview, nav stack after external mine)
-  // Increased attempts + timeouts + extra gestures to defeat post-fund app-busy / L1SendE2E not found
-  for (let attempt = 0; attempt < 10; attempt++) {
-    try {
-      await waitFor(element(by.id('WalletsList')))
-        .toBeVisible()
-        .withTimeout(4000);
-      break;
-    } catch (_) {
-      try { await element(by.id('BackButton')).atIndex(0).tap(); } catch (_) {}
-      try { await element(by.id('NavigationCloseButton')).atIndex(0).tap(); } catch (_) {}
-      try { await element(by.id('WalletsList')).swipe('down', 'slow'); } catch (_) {} // pull to refresh list
-      await dismissGeneralAlerts();
-      await sleep(450);
-    }
-  }
+  await resetToWalletsList(8);
+  await dismissPostFundAlerts();
   await scrollWalletIntoView(walletName);
   await tapAndTapAgainIfElementIsNotVisible(walletName, 'SendButton');
   await waitFor(element(by.id('SendButton')))
@@ -152,15 +140,17 @@ describe('L1 signet iOS simulator to Android receive', () => {
 
     // Re-disable sync + settle after external fund/mine (addresses "app busy" + L1SendE2E not found on main queue pending)
     await device.disableSynchronization();
-    await sleep(3000);
-
-    // Extra refresh of wallet list + dismiss to ensure L1SendE2E row is interactable post-fund (common Detox/RN main-queue blocker)
+    if (process.env.L1_E2E_POST_FUND_RELAUNCH === '1') {
+      await device.launchApp({ newInstance: false, launchArgs: { detoxEnableSynchronization: 'NO' } });
+      await device.disableSynchronization();
+      await waitForId('WalletsList', 120000);
+    }
+    await resetToWalletsList(8);
+    await dismissPostFundAlerts();
+    await sleep(2000);
     try {
-      await waitFor(element(by.id('WalletsList'))).toBeVisible().withTimeout(5000);
       await element(by.id('WalletsList')).swipe('down', 'slow');
     } catch (_) {}
-    await dismissGeneralAlerts();
-    await sleep(1500);
 
     await openWalletSendScreen(walletLabel);
 
@@ -171,10 +161,10 @@ describe('L1 signet iOS simulator to Android receive', () => {
         await element(by.id('WalletTransactionsScrollView')).swipe('down', 'slow');
       } catch (_) {}
     }
-    await sleep(Number(process.env.L1_E2E_BALANCE_WAIT_MS || 45000));
+    await sleep(Number(process.env.L1_E2E_BALANCE_WAIT_MS || 120000));
 
     // Post-balance-wait refresh in case UI still busy after Electrum sync; ensures SendButton and L1SendE2E context
-    await dismissGeneralAlerts();
+    await dismissPostFundAlerts();
     try { await element(by.id('WalletsList')).swipe('down', 'slow'); } catch (_) {}
     await sleep(800);
 
@@ -190,11 +180,11 @@ describe('L1 signet iOS simulator to Android receive', () => {
     for (let attempt = 0; attempt < 5; attempt++) {
       await element(by.id('CreateTransactionButton')).tap();
       try {
-        await waitForId('TransactionValue', 30000);
+        await waitForId('TransactionValue', 90000);
         break;
       } catch (_) {
         if (attempt === 4) throw new Error('CreateTransactionButton did not produce TransactionValue');
-        await sleep(5000);
+        await sleep(8000);
       }
     }
     await element(by.id('TransactionDetailsButton')).tap();
@@ -207,5 +197,5 @@ describe('L1 signet iOS simulator to Android receive', () => {
     await element(by.text('Send now')).tap();
     await waitForText('Done', 60000);
     await element(by.text('Done')).tap();
-  }, 600000);
+  }, 1200000);
 });

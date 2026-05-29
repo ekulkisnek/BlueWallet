@@ -181,8 +181,9 @@ export L1_E2E_ROOT_DIR="$ROOT_DIR"
 export L1_E2E_LOCAL_DEV_DIR="$LOCAL_DEV"
 export L1_E2E_COMPOSE_FILE="$COMPOSE_FILE"
 export L1_E2E_SEND_SATS L1_E2E_FUND_SATS
+export L1_E2E_BALANCE_WAIT_MS="${L1_E2E_BALANCE_WAIT_MS:-120000}"
 
-log "detox_start android.debug.device"
+log "detox_start android.debug.device balance_wait_ms=$L1_E2E_BALANCE_WAIT_MS"
 set +e
 npx detox test -c android.debug.device tests/e2e/l1_android_phone_to_ios_simulator.spec.js \
   --loglevel "${DETOX_LOGLEVEL:-info}" \
