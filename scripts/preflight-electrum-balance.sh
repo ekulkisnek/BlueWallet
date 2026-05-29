@@ -17,9 +17,24 @@ HOST="${REDWALLET_ELECTRUM_HOST:-127.0.0.1}"
 PORT="${REDWALLET_ELECTRUM_PORT:-60101}"
 FEE_BUFFER="${L1_E2E_FEE_BUFFER_SATS:-2000}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+LOCAL_DEV="${LOCAL_DEV:-/Volumes/T705/code/drivechain-wallet-dev/local-dev}"
+COMPOSE_FILE="${COMPOSE_FILE:-$LOCAL_DEV/docker-compose.local-minimal.yml}"
 REQUIRED=$((MIN_SATS + FEE_BUFFER))
 
 log() { printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*"; }
+
+get_mainchain_balance_sats() {
+  docker compose -f "$COMPOSE_FILE" exec -T mainchain \
+    drivechain-cli -signet -rpccookiefile=/data/signet/.cookie listunspent 0 9999999 "[\"$ADDRESS\"]" 2>/dev/null \
+    | python3 -c "
+import json, sys
+try:
+    utxos = json.load(sys.stdin)
+    print(int(round(sum(float(u.get('amount', 0)) for u in utxos) * 1e8)))
+except Exception:
+    print(0)
+" 2>/dev/null || echo 0
+}
 
 get_balance_sats() {
   node - "$ADDRESS" "$HOST" "$PORT" <<'NODE'
@@ -78,10 +93,15 @@ deadline=$((SECONDS + TIMEOUT_SEC))
 while [[ "$SECONDS" -lt "$deadline" ]]; do
   bal="$(get_balance_sats 2>/dev/null || echo 0)"
   if [[ "$bal" =~ ^[0-9]+$ ]] && [[ "$bal" -ge "$REQUIRED" ]]; then
-    log "electrum_balance_ok balance_sats=$bal required=$REQUIRED"
+    log "electrum_balance_ok balance_sats=$bal required=$REQUIRED source=electrum"
     exit 0
   fi
-  log "electrum_balance_wait balance_sats=${bal:-0} required=$REQUIRED"
+  mc_bal="$(get_mainchain_balance_sats 2>/dev/null || echo 0)"
+  if [[ "$mc_bal" =~ ^[0-9]+$ ]] && [[ "$mc_bal" -ge "$REQUIRED" ]]; then
+    log "electrum_balance_ok balance_sats=$mc_bal required=$REQUIRED source=mainchain_rpc_fallback electrum_sats=${bal:-0}"
+    exit 0
+  fi
+  log "electrum_balance_wait balance_sats=${bal:-0} mainchain_sats=${mc_bal:-0} required=$REQUIRED"
   sleep 3
 done
 

@@ -41,6 +41,11 @@ PY
 
 log "preflight start compose=$COMPOSE_FILE electrum=${ELECTRUM_HOST}:${ELECTRUM_PORT}"
 
+bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/scripts/ensure-l1-electrum.sh" >>"${L1_E2E_LOG_FILE:-/dev/null}" 2>&1 || {
+  log "BLOCKER ensure-l1-electrum failed"
+  exit 2
+}
+
 if ! docker info >/dev/null 2>&1; then
   log "BLOCKER docker unavailable"
   exit 2

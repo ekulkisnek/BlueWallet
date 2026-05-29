@@ -99,16 +99,30 @@ if [[ "$USE_PHYSICAL" -eq 1 ]]; then
   DETOX_EXIT=$(( ios_to_android_rc || android_to_ios_rc ))
 else
   log "running simulator fallback: ios-sim -> android then android -> ios-sim"
+  IOS_SIM_RUN="$RUN_DIR/ios-sim-to-android"
+  set +e
   L1_E2E_SKIP_LOCK=1 \
-    L1_IOS_SIM_ANDROID_E2E_LOG_DIR="$RUN_DIR/ios-sim-to-android" \
-    bash "$ROOT_DIR/scripts/run-l1-ios-simulator-to-android-phone-e2e.sh" "$@" || true
+    L1_IOS_SIM_ANDROID_E2E_LOG_DIR="$IOS_SIM_RUN" \
+    bash "$ROOT_DIR/scripts/run-l1-ios-simulator-to-android-phone-e2e.sh" "$@"
   ios_to_android_rc=$?
+  set -e
+  if [[ -f "$IOS_SIM_RUN/SUMMARY.txt" ]]; then
+    s=$(grep -E '^detox_exit=' "$IOS_SIM_RUN/SUMMARY.txt" 2>/dev/null | tail -1 | cut -d= -f2 || true)
+    [[ -n "$s" ]] && ios_to_android_rc="$s"
+  fi
   log "ios_sim_to_android_exit=$ios_to_android_rc"
 
+  ANDROID_SIM_RUN="$RUN_DIR/android-to-ios-sim"
+  set +e
   L1_E2E_SKIP_LOCK=1 \
-    L1_ANDROID_IOS_SIM_E2E_LOG_DIR="$RUN_DIR/android-to-ios-sim" \
-    bash "$ROOT_DIR/scripts/run-l1-android-phone-to-ios-simulator-e2e.sh" "$@" || true
+    L1_ANDROID_IOS_SIM_E2E_LOG_DIR="$ANDROID_SIM_RUN" \
+    bash "$ROOT_DIR/scripts/run-l1-android-phone-to-ios-simulator-e2e.sh" "$@"
   android_to_ios_rc=$?
+  set -e
+  if [[ -f "$ANDROID_SIM_RUN/SUMMARY.txt" ]]; then
+    s=$(grep -E '^detox_exit=' "$ANDROID_SIM_RUN/SUMMARY.txt" 2>/dev/null | tail -1 | cut -d= -f2 || true)
+    [[ -n "$s" ]] && android_to_ios_rc="$s"
+  fi
   log "android_to_ios_sim_exit=$android_to_ios_rc"
 
   DETOX_EXIT=$(( ios_to_android_rc || android_to_ios_rc ))
