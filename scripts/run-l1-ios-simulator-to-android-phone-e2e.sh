@@ -122,7 +122,7 @@ ensure_ios_build() {
     return
   fi
   log "ios_build=detox_build"
-  npx detox build -c ios.debug >>"$RUN_DIR/detox-build.log" 2>&1
+  npx detox build -c ios.debug.nosync >>"$RUN_DIR/detox-build.log" 2>&1
 }
 
 ensure_detox_simulator_booted() {
@@ -169,7 +169,7 @@ export L1_E2E_SEND_SATS L1_E2E_FUND_SATS
 
 log "detox_start"
 set +e
-npx detox test -c ios.debug tests/e2e/l1_ios_simulator_to_android.spec.js \
+npx detox test -c ios.debug.nosync tests/e2e/l1_ios_simulator_to_android.spec.js \
   --loglevel "${DETOX_LOGLEVEL:-info}" \
   --reuse "$@" 2>&1 | tee "$RUN_DIR/detox.log"
 detox_rc=${PIPESTATUS[0]}

@@ -124,7 +124,7 @@ ensure_ios_build() {
     return
   fi
   log "ios_build=detox_build"
-  npx detox build -c ios.debug >>"$RUN_DIR/detox-build-ios.log" 2>&1
+  npx detox build -c ios.debug.nosync >>"$RUN_DIR/detox-build-ios.log" 2>&1
 }
 
 parse_ios_receive_address() {
@@ -140,7 +140,7 @@ parse_detox_txid() {
 seed_ios_receive_address() {
   log "ios_seed_start"
   set +e
-  npx detox test -c ios.debug tests/e2e/l1_ios_simulator_seed_receive.spec.js \
+  npx detox test -c ios.debug.nosync tests/e2e/l1_ios_simulator_seed_receive.spec.js \
     --loglevel "${DETOX_LOGLEVEL:-info}" \
     --reuse 2>&1 | tee "$RUN_DIR/ios-seed.log"
   local seed_rc=${PIPESTATUS[0]}

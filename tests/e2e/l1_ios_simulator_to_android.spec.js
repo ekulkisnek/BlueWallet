@@ -87,25 +87,30 @@ async function openWalletReceiveScreen(walletName) {
 
 async function openWalletSendScreen(walletName) {
   await dismissGeneralAlerts();
-  try {
-    await waitFor(element(by.id('SendButton')))
-      .toBeVisible()
-      .withTimeout(5000);
-    return;
-  } catch (_) {}
-  await goBack();
-  await dismissGeneralAlerts();
-  try {
-    await waitFor(element(by.id('SendButton')))
-      .toBeVisible()
-      .withTimeout(5000);
-    return;
-  } catch (_) {}
+  await device.disableSynchronization();
+  // Robust reset to WalletsList after fund/receive (handles busy main queue, receive subview, nav stack after external mine)
+  for (let attempt = 0; attempt < 6; attempt++) {
+    try {
+      await waitFor(element(by.id('WalletsList')))
+        .toBeVisible()
+        .withTimeout(2500);
+      break;
+    } catch (_) {
+      try {
+        await element(by.id('BackButton')).atIndex(0).tap();
+      } catch (_) {}
+      try {
+        await element(by.id('NavigationCloseButton')).atIndex(0).tap();
+      } catch (_) {}
+      await dismissGeneralAlerts();
+      await sleep(350);
+    }
+  }
   await scrollWalletIntoView(walletName);
   await tapAndTapAgainIfElementIsNotVisible(walletName, 'SendButton');
   await waitFor(element(by.id('SendButton')))
     .toBeVisible()
-    .withTimeout(60000);
+    .withTimeout(45000);
 }
 
 describe('L1 signet iOS simulator to Android receive', () => {
@@ -146,6 +151,10 @@ describe('L1 signet iOS simulator to Android receive', () => {
 
     fundL1Address(iosReceiveAddress, fundSats);
     mineL1Blocks(Number(process.env.L1_E2E_POST_FUND_MINE_BLOCKS || 3));
+
+    // Re-disable sync + settle after external fund/mine (addresses "app busy" + L1SendE2E not found on main queue pending)
+    await device.disableSynchronization();
+    await sleep(2500);
 
     await openWalletSendScreen(walletLabel);
 
