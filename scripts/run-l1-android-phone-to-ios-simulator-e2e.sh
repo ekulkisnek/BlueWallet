@@ -129,7 +129,7 @@ ensure_ios_build() {
 
 parse_ios_receive_address() {
   local log_file="$1"
-  rg -o 'L1_IOS_ANDROID_E2E\] ios_receive_address= [a-zA-Z0-9]+' "$log_file" 2>/dev/null | tail -1 | sed 's/.*ios_receive_address= //' || true
+  rg -o 'L1_IOS_ANDROID_E2E\] ios_receive_address=[a-zA-HJ-NP-Z0-9]+' "$log_file" 2>/dev/null | tail -1 | sed 's/.*ios_receive_address=//' || true
 }
 
 parse_detox_txid() {
