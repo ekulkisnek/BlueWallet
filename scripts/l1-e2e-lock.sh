@@ -69,16 +69,33 @@ l1_pause_autocode_competitors() {
     return 0
   fi
   if [[ -d "$HOME/autocode" ]]; then
-    python3 -m autocode coord pause-l1-competitors 2>/dev/null || true
+    (cd "$HOME/autocode" && python3 -m autocode coord pause-l1-competitors 2>/dev/null) || true
   fi
 }
 
-case "${1:-}" in
-  acquire) l1_lock_acquire "${2:-}" "${3:-l1-e2e}" ;;
-  release) l1_lock_release ;;
-  status)
-    if [[ -f "$LOCK_FILE" ]]; then l1_lock_read; else echo "no lock"; fi
-    ;;
-  kill-dupes) l1_kill_duplicates "${2:-$$}" ;;
-  *) echo "usage: $0 {acquire|release|status|kill-dupes} [run_dir] [holder]" >&2; exit 2 ;;
-esac
+# Acquire lock unless L1_E2E_SKIP_LOCK=1 (nested orchestrator child).
+l1_lock_maybe_acquire() {
+  local run_dir="${1:-unknown}"
+  local holder="${2:-l1-e2e}"
+  if [[ "${L1_E2E_SKIP_LOCK:-0}" == 1 ]]; then
+    return 0
+  fi
+  if ! l1_lock_acquire "$run_dir" "$holder"; then
+    return 1
+  fi
+  l1_pause_autocode_competitors
+  trap 'l1_lock_release' EXIT
+}
+
+# CLI when executed directly (not when sourced by orchestrators).
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  case "${1:-}" in
+    acquire) l1_lock_acquire "${2:-}" "${3:-l1-e2e}" ;;
+    release) l1_lock_release ;;
+    status)
+      if [[ -f "$LOCK_FILE" ]]; then l1_lock_read; else echo "no lock"; fi
+      ;;
+    kill-dupes) l1_kill_duplicates "${2:-$$}" ;;
+    *) echo "usage: $0 {acquire|release|status|kill-dupes} [run_dir] [holder]" >&2; exit 2 ;;
+  esac
+fi
