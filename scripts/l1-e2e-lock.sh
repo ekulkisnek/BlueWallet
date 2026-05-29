@@ -19,12 +19,14 @@ l1_lock_pid_alive() {
 
 l1_kill_duplicates() {
   local keep="${1:-$$}"
-  local pid line
+  local pid
   while read -r pid _; do
-    [[ "$pid" == "$keep" || "$pid" == "$PPID" ]] && continue
-    kill -9 "$pid" 2>/dev/null || true
-    echo "killed duplicate l1/detox pid=$pid"
-  done < <(pgrep -fl 'run-l1-|detox test' 2>/dev/null | awk '{print $1}' || true)
+    [[ "$pid" =~ ^[0-9]+$ ]] || continue
+    [[ "$pid" -eq "$$" || "$pid" -eq "$PPID" || "$pid" -eq "$keep" ]] && continue
+    # Only kill other L1 orchestrator shells, not monitor loops or child steps.
+    kill -9 "$pid" 2>/dev/null || continue
+    echo "killed duplicate l1 orchestrator pid=$pid"
+  done < <(pgrep -f 'run-l1-(physical|ios|android).*e2e\.sh' 2>/dev/null || true)
 }
 
 l1_lock_acquire() {
