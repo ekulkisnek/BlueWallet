@@ -187,7 +187,7 @@ describe('L1 signet iOS simulator to Android receive', () => {
       try { await device.reloadReactNative(); } catch (_) {}
       await device.disableSynchronization();
       await dismissPostFundAlerts();
-      try { await device.pressBack(); } catch (_) {}
+      try { await goBack(); } catch (_) {}
 
       // After resetToWalletsList (for app-busy post-fund), must re-enter wallet from list before SendButton is hittable.
       // This completes the safe post-fund reset path (using dismissPostFundAlerts inside reset to avoid Skip/Continue loops).

@@ -163,7 +163,7 @@ export async function dismissGeneralAlerts() {
     }
     try { await element(by.id('NavigationCloseButton')).atIndex(0).tap(); } catch (_) {}
     try { await element(by.id('CloseButton')).atIndex(0).tap(); } catch (_) {}
-    try { await device.pressBack(); } catch (_) {}
+    if (device.getPlatform() === 'android') { try { await device.pressBack(); } catch (_) {} }
     await sleep(150);
   }
 }
@@ -187,7 +187,7 @@ export async function dismissPostFundAlerts() {
     }
     try { await element(by.id('NavigationCloseButton')).atIndex(0).tap(); } catch (_) {}
     try { await element(by.id('CloseButton')).atIndex(0).tap(); } catch (_) {}
-    try { await device.pressBack(); } catch (_) {}
+    if (device.getPlatform() === 'android') { try { await device.pressBack(); } catch (_) {} }
     await sleep(120);
   }
 }
@@ -288,7 +288,7 @@ export async function helperCreateWallet(walletName) {
   await resetToWalletsList(6, true);
   // Additional overlay clear for RNSModalScreen hit-test issues on simulator
   try { await element(by.type('RCTModalHostView')).atIndex(0).tap(); } catch (_) {}
-  try { await device.pressBack(); } catch (_) {}
+  if (device.getPlatform() === 'android') { try { await device.pressBack(); } catch (_) {} }
   try { await device.disableSynchronization(); } catch (_) {}
 
   await waitFor(element(by.id('CreateAWallet')))
@@ -314,7 +314,7 @@ export async function helperCreateWallet(walletName) {
   await element(by.id('PleasebackupOk')).tap();
   await sleep(400);
   try { await dismissGeneralAlerts(); } catch (_) {}
-  try { await device.pressBack(); } catch (_) {}
+  if (device.getPlatform() === 'android') { try { await device.pressBack(); } catch (_) {} }
   await resetToWalletsList(8, true);
   await scrollUpOnHomeScreen();
   await expect(element(by.id('WalletsList'))).toBeVisible();
