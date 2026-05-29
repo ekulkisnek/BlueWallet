@@ -143,25 +143,28 @@ export async function dismissGeneralAlerts() {
     'Don\'t Allow',
     'Maybe Later',
     'Set up later',
+    'Set Up Later',
+    'Setup Later',
+    'Set up Later',
     'Not Now',
     'Remind Me Later',
+    'Remind me later',
+    'Skip for now',
   ];
-  for (let round = 0; round < 8; round++) {
+  for (let round = 0; round < 10; round++) {
     for (const label of labels) {
       try {
         await waitFor(element(by.text(label)))
           .toBeVisible()
-          .withTimeout(800);
+          .withTimeout(600);
         await element(by.text(label)).tap();
-        await sleep(250);
+        await sleep(200);
       } catch (_) {}
     }
-    try {
-      await element(by.id('NavigationCloseButton')).atIndex(0).tap();
-    } catch (_) {}
-    try {
-      await element(by.id('CloseButton')).atIndex(0).tap();
-    } catch (_) {}
+    try { await element(by.id('NavigationCloseButton')).atIndex(0).tap(); } catch (_) {}
+    try { await element(by.id('CloseButton')).atIndex(0).tap(); } catch (_) {}
+    try { await device.pressBack(); } catch (_) {}
+    await sleep(150);
   }
 }
 
@@ -171,23 +174,21 @@ export async function dismissGeneralAlerts() {
  * "app is busy" in Detox and blocking subsequent waits/taps. Use via resetToWalletsList(..., true).
  */
 export async function dismissPostFundAlerts() {
-  const labels = ['Cancel', 'Try again', 'Reset', 'Reset to default', 'OK', 'Ok', 'Not Now', 'Not now', 'Later', 'Close', 'Dismiss', 'Continue', 'Yes, I have.', 'No, and do not ask me again.'];
-  for (let round = 0; round < 4; round++) {
+  const labels = ['Cancel', 'Try again', 'Reset', 'Reset to default', 'OK', 'Ok', 'Not Now', 'Not now', 'Later', 'Close', 'Dismiss', 'Continue', 'Yes, I have.', 'No, and do not ask me again.', 'Set up later', 'Set Up Later', 'Maybe Later', 'Remind Me Later', 'Skip for now'];
+  for (let round = 0; round < 6; round++) {
     for (const label of labels) {
       try {
         await waitFor(element(by.text(label)))
           .toBeVisible()
-          .withTimeout(800);
+          .withTimeout(600);
         await element(by.text(label)).tap();
-        await sleep(250);
+        await sleep(200);
       } catch (_) {}
     }
-    try {
-      await element(by.id('NavigationCloseButton')).atIndex(0).tap();
-    } catch (_) {}
-    try {
-      await element(by.id('CloseButton')).atIndex(0).tap();
-    } catch (_) {}
+    try { await element(by.id('NavigationCloseButton')).atIndex(0).tap(); } catch (_) {}
+    try { await element(by.id('CloseButton')).atIndex(0).tap(); } catch (_) {}
+    try { await device.pressBack(); } catch (_) {}
+    await sleep(120);
   }
 }
 
@@ -274,26 +275,29 @@ export const expectToBeVisible = async id => {
 };
 
 export async function helperCreateWallet(walletName) {
-  // Early disable + aggressive dismiss for fresh delete:true sim launches (addresses WalletsList/CreateAWallet flakes post-wip + modal snapshot blockers)
+  // Early disable + aggressive dismiss for fresh delete:true sim launches (addresses WalletsList/CreateAWallet flakes post-wip + modal snapshot blockers + Set up later system prompts)
   try {
     if (device.getPlatform() === 'ios') {
       await device.disableSynchronization();
     }
   } catch (_) {}
-  await dismissGeneralAlerts();
-  await dismissPostFundAlerts();
+  for (let i = 0; i < 2; i++) {
+    try { await dismissGeneralAlerts(); } catch (_) {}
+    try { await dismissPostFundAlerts(); } catch (_) {}
+  }
   await resetToWalletsList(6, true);
   // Additional overlay clear for RNSModalScreen hit-test issues on simulator
   try { await element(by.type('RCTModalHostView')).atIndex(0).tap(); } catch (_) {}
   try { await device.pressBack(); } catch (_) {}
+  try { await device.disableSynchronization(); } catch (_) {}
 
   await waitFor(element(by.id('CreateAWallet')))
     .toBeVisible()
     .whileElement(by.id('WalletsList'))
     .scroll(500, 'right'); // in case emu screen is small and it doesnt fit
 
-  await sleep(200); // Wait until bounce animation finishes.
-  await dismissGeneralAlerts();
+  await sleep(300); // Wait until bounce animation finishes.
+  try { await dismissGeneralAlerts(); } catch (_) {}
   await tapAndTapAgainIfElementIsNotVisible('CreateAWallet', 'WalletNameInput');
   await element(by.id('WalletNameInput')).replaceText(walletName || 'cr34t3d');
   await waitForId('ActivateBitcoinButton');
@@ -308,12 +312,14 @@ export async function helperCreateWallet(walletName) {
     .scroll(500, 'down'); // in case emu screen is small and it doesnt fit
 
   await element(by.id('PleasebackupOk')).tap();
-  await dismissGeneralAlerts();
-  await resetToWalletsList(6);
+  await sleep(400);
+  try { await dismissGeneralAlerts(); } catch (_) {}
+  try { await device.pressBack(); } catch (_) {}
+  await resetToWalletsList(8, true);
   await scrollUpOnHomeScreen();
   await expect(element(by.id('WalletsList'))).toBeVisible();
   await element(by.id('WalletsList')).swipe('right', 'fast', 1); // in case emu screen is small and it doesnt fit
-  await sleep(200);
+  await sleep(300);
   await expect(element(by.id(walletName || 'cr34t3d'))).toBeVisible();
 }
 

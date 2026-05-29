@@ -67,16 +67,31 @@ describe('L1 signet iOS simulator receive seed', () => {
 
   it('creates wallet and logs receive address for Android send E2E', async () => {
     await device.disableSynchronization();
-    await sleep(1500);
-    await dismissGeneralAlerts();
+    await sleep(2000);
+    // Defensive: system setup prompts (Set up later, iCloud, etc) may appear on fresh/reused sim; best-effort only, ignore busy/not-responded to avoid 10min test timeout
+    try {
+      await dismissGeneralAlerts();
+    } catch (e) {
+      console.log('[L1_IOS_ANDROID_E2E] initial dismiss skipped (app busy or system modal):', (e && e.message ? e.message.slice(0, 180) : e));
+      try { await device.pressBack(); } catch (_) {}
+      try { await device.disableSynchronization(); } catch (_) {}
+      await sleep(1500);
+    }
     await resetToWalletsList(4, true);
+    await device.disableSynchronization();
 
     await helperCreateWallet(walletLabel);
 
     await device.launchApp({ newInstance: true, permissions: { notifications: 'YES' }, launchArgs: { detoxEnableSynchronization: 'NO' } });
     await device.disableSynchronization();
-    await sleep(1500);
-    await dismissGeneralAlerts();
+    await sleep(2000);
+    try {
+      await dismissGeneralAlerts();
+    } catch (e) {
+      console.log('[L1_IOS_ANDROID_E2E] post-relaunch dismiss skipped:', (e && e.message ? e.message.slice(0, 180) : e));
+      try { await device.pressBack(); } catch (_) {}
+      await sleep(1000);
+    }
     await waitForId('WalletsList', 60000);
     await expect(element(by.id(walletLabel))).toBeVisible();
 

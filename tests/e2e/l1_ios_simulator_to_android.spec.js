@@ -73,11 +73,12 @@ async function openWalletReceiveScreen(walletName) {
 
 async function openWalletSendScreen(walletName) {
   await device.disableSynchronization();
-  await resetToWalletsList(10, true);
+  await resetToWalletsList(12, true);
   await dismissPostFundAlerts();
   // Extra recovery swipe + re-scroll for L1SendE2E not found after fund (list may need bounce/refresh post-balance update)
   try { await element(by.id('WalletsList')).swipe('down', 'slow', 0.4); } catch (_) {}
-  await sleep(400);
+  await sleep(500);
+  try { await device.disableSynchronization(); } catch (_) {}
   await scrollWalletIntoView(walletName);
   await tapAndTapAgainIfElementIsNotVisible(walletName, 'SendButton');
   await waitFor(element(by.id('SendButton')))
@@ -177,7 +178,7 @@ describe('L1 signet iOS simulator to Android receive', () => {
 
       // Post-balance-wait reset + safe dismiss (use resetToWalletsList with safePostFund=true to avoid Skip/Continue alert loops that cause Detox app-busy after L1 fund/mine). Matches Android leg and L1_E2E requirements.
       await device.disableSynchronization();
-      await resetToWalletsList(10, true);
+      await resetToWalletsList(12, true);
       await dismissPostFundAlerts();
       try {
         await element(by.id('WalletsList')).swipe('down', 'slow');
@@ -186,6 +187,7 @@ describe('L1 signet iOS simulator to Android receive', () => {
       try { await device.reloadReactNative(); } catch (_) {}
       await device.disableSynchronization();
       await dismissPostFundAlerts();
+      try { await device.pressBack(); } catch (_) {}
 
       // After resetToWalletsList (for app-busy post-fund), must re-enter wallet from list before SendButton is hittable.
       // This completes the safe post-fund reset path (using dismissPostFundAlerts inside reset to avoid Skip/Continue loops).

@@ -36,6 +36,11 @@ async function dismissBlockingAlerts() {
     'Close',
     'Yes, I have.',
     'No, and do not ask me again.',
+    'Set up later',
+    'Set Up Later',
+    'Maybe Later',
+    'Remind Me Later',
+    'Skip for now',
   ];
   for (let round = 0; round < 4; round++) {
     for (const label of labels) {
