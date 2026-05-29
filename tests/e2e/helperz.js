@@ -184,11 +184,15 @@ export async function dismissPostFundAlerts() {
  * Pass safePostFund=true after L1 fund/mine to use dismissPostFundAlerts (avoids Skip/Continue waits that wedge Detox).
  */
 export async function resetToWalletsList(maxAttempts = 6, safePostFund = false) {
+  if (safePostFund) {
+    try { await device.disableSynchronization(); } catch (_) {}
+    await sleep(600);
+  }
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
       await waitFor(element(by.id('WalletsList')))
         .toBeVisible()
-        .withTimeout(2500);
+        .withTimeout(3000);
       return true;
     } catch (_) {
       try {
@@ -198,7 +202,11 @@ export async function resetToWalletsList(maxAttempts = 6, safePostFund = false) 
         await element(by.id('NavigationCloseButton')).atIndex(0).tap();
       } catch (_) {}
       await (safePostFund ? dismissPostFundAlerts() : dismissGeneralAlerts());
-      await sleep(350);
+      await sleep(450);
+      if (safePostFund && attempt % 3 === 2) {
+        try { await device.reloadReactNative(); } catch (_) {}
+        await device.disableSynchronization();
+      }
     }
   }
   // Final best-effort

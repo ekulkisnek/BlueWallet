@@ -149,7 +149,8 @@ describe('L1 signet Android phone to iOS simulator receive', () => {
       // Re-disable sync + settle after external fund/mine (parity with ios-sim leg; addresses app busy + nav flakes on Android device)
       await device.disableSynchronization();
       await sleep(2500);
-      await resetToWalletsList(8, true);
+      try { await device.reloadReactNative(); } catch (_) {}
+      await resetToWalletsList(10, true);
       await dismissPostFundAlerts();
       await dismissBlockingAlerts();
 

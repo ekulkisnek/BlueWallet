@@ -116,7 +116,7 @@ else
   set +e
   L1_E2E_SKIP_LOCK=1 \
     L1_ANDROID_IOS_SIM_E2E_LOG_DIR="$ANDROID_SIM_RUN" \
-    bash "$ROOT_DIR/scripts/run-l1-android-phone-to-ios-simulator-e2e.sh" "$@"
+    bash "$ROOT_DIR/scripts/with-android-build-env.sh" "$ROOT_DIR/scripts/run-l1-android-phone-to-ios-simulator-e2e.sh" "$@"
   android_to_ios_rc=$?
   set -e
   if [[ -f "$ANDROID_SIM_RUN/SUMMARY.txt" ]]; then

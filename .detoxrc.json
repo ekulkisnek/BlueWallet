@@ -53,6 +53,7 @@
         "id": "FC7DDD6B-DFCB-432A-98CE-48C453E6EF48"
       }
     },
+    // iPhone 16e-Detox pinned by UDID (FC7... is the active E2E sim; name duplicates exist in simctl but id ensures correct boot target for L1 E2E)
     "emulator": {
       "type": "android.emulator",
       "device": {
