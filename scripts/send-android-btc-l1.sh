@@ -80,6 +80,11 @@ wallet_id_json=""
 if [[ -n "$WALLET_ID" ]]; then
   wallet_id_json=",\"walletID\":\"${WALLET_ID}\""
 fi
+
+log "warm_launch wallet load wait"
+adb -s "$ANDROID_SERIAL" shell monkey -p "$ANDROID_PACKAGE" -c android.intent.category.LAUNCHER 1 >>"$RUN_DIR/launch.log" 2>&1 || true
+sleep "${REDWALLET_ANDROID_BTC_SEND_WARMUP_SEC:-25}"
+
 cat >"$CMD_DIR/command.json" <<EOF
 {"operation":"sendL1","commandId":"${command_id}","address":"${DESTINATION}","amountSats":${AMOUNT_SATS},"feeRate":${FEE_RATE}${wallet_id_json}}
 EOF
@@ -88,7 +93,8 @@ log "SEEDED command.json dir=$CMD_DIR"
 android_push_app_file "$CMD_DIR/command.json" "redwallet-btc-selftest-command.json" || true
 
 set +e
-"$ROOT_DIR/scripts/monitor-redwallet-android-real-device.sh" "$ANDROID_PACKAGE" "$MONITOR_SECONDS" "$ANDROID_SERIAL" >>"$RUN_DIR/monitor.log" 2>&1
+REDWALLET_ANDROID_MONITOR_NO_RESTART=1 \
+  "$ROOT_DIR/scripts/monitor-redwallet-android-real-device.sh" "$ANDROID_PACKAGE" "$MONITOR_SECONDS" "$ANDROID_SERIAL" >>"$RUN_DIR/monitor.log" 2>&1
 set -e
 
 result_path="$CMD_DIR/result.json"
@@ -103,7 +109,12 @@ with open(p) as f:
     r = json.load(f)
 ok = r.get("ok") is True
 txid = (r.get("txid") or "").strip()
-sys.exit(0 if ok and len(txid) == 64 else 1)
+err = (r.get("error") or "").strip()
+if ok and len(txid) == 64:
+    sys.exit(0)
+if err and err != "wallet_not_ready":
+    sys.exit(2)
+sys.exit(1)
 PY
     then
       txid="$(python3 - <<PY

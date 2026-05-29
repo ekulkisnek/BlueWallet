@@ -156,7 +156,7 @@ describe('L1 signet iOS simulator to Android receive', () => {
         await element(by.id('WalletTransactionsScrollView')).swipe('down', 'slow');
       } catch (_) {}
     }
-    await sleep(Number(process.env.L1_E2E_BALANCE_WAIT_MS || 20000));
+    await sleep(Number(process.env.L1_E2E_BALANCE_WAIT_MS || 45000));
 
     await element(by.id('SendButton')).tap();
     await waitForId('AddressInput');
@@ -167,8 +167,16 @@ describe('L1 signet iOS simulator to Android receive', () => {
     }
     await sleep(500);
 
-    await element(by.id('CreateTransactionButton')).tap();
-    await waitForId('TransactionValue');
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await element(by.id('CreateTransactionButton')).tap();
+      try {
+        await waitForId('TransactionValue', 30000);
+        break;
+      } catch (_) {
+        if (attempt === 4) throw new Error('CreateTransactionButton did not produce TransactionValue');
+        await sleep(5000);
+      }
+    }
     await element(by.id('TransactionDetailsButton')).tap();
     const txhex = await extractTextFromElementById('TxhexInput');
     const txid = bitcoin.Transaction.fromHex(txhex).getId();

@@ -469,8 +469,20 @@ async function executeBtcSendL1Command(
 
   await BlueElectrum.ping();
   await BlueElectrum.waitTillConnected();
-  await wallet.fetchBalance();
-  await wallet.fetchTransactions();
+
+  const minBalance = amountSats + 2000;
+  for (let attempt = 0; attempt < 20; attempt++) {
+    await wallet.fetchBalance();
+    await wallet.fetchTransactions();
+    if (wallet.getBalance() >= minBalance) {
+      break;
+    }
+    if (attempt === 19) {
+      throw new Error(`Insufficient balance after sync: ${wallet.getBalance()} < ${minBalance}`);
+    }
+    await new Promise(resolve => setTimeout(resolve, 3000));
+  }
+
   const utxos = wallet.getUtxo();
   const change = await wallet.getChangeAddressAsync();
   if (!change) {
@@ -1239,6 +1251,16 @@ export const StorageProvider = ({ children }: { children: React.ReactNode }) => 
         }
 
         if (operation === 'sendL1') {
+          const walletID = String(command.walletID ?? '').trim();
+          const hasWallet =
+            wallets.some(w => w.getID() === walletID && w.type === HDSegwitBech32Wallet.type) ||
+            wallets.some(w => w.type === HDSegwitBech32Wallet.type);
+          if (!hasWallet) {
+            await RNFS.writeFile(BTC_REAL_DEVICE_COMMAND, rawCommand, 'utf8');
+            redWalletEvent('real_device_btc_command_deferred', { operation, commandId, reason: 'wallet_not_ready' });
+            return;
+          }
+
           const sendResult = await executeBtcSendL1Command(wallets, command);
           const result = {
             ok: true,

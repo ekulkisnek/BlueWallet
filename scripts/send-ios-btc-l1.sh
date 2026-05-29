@@ -81,7 +81,6 @@ if [[ "$metro_status" != *packager-status:running* ]]; then
 fi
 
 bash "$ROOT_DIR/scripts/ensure-ios-btc-command-server.sh" >>"$RUN_DIR/ensure-server.log" 2>&1
-bash "$ROOT_DIR/scripts/ensure-redwallet-ios-device-servers.sh" >>"$RUN_DIR/ensure-ios-servers.log" 2>&1 || true
 
 CMD_DIR="$(resolve_command_dir)"
 export REDWALLET_IOS_BTC_COMMAND_DIR="$CMD_DIR"
@@ -111,11 +110,14 @@ txid=""
 deadline=$(( $(date +%s) + POLL_SECONDS ))
 while [[ $(date +%s) -lt $deadline ]]; do
   if [[ -f "$result_path" ]]; then
+    cp "$result_path" "$RUN_DIR/result-latest.json" 2>/dev/null || true
     if python3 - <<'PY' "$result_path"
 import json, sys
 p = sys.argv[1]
 with open(p) as f:
     r = json.load(f)
+if r.get("operation") != "sendL1":
+    sys.exit(1)
 ok = r.get("ok") is True
 txid = (r.get("txid") or "").strip()
 sys.exit(0 if ok and len(txid) == 64 else 1)
@@ -136,7 +138,9 @@ done
 
 if [[ -z "$txid" ]]; then
   log "BLOCKER no iOS L1 send txid (result.json missing or failed)"
-  if [[ -f "$result_path" ]]; then
+  if [[ -f "$RUN_DIR/result-latest.json" ]]; then
+    cat "$RUN_DIR/result-latest.json" >>"$RUN_DIR/send.log"
+  elif [[ -f "$result_path" ]]; then
     cat "$result_path" >>"$RUN_DIR/send.log"
   fi
   exit 2

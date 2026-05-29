@@ -42,11 +42,13 @@ l1_lock_acquire() {
     fi
     rm -f "$LOCK_FILE"
   fi
+  # Use bash $$ (orchestrator shell), not a Python subprocess pid — otherwise
+  # kill_duplicate_l1_processes keeps a dead pid and SIGKILLs the live orchestrator.
   python3 - <<PY
-import json, os, time
+import json, time
 payload = {
-    "pid": os.getpid(),
-    "ppid": os.getppid(),
+    "pid": int("${BASHPID:-$$}"),
+    "ppid": int("$PPID"),
     "run_dir": "$run_dir",
     "holder": "$holder",
     "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),

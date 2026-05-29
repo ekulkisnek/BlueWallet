@@ -49,8 +49,7 @@
     "simulator": {
       "type": "ios.simulator",
       "device": {
-        "type": "iPhone 16e-Detox",
-        "udid": "FC7DDD6B-DFCB-432A-98CE-48C453E6EF48"
+        "type": "iPhone 16e"
       }
     },
     "emulator": {
