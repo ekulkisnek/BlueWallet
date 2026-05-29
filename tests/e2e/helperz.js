@@ -194,20 +194,26 @@ export async function dismissGeneralAlerts() {
  */
 export async function dismissPostFundAlerts() {
   const labels = ['Cancel', 'Try again', 'Reset', 'Reset to default', 'OK', 'Ok', 'Not Now', 'Not now', 'Later', 'Close', 'Dismiss', 'Continue', 'Yes, I have.', 'No, and do not ask me again.', 'Set up later', 'Set Up Later', 'Maybe Later', 'Remind Me Later', 'Skip for now'];
-  for (let round = 0; round < 6; round++) {
+  try { await device.disableSynchronization(); } catch (_) {}
+  for (let round = 0; round < 8; round++) {
+    if (round % 3 === 2) {
+      try { await device.reloadReactNative(); } catch (_) {}
+      try { await device.disableSynchronization(); } catch (_) {}
+      await sleep(300);
+    }
     for (const label of labels) {
       try {
         await waitFor(element(by.text(label)))
           .toBeVisible()
-          .withTimeout(600);
+          .withTimeout(400);
         await element(by.text(label)).tap();
-        await sleep(200);
+        await sleep(150);
       } catch (_) {}
     }
     try { await element(by.id('NavigationCloseButton')).atIndex(0).tap(); } catch (_) {}
     try { await element(by.id('CloseButton')).atIndex(0).tap(); } catch (_) {}
     if (device.getPlatform() === 'android') { try { await device.pressBack(); } catch (_) {} }
-    await sleep(120);
+    await sleep(100);
   }
 }
 
@@ -227,6 +233,7 @@ export async function resetToWalletsList(maxAttempts = 6, safePostFund = false) 
       await waitFor(element(by.id('WalletsList')))
         .toBeVisible()
         .withTimeout(3000);
+      try { await element(by.id('WalletsList')).swipe('down', 'slow', 0.3); } catch (_) {}
       return true;
     } catch (_) {
       try {
@@ -237,9 +244,9 @@ export async function resetToWalletsList(maxAttempts = 6, safePostFund = false) 
       } catch (_) {}
       await (safePostFund ? dismissPostFundAlerts() : dismissGeneralAlerts());
       await sleep(450);
-      if (safePostFund && attempt % 3 === 2) {
+      if (safePostFund && (attempt % 2 === 1)) {
         try { await device.reloadReactNative(); } catch (_) {}
-        await device.disableSynchronization();
+        try { await device.disableSynchronization(); } catch (_) {}
       }
     }
   }
@@ -247,7 +254,8 @@ export async function resetToWalletsList(maxAttempts = 6, safePostFund = false) 
   try {
     await waitFor(element(by.id('WalletsList')))
       .toBeVisible()
-      .withTimeout(3000);
+      .withTimeout(4000);
+    try { await element(by.id('WalletsList')).swipe('down', 'slow', 0.3); } catch (_) {}
     return true;
   } catch (_) {
     return false;

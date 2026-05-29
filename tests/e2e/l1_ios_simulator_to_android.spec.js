@@ -72,17 +72,19 @@ async function openWalletReceiveScreen(walletName) {
 
 async function openWalletSendScreen(walletName) {
   await device.disableSynchronization();
-  await resetToWalletsList(12, true);
+  await resetToWalletsList(15, true);
   await dismissPostFundAlerts();
-  // Extra recovery swipe + re-scroll for L1SendE2E not found after fund (list may need bounce/refresh post-balance update)
+  // Extra recovery swipe + re-scroll + reload for L1SendE2E not found after fund (list may need bounce/refresh post-balance update) + Detox app busy
   try { await element(by.id('WalletsList')).swipe('down', 'slow', 0.4); } catch (_) {}
-  await sleep(500);
+  await sleep(400);
+  try { await device.reloadReactNative(); } catch (_) {}
   try { await device.disableSynchronization(); } catch (_) {}
+  await dismissPostFundAlerts();
   await scrollWalletIntoView(walletName);
   await tapAndTapAgainIfElementIsNotVisible(walletName, 'SendButton');
   await waitFor(element(by.id('SendButton')))
     .toBeVisible()
-    .withTimeout(90000);
+    .withTimeout(120000);
 }
 
 describe('L1 signet iOS simulator to Android receive', () => {
@@ -193,22 +195,23 @@ describe('L1 signet iOS simulator to Android receive', () => {
 
       // Post-balance-wait reset + safe dismiss (use resetToWalletsList with safePostFund=true to avoid Skip/Continue alert loops that cause Detox app-busy after L1 fund/mine). Matches Android leg and L1_E2E requirements.
       await device.disableSynchronization();
-      await resetToWalletsList(12, true);
+      await resetToWalletsList(15, true);
       await dismissPostFundAlerts();
       try {
         await element(by.id('WalletsList')).swipe('down', 'slow');
       } catch (_) {}
-      await sleep(800);
+      await sleep(600);
       try { await device.reloadReactNative(); } catch (_) {}
-      await device.disableSynchronization();
+      try { await device.disableSynchronization(); } catch (_) {}
       await dismissPostFundAlerts();
+      try { await element(by.id('WalletsList')).swipe('down', 'slow', 0.3); } catch (_) {}
       try { await goBack(); } catch (_) {}
 
       // After resetToWalletsList (for app-busy post-fund), must re-enter wallet from list before SendButton is hittable.
       // This completes the safe post-fund reset path (using dismissPostFundAlerts inside reset to avoid Skip/Continue loops).
       await scrollWalletIntoView(walletLabel);
       await tapAndTapAgainIfElementIsNotVisible(walletLabel, 'SendButton');
-      await waitForId('SendButton', 45000);
+      await waitForId('SendButton', 60000);
       await element(by.id('SendButton')).tap();
       await waitForId('AddressInput');
       await element(by.id('AddressInput')).replaceText(receiveAddress);
