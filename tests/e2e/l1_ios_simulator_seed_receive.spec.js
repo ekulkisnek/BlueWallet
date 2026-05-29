@@ -73,7 +73,7 @@ describe('L1 signet iOS simulator receive seed', () => {
       await dismissGeneralAlerts();
     } catch (e) {
       console.log('[L1_IOS_ANDROID_E2E] initial dismiss skipped (app busy or system modal):', (e && e.message ? e.message.slice(0, 180) : e));
-      try { await device.pressBack(); } catch (_) {}
+      if (device.getPlatform() === 'android') { try { await device.pressBack(); } catch (_) {} }
       try { await device.disableSynchronization(); } catch (_) {}
       await sleep(1500);
     }
@@ -89,7 +89,7 @@ describe('L1 signet iOS simulator receive seed', () => {
       await dismissGeneralAlerts();
     } catch (e) {
       console.log('[L1_IOS_ANDROID_E2E] post-relaunch dismiss skipped:', (e && e.message ? e.message.slice(0, 180) : e));
-      try { await device.pressBack(); } catch (_) {}
+      if (device.getPlatform() === 'android') { try { await device.pressBack(); } catch (_) {} }
       await sleep(1000);
     }
     await waitForId('WalletsList', 60000);
