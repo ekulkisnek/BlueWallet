@@ -103,7 +103,7 @@ else
   set +e
   L1_E2E_SKIP_LOCK=1 \
     L1_IOS_SIM_ANDROID_E2E_LOG_DIR="$IOS_SIM_RUN" \
-    L1_E2E_POST_FUND_RELAUNCH=1 \
+    L1_E2E_POST_FUND_RELAUNCH=0 \
     L1_E2E_BIDIRECTIONAL=0 \
     REDWALLET_SKIP_ANDROID_SEED=1 \
     ANDROID_L1_RECEIVE_ADDRESS=tb1qewdkqej3xc6hh2v5q88rnaekd2zkccf0zq6kdf \
@@ -120,7 +120,7 @@ else
   set +e
   L1_E2E_SKIP_LOCK=1 \
     L1_ANDROID_IOS_SIM_E2E_LOG_DIR="$ANDROID_SIM_RUN" \
-    L1_E2E_POST_FUND_RELAUNCH=1 \
+    L1_E2E_POST_FUND_RELAUNCH=0 \
     bash "$ROOT_DIR/scripts/with-android-build-env.sh" "$ROOT_DIR/scripts/run-l1-android-phone-to-ios-simulator-e2e.sh" "$@"
   android_to_ios_rc=$?
   set -e

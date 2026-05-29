@@ -60,12 +60,37 @@ function sumPaidSatsToAddress(tx, address) {
 function waitForElectrumBalance(address, minSats) {
   const rootDir = process.env.L1_E2E_ROOT_DIR || '/Volumes/T705/code/work-on-something-to-do-with/redwallet';
   const script = `${rootDir}/scripts/preflight-electrum-balance.sh`;
-  const timeoutSec = Math.ceil(Number(process.env.L1_E2E_BALANCE_WAIT_MS || 120000) / 1000);
+  const ensureElectrum = `${rootDir}/scripts/ensure-l1-electrum.sh`;
+  const balanceWaitMs = Number(process.env.L1_E2E_BALANCE_WAIT_MS || 180000);
+  const timeoutSec = Math.ceil(balanceWaitMs / 1000);
+  const postFundMine = Number(process.env.L1_E2E_POST_FUND_MINE_BLOCKS || process.env.L1_MINE_BLOCKS || 3);
+
+  console.log(`[L1 E2E] Ensuring L1 electrum before balance preflight`);
+  try {
+    execFileSync('bash', [ensureElectrum], {
+      encoding: 'utf8',
+      timeout: 120000,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, L1_E2E_ROOT_DIR: rootDir },
+    });
+  } catch (e) {
+    console.log(`[L1 E2E] ensure-l1-electrum warn: ${(e && e.message) || e}`);
+  }
+
+  console.log(`[L1 E2E] Mining ${postFundMine} block(s) before electrum balance wait`);
+  mineL1Blocks(postFundMine);
+
   console.log(`[L1 E2E] Waiting for Electrum balance >= ${minSats} sats on ${address} (timeout ${timeoutSec}s)`);
   execFileSync('bash', [script, address, String(minSats), String(timeoutSec)], {
     encoding: 'utf8',
-    timeout: Number(process.env.L1_E2E_BALANCE_WAIT_MS || 120000) + 30000,
+    timeout: balanceWaitMs + 60000,
     stdio: ['ignore', 'pipe', 'pipe'],
+    env: {
+      ...process.env,
+      L1_E2E_ROOT_DIR: rootDir,
+      REDWALLET_ELECTRUM_HOST: process.env.REDWALLET_ELECTRUM_HOST || '127.0.0.1',
+      REDWALLET_ELECTRUM_PORT: process.env.REDWALLET_ELECTRUM_PORT || '60101',
+    },
   });
 }
 

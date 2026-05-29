@@ -37,7 +37,8 @@ except Exception:
 }
 
 get_balance_sats() {
-  node - "$ADDRESS" "$HOST" "$PORT" <<'NODE'
+  # Must run node from repo root so bitcoinjs-lib resolves (Detox/jest cwd varies).
+  (cd "$ROOT_DIR" && node - "$ADDRESS" "$HOST" "$PORT") <<'NODE'
 const bitcoin = require('bitcoinjs-lib');
 const crypto = require('crypto');
 const net = require('net');
@@ -87,7 +88,21 @@ client.setTimeout(5000, () => {
 NODE
 }
 
+notify_electrs_refresh() {
+  python3 - <<'PY' "$HOST" "$PORT" 2>/dev/null || true
+import json, socket, sys
+host, port = sys.argv[1], int(sys.argv[2])
+payload = json.dumps({"id": 99, "method": "blockchain.headers.subscribe", "params": []}) + "\n"
+try:
+    with socket.create_connection((host, port), timeout=3) as s:
+        s.sendall(payload.encode())
+except Exception:
+    pass
+PY
+}
+
 log "electrum_balance_preflight address=$ADDRESS required_sats=$REQUIRED timeout=${TIMEOUT_SEC}s host=${HOST}:${PORT}"
+notify_electrs_refresh
 
 deadline=$((SECONDS + TIMEOUT_SEC))
 while [[ "$SECONDS" -lt "$deadline" ]]; do

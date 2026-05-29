@@ -152,8 +152,6 @@ export async function dismissGeneralAlerts() {
     const labels = [
       'Cancel',
       'Try again',
-      'Reset',
-      'Reset to default',
       'OK',
       'Ok',
       'Continue',
@@ -165,10 +163,6 @@ export async function dismissGeneralAlerts() {
       'Dismiss',
       'Yes, I have.',
       'No, and do not ask me again.',
-      'Allow',
-      'Don\'t Allow',
-      'Don\u2019t Allow',
-      'Don‘t Allow',
       'Maybe Later',
       'Set up later',
       'Set Up Later',
@@ -177,14 +171,13 @@ export async function dismissGeneralAlerts() {
       'Remind Me Later',
       'Remind me later',
       'Skip for now',
-      'Allow While Using App',
-      'Allow Once',
       'Open Settings',
       'Keep Using',
     ];
-    await dismissAlertLabels(labels, { rounds: 2, timeoutMs: 120 });
+    await dismissAlertLabels(labels, { rounds: 1, timeoutMs: 80 });
+    // Permission prompts: single quick pass only (polling "Don't Allow" wedges Detox for 20min).
     for (const permLabel of ["Don't Allow", "Don\u2019t Allow", "Don‘t Allow", 'Allow', 'Allow While Using App']) {
-      await tapIfVisible(element(by.text(permLabel)), 150);
+      await tapIfVisible(element(by.text(permLabel)), 50);
     }
   } catch (_) {
     // Never let dismiss unhandled errors (app busy, detox comms, permission race) escape and fail the test
@@ -298,8 +291,8 @@ export async function helperCreateWallet(walletName) {
       await device.disableSynchronization();
     }
   } catch (_) {}
-  try { await dismissGeneralAlerts(); } catch (_) {}
-  await resetToWalletsList(4, false);
+  try { await dismissPostFundAlerts(); } catch (_) {}
+  await resetToWalletsList(4, true);
   // Additional overlay clear for RNSModalScreen hit-test issues on simulator
   try { await element(by.type('RCTModalHostView')).atIndex(0).tap(); } catch (_) {}
   if (device.getPlatform() === 'android') { try { await device.pressBack(); } catch (_) {} }
@@ -311,7 +304,7 @@ export async function helperCreateWallet(walletName) {
     .scroll(500, 'right'); // in case emu screen is small and it doesnt fit
 
   await sleep(300); // Wait until bounce animation finishes.
-  try { await dismissGeneralAlerts(); } catch (_) {}
+  try { await dismissPostFundAlerts(); } catch (_) {}
   await tapAndTapAgainIfElementIsNotVisible('CreateAWallet', 'WalletNameInput');
   await element(by.id('WalletNameInput')).replaceText(walletName || 'cr34t3d');
   await waitForId('ActivateBitcoinButton');
@@ -327,7 +320,7 @@ export async function helperCreateWallet(walletName) {
 
   await element(by.id('PleasebackupOk')).tap();
   await sleep(400);
-  try { await dismissGeneralAlerts(); } catch (_) {}
+  try { await dismissPostFundAlerts(); } catch (_) {}
   if (device.getPlatform() === 'android') { try { await device.pressBack(); } catch (_) {} }
   await resetToWalletsList(8, true);
   await scrollUpOnHomeScreen();

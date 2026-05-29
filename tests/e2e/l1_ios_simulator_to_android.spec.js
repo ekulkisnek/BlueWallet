@@ -19,7 +19,7 @@ const walletLabel = process.env.L1_E2E_WALLET_LABEL || 'L1SendE2E';
 const sendSats = Number(process.env.L1_E2E_SEND_SATS || 10000);
 const fundSats = Number(process.env.L1_E2E_FUND_SATS || 100000);
 const sendBtc = (sendSats / 1e8).toFixed(8);
-const BALANCE_WAIT_MS = Number(process.env.L1_E2E_BALANCE_WAIT_MS || 120000);
+const BALANCE_WAIT_MS = Number(process.env.L1_E2E_BALANCE_WAIT_MS || 180000);
 const TEST_TIMEOUT_MS = Number(process.env.L1_E2E_TEST_TIMEOUT_MS || 1200000);
 
 async function dismissReceiveNotificationPrompts() {
