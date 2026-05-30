@@ -72,6 +72,7 @@ class MainApplication : Application(), ReactApplication {
                     add(CustomSegmentedControlPackage())
                     add(SettingsPackage())
                     add(BitAssetsWalletPackage())
+                    add(LiquidWalletPackage())
                 }
 
             override fun getUseDeveloperSupport() = BuildConfig.DEBUG
