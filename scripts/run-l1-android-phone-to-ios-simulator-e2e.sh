@@ -195,14 +195,18 @@ export L1_E2E_COMPOSE_FILE="$COMPOSE_FILE"
 export L1_E2E_SEND_SATS L1_E2E_FUND_SATS
 export L1_E2E_BALANCE_WAIT_MS="${L1_E2E_BALANCE_WAIT_MS:-120000}"
 
-log "detox_start android.debug.device balance_wait_ms=$L1_E2E_BALANCE_WAIT_MS"
+log "detox_start android.debug.device balance_wait_ms=$L1_E2E_BALANCE_WAIT_MS detox_reuse=${L1_E2E_DETOX_REUSE:-0}"
 wake_android_device
 set +e
 # shellcheck source=with-android-build-env.sh
 source "$ROOT_DIR/scripts/with-android-build-env.sh"
+DETOX_EXTRA=()
+if [[ "${L1_E2E_DETOX_REUSE:-0}" == 1 ]]; then
+  DETOX_EXTRA+=(--reuse)
+fi
 npx detox test -c android.debug.device tests/e2e/l1_android_phone_to_ios_simulator.spec.js \
   --loglevel "${DETOX_LOGLEVEL:-info}" \
-  --reuse "$@" 2>&1 | tee "$RUN_DIR/detox.log"
+  "${DETOX_EXTRA[@]}" "$@" 2>&1 | tee "$RUN_DIR/detox.log"
 detox_rc=${PIPESTATUS[0]}
 set -e
 log "detox_exit=$detox_rc"
