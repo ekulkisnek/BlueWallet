@@ -191,6 +191,14 @@ const WalletTransactions: React.FC<WalletTransactionsProps> = ({ route }: { rout
         const oldBalance = wallet.getBalance();
         await wallet.fetchBalance();
         if (oldBalance !== wallet.getBalance()) smthChanged = true;
+        if (typeof wallet.fetchUtxo === 'function') {
+          try {
+            await wallet.fetchUtxo();
+            if (oldBalance !== wallet.getBalance()) smthChanged = true;
+          } catch (utxoErr) {
+            console.log('fetchUtxo after electrum balance', utxoErr);
+          }
+        }
         const oldTxLen = wallet.getTransactions().length;
         await wallet.fetchTransactions();
         if ('fetchPendingTransactions' in wallet) {

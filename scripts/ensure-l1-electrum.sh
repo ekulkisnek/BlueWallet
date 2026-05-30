@@ -25,8 +25,29 @@ PY
 }
 
 mainchain_height() {
-  docker compose -f "$COMPOSE_FILE" exec -T mainchain \
-    drivechain-cli -signet -rpccookiefile=/data/signet/.cookie getblockcount 2>/dev/null | tr -d '\r\n' || echo 0
+  docker compose -f "$COMPOSE_FILE" exec -T mainchain     drivechain-cli -signet -rpccookiefile=/data/signet/.cookie getblockcount 2>/dev/null | tr -d '
+' || echo 0
+}
+
+# Mainchain returns 0 while the container is still starting RPC (supervisor race).
+wait_mainchain_block_height() {
+  local deadline=$((SECONDS + 180))
+  local mc=0
+  while [[ "$SECONDS" -lt "$deadline" ]]; do
+    if docker compose -f "$COMPOSE_FILE" ps mainchain 2>/dev/null | grep -qE 'Up.*healthy'; then
+      mc="$(mainchain_height)"
+      if [[ "$mc" =~ ^[0-9]+$ ]] && [[ "$mc" -gt 0 ]]; then
+        echo "$mc"
+        return 0
+      fi
+      log "mainchain_warmup height=${mc:-0}"
+    else
+      log "mainchain_warmup waiting for healthy"
+    fi
+    sleep 3
+  done
+  echo 0
+  return 1
 }
 
 electrum_height() {
@@ -101,11 +122,12 @@ if ! docker compose -f "$COMPOSE_FILE" ps mainchain 2>/dev/null | grep -q Up; th
   exit 2
 fi
 
-mc="$(mainchain_height)"
+mc="$(wait_mainchain_block_height)" || mc=0
 if [[ "$mc" -eq 0 ]]; then
-  log "BLOCKER mainchain height 0"
+  log "BLOCKER mainchain height 0 after warmup"
   exit 2
 fi
+log "mainchain_ready height=$mc"
 
 if docker ps --format '{{.Names}}' | grep -qx "$ELECTRS_CONTAINER"; then
   eh="$(electrum_height 2>/dev/null || echo 0)"

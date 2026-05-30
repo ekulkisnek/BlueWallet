@@ -14,7 +14,7 @@ import {
   waitForCreateTransactionButton,
   waitForId,
   waitForText,
-  openSendViaBip21DeepLink,
+  openSendViaWalletSendButton,
 } from './helperz';
 import { fundL1Address, mineL1Blocks, waitForElectrumBalance } from './l1SignetShared';
 
@@ -180,7 +180,7 @@ describe('L1 signet iOS simulator to Android receive', () => {
       await device.disableSynchronization();
       await dismissPostFundAlerts();
       // Escalation: BIP21 OS deeplink (bluewallet2.spec) — not HomeScreenScan / ScanQr backdoor.
-      await openSendViaBip21DeepLink(receiveAddress, sendBtc);
+      await openSendViaWalletSendButton(receiveAddress, sendBtc);
       await waitForCreateTransactionButton(180000);
       for (let attempt = 0; attempt < 5; attempt++) {
         await element(by.id('CreateTransactionButton')).tap();
@@ -197,7 +197,7 @@ describe('L1 signet iOS simulator to Android receive', () => {
           }
           await resetToWalletsList(3, true);
           await scrollWalletIntoView(walletLabel);
-          await openSendViaBip21DeepLink(receiveAddress, sendBtc);
+          await openSendViaWalletSendButton(receiveAddress, sendBtc);
           await sleep(10000);
         }
       }

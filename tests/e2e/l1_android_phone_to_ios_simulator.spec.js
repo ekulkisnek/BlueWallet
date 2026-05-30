@@ -15,7 +15,7 @@ import {
   waitForCreateTransactionButton,
   waitForId,
   waitForText,
-  openSendViaBip21DeepLink,
+  openSendViaWalletSendButton,
 } from './helperz';
 import { fundL1Address, mineL1Blocks, waitForElectrumBalance } from './l1SignetShared';
 
@@ -106,10 +106,9 @@ describe('L1 signet Android phone to iOS simulator receive', () => {
       await device.disableSynchronization();
       await sleep(2000);
       await dismissGeneralAlerts();
-      await resetToWalletsList(5);
       await dismissBlockingAlerts();
 
-      // helperCreateWallet runs ensureWalletsListReady (cold restart on Android) — avoid double terminateApp here.
+      // helperCreateWallet runs ensureWalletsListReady (cold restart on Android) — avoid reset/terminate before it.
       await helperCreateWallet(walletLabel);
       await tapAndTapAgainIfElementIsNotVisible(walletLabel, 'ReceiveButton');
       await dismissBlockingAlerts();
@@ -156,7 +155,7 @@ describe('L1 signet Android phone to iOS simulator receive', () => {
 
       await device.disableSynchronization();
       await dismissPostFundAlerts();
-      await openSendViaBip21DeepLink(receiveAddress, sendBtc);
+      await openSendViaWalletSendButton(receiveAddress, sendBtc);
       await waitForCreateTransactionButton(180000);
       for (let attempt = 0; attempt < 5; attempt++) {
         await element(by.id('CreateTransactionButton')).tap();

@@ -292,7 +292,14 @@ export async function helperCreateWallet(walletName) {
     }
   } catch (_) {}
   try { await dismissPostFundAlerts(); } catch (_) {}
-  await resetToWalletsList(4, true);
+  let onWalletsList = false;
+  try {
+    await waitFor(element(by.id('WalletsList'))).toBeVisible().withTimeout(5000);
+    onWalletsList = true;
+  } catch (_) {}
+  if (!onWalletsList) {
+    await resetToWalletsList(device.getPlatform() === 'android' ? 2 : 4, true);
+  }
   // Additional overlay clear for RNSModalScreen hit-test issues on simulator
   try { await element(by.type('RCTModalHostView')).atIndex(0).tap(); } catch (_) {}
   if (device.getPlatform() === 'android') { try { await device.pressBack(); } catch (_) {} }
@@ -499,10 +506,20 @@ export async function openSendViaBip21DeepLink(receiveAddress, sendBtc) {
   await device.disableSynchronization();
   try {
     await waitForId('chooseFee', 90000);
-  } catch (_) {
-    await waitForId('AddressInput', 90000);
+    await setCustomFeeRate(2);
+    return;
+  } catch (_) {}
+  try {
+    await waitForId('AddressInput', 45000);
+    await setCustomFeeRate(2);
+    return;
+  } catch (e) {
+    console.log(
+      `[L1 E2E] openSendViaBip21DeepLink deeplink missed SendDetails, fallback scan:`,
+      e && e.message ? e.message.slice(0, 120) : e,
+    );
   }
-  await setCustomFeeRate(2);
+  await openSendViaHomeScanBip21(receiveAddress, sendBtc);
 }
 
 export async function goBack() {
@@ -640,6 +657,16 @@ export async function proceedAfterElectrumFund() {
   await sleep(Number(process.env.L1_E2E_POST_ELECTRUM_SETTLE_MS || 10000));
 }
 
+/** Open send from wallet detail (SendButton + form). Avoids BIP21 OS deeplink flake after post-fund relaunch. */
+export async function openSendViaWalletSendButton(receiveAddress, sendBtc) {
+  console.log(`[L1 E2E] openSendViaWalletSendButton to=${receiveAddress} amount=${sendBtc}`);
+  await dismissPostFundAlerts();
+  await device.disableSynchronization();
+  await waitForId('SendButton', 90000);
+  await tapAndTapAgainIfElementIsNotVisible('SendButton', 'HeaderMenuButton');
+  await fillL1SendForm(receiveAddress, sendBtc);
+}
+
 /** Fill send form and set custom fee (local signet). */
 export async function fillL1SendForm(receiveAddress, sendBtc) {
   await waitForId('AddressInput', 60000);
@@ -664,15 +691,24 @@ export async function ensureWalletsListReady(maxAttempts = 3) {
       return;
     } catch (_) {
       console.log(`[L1 E2E] ensureWalletsListReady attempt ${attempt + 1}/${maxAttempts}`);
+      const hardRelaunch = attempt >= maxAttempts - 2;
       // Cold restart only — launchApp(newInstance:false) loses Detox↔app bridge on Android device.
       if (device.getPlatform() === 'android') {
         try {
           await device.terminateApp();
         } catch (_) {}
-        await sleep(1500);
-        await launchAppUntilWalletsList({ deleteOnFirst: false, maxAttempts: 2, walletsTimeout: 90000 });
+        await sleep(hardRelaunch ? 3000 : 1500);
+        await launchAppUntilWalletsList({
+          deleteOnFirst: hardRelaunch,
+          maxAttempts: 2,
+          walletsTimeout: 90000,
+        });
       } else {
-        await launchAppUntilWalletsList({ deleteOnFirst: false, maxAttempts: 2, walletsTimeout: 90000 });
+        await launchAppUntilWalletsList({
+          deleteOnFirst: hardRelaunch,
+          maxAttempts: 2,
+          walletsTimeout: 90000,
+        });
       }
       try {
         await dismissGeneralAlerts();
