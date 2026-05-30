@@ -108,7 +108,8 @@ const SendDetails = () => {
   const [dumb, setDumb] = useState(false);
   const { isEditable } = routeParams;
   // if utxo is limited we use it to calculate available balance
-  const balance: number = utxos ? utxos.reduce((prev, curr) => prev + curr.value, 0) : (wallet?.getBalance() ?? 0);
+  const balance: number =
+    Array.isArray(utxos) && utxos.length > 0 ? utxos.reduce((prev, curr) => prev + curr.value, 0) : (wallet?.getBalance() ?? 0);
   const allBalance = formatBalanceWithoutSuffix(balance, BitcoinUnit.BTC, true);
   // estimated sendable amount when MAX is selected (null if not applicable)
   const [maxSendableAmount, setMaxSendableAmount] = useState<number | null>(null);
@@ -278,14 +279,23 @@ const SendDetails = () => {
       utxos: null,
       isTransactionReplaceable: wallet.type === HDSegwitBech32Wallet.type && !routeParams.isTransactionReplaceable ? true : undefined,
     });
-    // update wallet UTXO
+    // update wallet UTXO; refresh balance after UTXO sync so CreateTransactionButton enables post-fund (L1 signet E2E)
     wallet
       .fetchUtxo()
-      .then(() => {
-        // we need to re-calculate fees
+      .then(async () => {
+        try {
+          if (typeof wallet.fetchBalance === 'function') {
+            await wallet.fetchBalance();
+          }
+        } catch (e) {
+          console.log('fetchBalance after fetchUtxo', e);
+        }
         setDumb(v => !v);
       })
-      .catch(e => console.log('fetchUtxo error', e));
+      .catch(e => {
+        console.log('fetchUtxo error', e);
+        setDumb(v => !v);
+      });
   }, [wallet]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // recalc fees in effect so we don't block render

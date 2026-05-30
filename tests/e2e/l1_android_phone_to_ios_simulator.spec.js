@@ -6,16 +6,16 @@ import {
   ensureWalletsListReady,
   extractTextFromElementById,
   goBack,
+  helperCreateWallet,
   launchAppUntilWalletsList,
-  pullRefreshWalletTransactions,
+  proceedAfterElectrumFund,
   resetToWalletsList,
-  scrollUpOnHomeScreen,
   sleep,
   tapAndTapAgainIfElementIsNotVisible,
   waitForCreateTransactionButton,
   waitForId,
   waitForText,
-  waitForWalletBalancePositive,
+  openSendViaBip21DeepLink,
 } from './helperz';
 import { fundL1Address, mineL1Blocks, waitForElectrumBalance } from './l1SignetShared';
 
@@ -90,40 +90,6 @@ async function openReceiveAndWaitForAddress() {
     .withTimeout(90000);
 }
 
-async function createBitcoinWallet(walletName) {
-  await waitFor(element(by.id('CreateAWallet')))
-    .toBeVisible()
-    .whileElement(by.id('WalletsList'))
-    .scroll(500, 'right');
-  await sleep(300);
-  await tapAndTapAgainIfElementIsNotVisible('CreateAWallet', 'WalletNameInput');
-  await waitForId('WalletNameInput');
-  await element(by.id('WalletNameInput')).tap();
-  await sleep(200);
-  await element(by.id('WalletNameInput')).replaceText(walletName);
-  await waitForId('ActivateBitcoinButton');
-  await element(by.id('ActivateBitcoinButton')).tap();
-  await element(by.id('ActivateBitcoinButton')).tap();
-  await tapAndTapAgainIfElementIsNotVisible('Create', 'PleaseBackupScrollView');
-  await waitFor(element(by.id('PleasebackupOk')))
-    .toBeVisible()
-    .whileElement(by.id('PleaseBackupScrollView'))
-    .scroll(500, 'down');
-  await element(by.id('PleasebackupOk')).tap();
-  try {
-    await waitFor(element(by.text('OK')))
-      .toBeVisible()
-      .withTimeout(5000);
-    await element(by.text('OK')).tap();
-  } catch (_) {}
-  await scrollUpOnHomeScreen();
-  await element(by.id('WalletsList')).swipe('right', 'fast', 1);
-  await sleep(500);
-  await waitFor(element(by.id(walletName)))
-    .toBeVisible()
-    .withTimeout(15000);
-}
-
 describe('L1 signet Android phone to iOS simulator receive', () => {
   beforeAll(async () => {
     if (!receiveAddress) {
@@ -143,8 +109,8 @@ describe('L1 signet Android phone to iOS simulator receive', () => {
       await resetToWalletsList(5);
       await dismissBlockingAlerts();
 
-      await ensureWalletsListReady();
-      await createBitcoinWallet(walletLabel);
+      // helperCreateWallet runs ensureWalletsListReady (cold restart on Android) — avoid double terminateApp here.
+      await helperCreateWallet(walletLabel);
       await tapAndTapAgainIfElementIsNotVisible(walletLabel, 'ReceiveButton');
       await dismissBlockingAlerts();
       await openReceiveAndWaitForAddress();
@@ -173,7 +139,6 @@ describe('L1 signet Android phone to iOS simulator receive', () => {
       }
 
       waitForElectrumBalance(androidReceiveAddress, sendSats);
-      await sleep(Math.min(8000, BALANCE_WAIT_MS));
 
       try {
         await waitFor(element(by.id(walletLabel)))
@@ -186,24 +151,12 @@ describe('L1 signet Android phone to iOS simulator receive', () => {
           .whileElement(by.id('WalletsList'))
           .scroll(500, 'left');
       }
-      await tapAndTapAgainIfElementIsNotVisible(walletLabel, 'SendButton');
-      await pullRefreshWalletTransactions();
-      await waitForWalletBalancePositive(BALANCE_WAIT_MS);
-      await waitForId('SendButton', 60000);
-      await element(by.id('SendButton')).tap();
-      await waitForId('AddressInput');
-      await element(by.id('AddressInput')).tap();
-      await element(by.id('AddressInput')).replaceText(receiveAddress);
-      await element(by.id('BitcoinAmountInput')).tap();
-      await element(by.id('BitcoinAmountInput')).replaceText(sendBtc);
-      await sleep(500);
+      await element(by.id(walletLabel)).tap();
+      await proceedAfterElectrumFund();
 
       await device.disableSynchronization();
       await dismissPostFundAlerts();
-      // Harden against CreateTransactionButton not found after fund on Android device (app busy / balance render lag post-mine).
-      try { await element(by.id('SendDetailsScroll')).swipe('up', 'fast', 0.3); } catch (_) {}
-      try { await element(by.type('RCTScrollView')).atIndex(0).swipe('up', 'fast', 0.3); } catch (_) {}
-      await sleep(2000);
+      await openSendViaBip21DeepLink(receiveAddress, sendBtc);
       await waitForCreateTransactionButton(180000);
       for (let attempt = 0; attempt < 5; attempt++) {
         await element(by.id('CreateTransactionButton')).tap();

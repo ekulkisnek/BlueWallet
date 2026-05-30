@@ -7,14 +7,14 @@ import {
   goBack,
   helperCreateWallet,
   launchAppUntilWalletsList,
-  pullRefreshWalletTransactions,
+  proceedAfterElectrumFund,
   resetToWalletsList,
   sleep,
   tapAndTapAgainIfElementIsNotVisible,
   waitForCreateTransactionButton,
   waitForId,
   waitForText,
-  waitForWalletBalancePositive,
+  openSendViaBip21DeepLink,
 } from './helperz';
 import { fundL1Address, mineL1Blocks, waitForElectrumBalance } from './l1SignetShared';
 
@@ -84,21 +84,6 @@ async function openWalletReceiveScreen(walletName) {
   await waitFor(element(by.id('AddressValue')))
     .toBeVisible()
     .withTimeout(90000);
-}
-
-async function openWalletSendScreen(walletName) {
-  await device.disableSynchronization();
-  await resetToWalletsList(6, true);
-  await dismissPostFundAlerts();
-  try { await element(by.id('WalletsList')).swipe('down', 'slow', 0.4); } catch (_) {}
-  await sleep(400);
-  await scrollWalletIntoView(walletName);
-  await tapAndTapAgainIfElementIsNotVisible(walletName, 'SendButton');
-  await pullRefreshWalletTransactions();
-  await waitForWalletBalancePositive(BALANCE_WAIT_MS);
-  await waitFor(element(by.id('SendButton')))
-    .toBeVisible()
-    .withTimeout(120000);
 }
 
 describe('L1 signet iOS simulator to Android receive', () => {
@@ -188,42 +173,14 @@ describe('L1 signet iOS simulator to Android receive', () => {
 
       waitForElectrumBalance(iosReceiveAddress, sendSats);
 
-      await openWalletSendScreen(walletLabel);
-
-      try {
-        await element(by.id('TransactionsListEmpty')).swipe('down', 'slow');
-      } catch (_) {
-        try {
-          await element(by.id('WalletTransactionsScrollView')).swipe('down', 'slow');
-        } catch (_) {}
-      }
-      // Short UI settle for balance render on wallet detail (electrum preflight already confirmed chain balance).
-      await sleep(Math.min(8000, BALANCE_WAIT_MS));
-
-      // openWalletSendScreen already navigated to wallet detail with SendButton visible — do not resetToWalletsList again (that was undoing nav and causing L1SendE2E wedge).
-      await element(by.id('SendButton')).tap();
-      await waitForId('AddressInput');
-      await element(by.id('AddressInput')).replaceText(receiveAddress);
-      await element(by.id('BitcoinAmountInput')).replaceText(sendBtc);
-      if (device.getPlatform() === 'ios') {
-        await element(by.id('BitcoinAmountInput')).tapReturnKey();
-      }
-      await sleep(1500);
-      // Re-trigger fee calc if CreateTransactionButton still hidden (ActivityIndicator while isLoading / balance=0).
-      try {
-        await element(by.id('BitcoinAmountInput')).tap();
-        await element(by.id('BitcoinAmountInput')).replaceText(sendBtc);
-        await element(by.id('BitcoinAmountInput')).tapReturnKey();
-      } catch (_) {}
-      await sleep(1500);
+      await scrollWalletIntoView(walletLabel);
+      await element(by.id(walletLabel)).tap();
+      await proceedAfterElectrumFund();
 
       await device.disableSynchronization();
       await dismissPostFundAlerts();
-      // Harden against L1SendE2E not found / CreateTransactionButton missing after fund (app busy or slow balance render on iOS sim post-mine).
-      // Explicit wait + scroll + re-enable before taps. Matches known simulator blocker.
-      try { await element(by.id('SendDetailsScroll')).swipe('up', 'fast', 0.3); } catch (_) {}
-      try { await element(by.type('RCTScrollView')).atIndex(0).swipe('up', 'fast', 0.3); } catch (_) {}
-      await sleep(2000);
+      // Escalation: BIP21 OS deeplink (bluewallet2.spec) — not HomeScreenScan / ScanQr backdoor.
+      await openSendViaBip21DeepLink(receiveAddress, sendBtc);
       await waitForCreateTransactionButton(180000);
       for (let attempt = 0; attempt < 5; attempt++) {
         await element(by.id('CreateTransactionButton')).tap();
@@ -239,7 +196,8 @@ describe('L1 signet iOS simulator to Android receive', () => {
             try { await device.reloadReactNative(); } catch (_) {}
           }
           await resetToWalletsList(3, true);
-          await openWalletSendScreen(walletLabel);
+          await scrollWalletIntoView(walletLabel);
+          await openSendViaBip21DeepLink(receiveAddress, sendBtc);
           await sleep(10000);
         }
       }

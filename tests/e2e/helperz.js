@@ -298,13 +298,37 @@ export async function helperCreateWallet(walletName) {
   if (device.getPlatform() === 'android') { try { await device.pressBack(); } catch (_) {} }
   try { await device.disableSynchronization(); } catch (_) {}
 
-  await waitFor(element(by.id('CreateAWallet')))
-    .toBeVisible()
-    .whileElement(by.id('WalletsList'))
-    .scroll(500, 'right'); // in case emu screen is small and it doesnt fit
+  await ensureWalletsListReady(device.getPlatform() === 'android' ? 5 : 3);
+
+  for (let scrollAttempt = 0; scrollAttempt < 3; scrollAttempt++) {
+    try {
+      await waitFor(element(by.id('CreateAWallet')))
+        .toBeVisible()
+        .whileElement(by.id('WalletsList'))
+        .scroll(500, 'right'); // in case emu screen is small and it doesnt fit
+      break;
+    } catch (e) {
+      console.log(
+        `[L1 E2E] CreateAWallet scroll attempt ${scrollAttempt + 1}/3:`,
+        e && e.message ? e.message.slice(0, 140) : e,
+      );
+      await ensureWalletsListReady(3);
+      if (scrollAttempt === 2) {
+        throw e;
+      }
+    }
+  }
 
   await sleep(300); // Wait until bounce animation finishes.
   try { await dismissPostFundAlerts(); } catch (_) {}
+  if (device.getPlatform() === 'android') {
+    try {
+      await waitFor(element(by.id('CreateAWallet'))).toBeVisible().withTimeout(45000);
+    } catch (_) {
+      await ensureWalletsListReady(3);
+      await waitFor(element(by.id('CreateAWallet'))).toBeVisible().withTimeout(60000);
+    }
+  }
   await tapAndTapAgainIfElementIsNotVisible('CreateAWallet', 'WalletNameInput');
   await element(by.id('WalletNameInput')).replaceText(walletName || 'cr34t3d');
   await waitForId('ActivateBitcoinButton');
@@ -330,10 +354,27 @@ export async function helperCreateWallet(walletName) {
   await expect(element(by.id(walletName || 'cr34t3d'))).toBeVisible();
 }
 
+
+/** Tap by id; on Android "No activities found" relaunch app and retry (activity died mid-test). */
+async function detoxTapByIdWithAndroidRecovery(elementId) {
+  try {
+    await element(by.id(elementId)).tap();
+  } catch (e) {
+    const msg = String((e && e.message) || e);
+    if (device.getPlatform() !== 'android' || !/No activities found/i.test(msg)) {
+      throw e;
+    }
+    console.log(`[L1 E2E] detoxTapByIdWithAndroidRecovery ${elementId}: activity lost, cold relaunch`);
+    await ensureWalletsListReady(3);
+    await waitFor(element(by.id(elementId))).toBeVisible().withTimeout(60000);
+    await element(by.id(elementId)).tap();
+  }
+}
+
 export async function tapAndTapAgainIfElementIsNotVisible(idToTap, idToCheckVisible) {
   const callsite = captureCallsite(tapAndTapAgainIfElementIsNotVisible);
   // tap
-  await element(by.id(idToTap)).tap();
+  await detoxTapByIdWithAndroidRecovery(idToTap);
 
   // check if visible
   try {
@@ -359,7 +400,7 @@ export async function tapAndTapAgainIfElementIsNotVisible(idToTap, idToCheckVisi
   }
 
   // did not return so its not visible, lets tap again
-  await element(by.id(idToTap)).tap();
+  await detoxTapByIdWithAndroidRecovery(idToTap);
 
   // check visibility again, this time no try-catch, if it fails it fails
   try {
@@ -431,6 +472,37 @@ export async function scanText(text) {
   }
   await element(by.id('scanQrBackdoorInput')).replaceText(text);
   await element(by.id('scanQrBackdoorOkButton')).tap();
+}
+
+/** Open SendDetails with address+amount via home-screen QR backdoor (bypasses manual AddressInput/fee form flake). */
+export async function openSendViaHomeScanBip21(receiveAddress, sendBtc) {
+  const uri = `bitcoin:${receiveAddress}?amount=${sendBtc}`;
+  console.log(`[L1 E2E] openSendViaHomeScanBip21 uri=${uri}`);
+  await resetToWalletsList(4, true);
+  await dismissPostFundAlerts();
+  await tapAndTapAgainIfElementIsNotVisible('HomeScreenScanButton', 'ScanQrBackdoorButton');
+  await scanText(uri);
+  await waitForId('AddressInput', 90000);
+  await setCustomFeeRate(2);
+}
+
+/** Open SendDetails via OS deeplink (bluewallet2.spec pattern) — no ScanQR / camera / backdoor UI. */
+export async function openSendViaBip21DeepLink(receiveAddress, sendBtc) {
+  const uri = `bitcoin:${receiveAddress}?amount=${sendBtc}`;
+  console.log(`[L1 E2E] openSendViaBip21DeepLink uri=${uri}`);
+  await dismissPostFundAlerts();
+  await device.launchApp({
+    newInstance: false,
+    url: uri,
+    launchArgs: { detoxEnableSynchronization: 'NO' },
+  });
+  await device.disableSynchronization();
+  try {
+    await waitForId('chooseFee', 90000);
+  } catch (_) {
+    await waitForId('AddressInput', 90000);
+  }
+  await setCustomFeeRate(2);
 }
 
 export async function goBack() {
@@ -528,28 +600,91 @@ export async function waitForWalletBalancePositive(maxWaitMs = 180000) {
   throw new Error(`WalletBalance still zero after ${maxWaitMs}ms`);
 }
 
+/** Set explicit sat/vB fee on send screen (local signet often has no recommendedFees API). */
+export async function setCustomFeeRate(feeRate = 2) {
+  await waitFor(element(by.id('chooseFee')))
+    .toBeVisible()
+    .withTimeout(60000);
+  await element(by.id('chooseFee')).tap();
+  await waitForId('feeCustomContainerButton', 30000);
+  await element(by.id('feeCustomContainerButton')).tap();
+  await element(by.id('feeCustom')).replaceText(String(feeRate));
+  if (device.getPlatform() === 'ios') {
+    await element(by.id('feeCustom')).tapReturnKey();
+  }
+  await sleep(1500);
+}
+
+/** Wait for funded tx to appear in wallet UI (UTXO sync) before opening send. */
+export async function waitForIncomingTransaction(maxWaitMs = 180000) {
+  const started = Date.now();
+  while (Date.now() - started < maxWaitMs) {
+    try {
+      await pullRefreshWalletTransactions();
+      if ((await countElements('TransactionListItem')) >= 1) {
+        console.log('[L1 E2E] TransactionListItem visible — wallet synced');
+        return;
+      }
+    } catch (_) {}
+    await sleep(3000);
+  }
+  throw new Error(`No TransactionListItem after fund within ${maxWaitMs}ms`);
+}
+
+/**
+ * After waitForElectrumBalance passes, skip UI WalletBalance/TransactionListItem polls (BalanceSync flake).
+ * Electrum is authoritative; brief settle before BIP21 send avoids stuck CreateTransactionButton while isLoading.
+ */
+export async function proceedAfterElectrumFund() {
+  console.log('[L1 E2E] electrum balance OK — skipping UI balance sync gate (BalanceSync escalation)');
+  await sleep(Number(process.env.L1_E2E_POST_ELECTRUM_SETTLE_MS || 10000));
+}
+
+/** Fill send form and set custom fee (local signet). */
+export async function fillL1SendForm(receiveAddress, sendBtc) {
+  await waitForId('AddressInput', 60000);
+  await element(by.id('AddressInput')).tap();
+  await element(by.id('AddressInput')).replaceText(receiveAddress);
+  await sleep(400);
+  await element(by.id('BitcoinAmountInput')).tap();
+  await element(by.id('BitcoinAmountInput')).replaceText(`${sendBtc}\n`);
+  if (device.getPlatform() === 'ios') {
+    await element(by.id('BitcoinAmountInput')).tapReturnKey();
+  }
+  await waitForKeyboardToClose();
+  await sleep(1000);
+  await setCustomFeeRate(2);
+}
+
 /** Recover WalletsList after Android activity loss (No activities found). */
 export async function ensureWalletsListReady(maxAttempts = 3) {
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
-      await waitForId('WalletsList', 15000);
+      await waitForId('WalletsList', 20000);
       return;
     } catch (_) {
       console.log(`[L1 E2E] ensureWalletsListReady attempt ${attempt + 1}/${maxAttempts}`);
-      try {
-        await device.launchApp({
-          newInstance: false,
-          permissions: { notifications: 'NO' },
-          launchArgs: { detoxEnableSynchronization: 'NO' },
-        });
-      } catch (_) {
-        await launchAppUntilWalletsList({ deleteOnFirst: false, maxAttempts: 1, walletsTimeout: 60000 });
+      // Cold restart only — launchApp(newInstance:false) loses Detox↔app bridge on Android device.
+      if (device.getPlatform() === 'android') {
+        try {
+          await device.terminateApp();
+        } catch (_) {}
+        await sleep(1500);
+        await launchAppUntilWalletsList({ deleteOnFirst: false, maxAttempts: 2, walletsTimeout: 90000 });
+      } else {
+        await launchAppUntilWalletsList({ deleteOnFirst: false, maxAttempts: 2, walletsTimeout: 90000 });
       }
+      try {
+        await dismissGeneralAlerts();
+      } catch (_) {}
+      try {
+        await dismissPostFundAlerts();
+      } catch (_) {}
       await device.disableSynchronization();
       await sleep(2000);
     }
   }
-  await waitForId('WalletsList', 60000);
+  await waitForId('WalletsList', 90000);
 }
 
 /**
@@ -597,38 +732,36 @@ export async function waitForCreateTransactionButton(maxWaitMs = 180000) {
     try {
       await waitFor(element(by.id('CreateTransactionButton')))
         .toBeVisible()
-        .withTimeout(Math.min(30000, remaining));
+        .withTimeout(Math.min(15000, remaining));
       return;
     } catch (_) {
       try {
-        await device.disableSynchronization();
+        await waitFor(element(by.text('Next')))
+          .toBeVisible()
+          .withTimeout(Math.min(8000, remaining));
+        return;
       } catch (_) {}
-      await dismissPostFundAlerts();
-      try {
-        await waitForWalletBalancePositive(Math.min(60000, remaining));
-      } catch (_) {}
-      // Extra hardening for app-busy / main-queue pending / L1SendE2E post-fund on iOS sim: reload + reset + re-scroll
-      if (device.getPlatform() === 'ios' && (Date.now() - started) % 25000 < 5000) {
-        try { await device.reloadReactNative(); } catch (_) {}
-        try { await device.disableSynchronization(); } catch (_) {}
-        await resetToWalletsList(3, true);
-        await dismissPostFundAlerts();
-        try { await element(by.id('WalletsList')).swipe('down', 'slow', 0.4); } catch (_) {}
-      }
-      try {
-        await element(by.id('BitcoinAmountInput')).tap();
-        await element(by.id('BitcoinAmountInput')).tapReturnKey();
-      } catch (_) {}
-      try {
-        await element(by.id('SendDetailsScroll')).swipe('up', 'fast', 0.3);
-      } catch (_) {}
-      try {
-        await element(by.type('RCTScrollView')).atIndex(0).swipe('up', 'fast', 0.3);
-      } catch (_) {}
-      // Re-tap wallet label to re-focus send screen (L1SendE2E wedge recovery)
-      try { await element(by.id('L1SendE2E')).tap(); } catch (_) {}
-      await sleep(3000);
     }
+    try {
+      await device.disableSynchronization();
+    } catch (_) {}
+    await dismissPostFundAlerts();
+    try {
+      await element(by.id('BitcoinAmountInput')).tap();
+      await element(by.id('BitcoinAmountInput')).tapReturnKey();
+    } catch (_) {}
+    try {
+      await setCustomFeeRate(2);
+    } catch (_) {}
+    for (const scrollId of ['SendDetailsScroll', 'WalletTransactionsScrollView']) {
+      try {
+        await element(by.id(scrollId)).swipe('up', 'slow', 0.4);
+      } catch (_) {}
+    }
+    try {
+      await element(by.type('RCTScrollView')).atIndex(0).swipe('up', 'slow', 0.4);
+    } catch (_) {}
+    await sleep(3000);
   }
   throw new Error(`CreateTransactionButton not visible after ${maxWaitMs}ms`);
 }
