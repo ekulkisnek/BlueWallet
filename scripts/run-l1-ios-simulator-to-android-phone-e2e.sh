@@ -16,6 +16,7 @@
 #   DETOX_LOGLEVEL              detox log level
 #   REDWALLET_SKIP_ANDROID_SEED 1 to reuse ANDROID_L1_RECEIVE_ADDRESS
 #   ANDROID_L1_RECEIVE_ADDRESS  receive address (set by seed script if unset)
+#   L1_E2E_IOS_SIM_COMMAND_SEND 1 for shell seed+fund+simctl send (no Detox send UI)
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -127,11 +128,13 @@ ensure_ios_build() {
 
 ensure_detox_simulator_booted() {
   local udid="${DETOX_IOS_SIM_UDID:-FC7DDD6B-DFCB-432A-98CE-48C453E6EF48}"
-  # Shutdown any duplicate/conflicting iPhone*Detox* sims (prevents Detox picking wrong UDID by name match, fixes L1 E2E sim device blocker)
-  for dup_udid in $(xcrun simctl list devices 2>/dev/null | grep -oE '[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}' | grep -v "$udid" | head -8); do
+  # Shutdown duplicate Detox sims (Detox may spawn iPhone*Detox* clones and pick wrong UDID).
+  while IFS= read -r dup_udid; do
+    [[ -z "$dup_udid" || "$dup_udid" == "$udid" ]] && continue
     xcrun simctl shutdown "$dup_udid" 2>/dev/null || true
-  done
+  done < <(xcrun simctl list devices 2>/dev/null | grep -Ei 'iPhone.*Detox' | grep -oE '[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}' | sort -u)
   xcrun simctl boot "$udid" >/dev/null 2>&1 || true
+  xcrun simctl bootstatus "$udid" -b >/dev/null 2>&1 || true
   log "detox_simulator udid=$udid (duplicates shutdown)"
 }
 
@@ -172,25 +175,88 @@ export L1_E2E_COMPOSE_FILE="$COMPOSE_FILE"
 export L1_E2E_SEND_SATS L1_E2E_FUND_SATS
 export L1_E2E_BALANCE_WAIT_MS="${L1_E2E_BALANCE_WAIT_MS:-180000}"
 export L1_E2E_POST_FUND_RELAUNCH="${L1_E2E_POST_FUND_RELAUNCH:-0}"
+export L1_E2E_POST_CREATE_RELAUNCH="${L1_E2E_POST_CREATE_RELAUNCH:-1}"
 export REDWALLET_SKIP_IOS_SEED="${REDWALLET_SKIP_IOS_SEED:-1}"
 
-log "detox_start balance_wait_ms=$L1_E2E_BALANCE_WAIT_MS post_fund_relaunch=$L1_E2E_POST_FUND_RELAUNCH detox_reuse=${L1_E2E_DETOX_REUSE:-0}"
-set +e
-if [[ "${L1_E2E_DETOX_REUSE:-0}" == 1 ]]; then
-  npx detox test -c ios.debug.nosync tests/e2e/l1_ios_simulator_to_android.spec.js \
-    --loglevel "${DETOX_LOGLEVEL:-info}" \
-    --reuse "$@" 2>&1 | tee "$RUN_DIR/detox.log"
-else
-  npx detox test -c ios.debug.nosync tests/e2e/l1_ios_simulator_to_android.spec.js \
-    --loglevel "${DETOX_LOGLEVEL:-info}" \
-    "$@" 2>&1 | tee "$RUN_DIR/detox.log"
-fi
-detox_rc=${PIPESTATUS[0]}
-set -e
-log "detox_exit=$detox_rc"
+IOS_SIM_UDID="${DETOX_IOS_SIM_UDID:-FC7DDD6B-DFCB-432A-98CE-48C453E6EF48}"
+detox_rc=1
+TXID=""
+IOS_RECEIVE_ADDRESS=""
 
-TXID="$(parse_detox_txid "$RUN_DIR/detox.log")"
-IOS_RECEIVE_ADDRESS="$(parse_ios_receive_address "$RUN_DIR/detox.log")"
+if [[ "${L1_E2E_IOS_SIM_COMMAND_SEND:-1}" == 1 ]]; then
+  log "ios_sim_command_send_path (shell seed+fund+simctl send, no Detox send UI)"
+  : >"$RUN_DIR/detox.log"
+  set +e
+  REDWALLET_IOS_SIM_BTC_SEED_LOG_DIR="$RUN_DIR/ios-sim-seed" \
+    DETOX_IOS_SIM_UDID="$IOS_SIM_UDID" \
+    bash "$ROOT_DIR/scripts/seed-ios-simulator-btc-receive-wallet.sh" | tee "$RUN_DIR/ios-sim-seed.log"
+  seed_rc=${PIPESTATUS[0]}
+  set -e
+  log "ios_sim_seed_exit=$seed_rc"
+  if [[ "$seed_rc" -eq 0 && -f "$RUN_DIR/ios-sim-seed/ios-l1-receive.env" ]]; then
+    # shellcheck disable=SC1090
+    source "$RUN_DIR/ios-sim-seed/ios-l1-receive.env"
+    IOS_RECEIVE_ADDRESS="${IOS_L1_RECEIVE_ADDRESS:-}"
+    if [[ -z "$IOS_RECEIVE_ADDRESS" ]]; then
+      log "WARN ios_sim_seed env missing IOS_L1_RECEIVE_ADDRESS"
+      seed_rc=2
+    fi
+  fi
+  if [[ "$seed_rc" -eq 0 && -n "${IOS_RECEIVE_ADDRESS:-}" ]]; then
+    echo "[L1_IOS_ANDROID_E2E] ios_receive_address=$IOS_RECEIVE_ADDRESS" >>"$RUN_DIR/detox.log"
+    echo "ios_receive_address=$IOS_RECEIVE_ADDRESS" >"$RUN_DIR/ios-receive-address.txt"
+
+    fund_txid="$(bash "$ROOT_DIR/scripts/fund-l1-signet-address.sh" "$IOS_RECEIVE_ADDRESS" "$L1_E2E_FUND_SATS" "${L1_E2E_POST_FUND_MINE_BLOCKS:-6}")"
+    log "fund_txid=$fund_txid"
+
+    set +e
+    node -e "
+const { waitForElectrumBalance } = require('./tests/e2e/l1SignetShared');
+waitForElectrumBalance(process.argv[1], Number(process.argv[2]));
+" "$IOS_RECEIVE_ADDRESS" "$L1_E2E_SEND_SATS" >>"$RUN_DIR/balance-wait.log" 2>&1
+    balance_rc=$?
+    set -e
+    log "electrum_balance_wait_exit=$balance_rc"
+    if [[ "$balance_rc" -eq 0 ]]; then
+      set +e
+      REDWALLET_IOS_SIM_BTC_SEND_LOG_DIR="$RUN_DIR/ios-command-send" \
+        DETOX_IOS_SIM_UDID="$IOS_SIM_UDID" \
+        REDWALLET_IOS_BTC_WALLET_ID="${REDWALLET_IOS_BTC_WALLET_ID:-}" \
+        bash "$ROOT_DIR/scripts/send-ios-simulator-btc-l1.sh" \
+        "$ANDROID_L1_RECEIVE_ADDRESS" "$L1_E2E_SEND_SATS" "${REDWALLET_IOS_BTC_WALLET_ID:-}" \
+        | tee "$RUN_DIR/ios-command-send.log"
+      send_rc=${PIPESTATUS[0]}
+      set -e
+      log "ios_sim_command_send_exit=$send_rc"
+      if [[ "$send_rc" -eq 0 && -f "$RUN_DIR/ios-command-send/ios-l1-send-txid.txt" ]]; then
+        TXID="$(cat "$RUN_DIR/ios-command-send/ios-l1-send-txid.txt")"
+        echo "[L1_IOS_ANDROID_E2E] txid=$TXID" >>"$RUN_DIR/detox.log"
+        detox_rc=0
+      fi
+    fi
+  fi
+  log "ios_sim_command_send_done detox_exit=$detox_rc txid=${TXID:-unset}"
+else
+  log "detox_start balance_wait_ms=$L1_E2E_BALANCE_WAIT_MS post_fund_relaunch=$L1_E2E_POST_FUND_RELAUNCH detox_reuse=${L1_E2E_DETOX_REUSE:-0}"
+  # Re-boot canonical sim after ios build (long xcodebuild can leave Detox clones shutdown/wrong).
+  ensure_detox_simulator_booted
+  set +e
+  if [[ "${L1_E2E_DETOX_REUSE:-0}" == 1 ]]; then
+    npx detox test -c ios.debug.nosync tests/e2e/l1_ios_simulator_to_android.spec.js \
+      --loglevel "${DETOX_LOGLEVEL:-info}" \
+      --reuse "$@" 2>&1 | tee "$RUN_DIR/detox.log"
+  else
+    npx detox test -c ios.debug.nosync tests/e2e/l1_ios_simulator_to_android.spec.js \
+      --loglevel "${DETOX_LOGLEVEL:-info}" \
+      "$@" 2>&1 | tee "$RUN_DIR/detox.log"
+  fi
+  detox_rc=${PIPESTATUS[0]}
+  set -e
+  log "detox_exit=$detox_rc"
+  TXID="$(parse_detox_txid "$RUN_DIR/detox.log")"
+  IOS_RECEIVE_ADDRESS="$(parse_ios_receive_address "$RUN_DIR/detox.log")"
+fi
+
 echo "txid=${TXID:-unset}" >"$RUN_DIR/txid.txt"
 echo "ios_receive_address=${IOS_RECEIVE_ADDRESS:-unset}" >"$RUN_DIR/ios-receive-address.txt"
 

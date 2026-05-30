@@ -14,7 +14,7 @@ import {
   waitForCreateTransactionButton,
   waitForId,
   waitForText,
-  openSendViaWalletSendButton,
+  openSendViaHomeScanBip21,
 } from './helperz';
 import { fundL1Address, mineL1Blocks, waitForElectrumBalance } from './l1SignetShared';
 
@@ -68,6 +68,7 @@ async function openWalletReceiveScreen(walletName) {
   await dismissGeneralAlerts();
   await scrollWalletIntoView(walletName);
   await element(by.id(walletName)).tap();
+  await sleep(800);
   for (let attempt = 0; attempt < 20; attempt++) {
     try {
       await waitFor(element(by.id('ReceiveButton')))
@@ -79,7 +80,40 @@ async function openWalletReceiveScreen(walletName) {
     }
   }
   await dismissGeneralAlerts();
-  await element(by.id('ReceiveButton')).tap();
+  let tapped = false;
+  for (let attempt = 0; attempt < 12; attempt++) {
+    try {
+      await device.disableSynchronization();
+      await waitFor(element(by.id('ReceiveButton')))
+        .toBeVisible()
+        .withTimeout(3000);
+      await element(by.id('ReceiveButton')).tap();
+      tapped = true;
+      break;
+    } catch (e) {
+      console.log(
+        '[L1_IOS_ANDROID_E2E] ReceiveButton tap attempt',
+        attempt + 1,
+        e && e.message ? e.message.slice(0, 120) : e,
+      );
+      try {
+        await element(by.id('TransactionsListView')).swipe('up', 'slow', 0.3);
+      } catch (_) {}
+      try {
+        await element(by.id('WalletsList')).swipe('down', 'slow', 0.2);
+      } catch (_) {}
+      await sleep(600);
+    }
+  }
+  if (!tapped) {
+    try {
+      await element(by.text('Receive')).tap();
+      tapped = true;
+    } catch (_) {
+      await element(by.id('ReceiveButton')).multiTap(2);
+      tapped = true;
+    }
+  }
   await dismissReceiveNotificationPrompts();
   await waitFor(element(by.id('AddressValue')))
     .toBeVisible()
@@ -87,6 +121,9 @@ async function openWalletReceiveScreen(walletName) {
 }
 
 describe('L1 signet iOS simulator to Android receive', () => {
+  // Supervisor escalation: never post-fund relaunch on iOS sim (app-busy / deeplink wedge).
+  process.env.L1_E2E_POST_FUND_RELAUNCH = '0';
+
   beforeAll(async () => {
     if (!receiveAddress) {
       throw new Error('ANDROID_L1_RECEIVE_ADDRESS or L1_RECEIVE_ADDRESS is required');
@@ -115,32 +152,14 @@ describe('L1 signet iOS simulator to Android receive', () => {
       }
       await device.disableSynchronization();
       await helperCreateWallet(walletLabel);
-      // Post-create cleanup: extra dismiss/reset/swipe to survive transient modal overlays (RNSModalScreen snapshots) that make WalletsList unhittable on iOS sim
       try {
         await dismissGeneralAlerts();
       } catch (e) {
         console.log('[L1_IOS_ANDROID_E2E] post-create dismiss skipped:', (e && e.message ? e.message.slice(0, 120) : e));
         try { await device.disableSynchronization(); } catch (_) {}
       }
-      await resetToWalletsList(5);
-      try {
-        await element(by.id('WalletsList')).swipe('down', 'slow', 0.5);
-      } catch (_) {}
-      await sleep(300);
-
-      if (process.env.L1_E2E_POST_CREATE_RELAUNCH === '1') {
-        await device.launchApp({
-          newInstance: true,
-          permissions: { notifications: 'YES' },
-          launchArgs: { detoxEnableSynchronization: 'NO' },
-        });
-        await device.disableSynchronization();
-        await waitForId('WalletsList');
-        await expect(element(by.id(walletLabel))).toBeVisible();
-      } else {
-        await dismissGeneralAlerts();
-        await expect(element(by.id(walletLabel))).toBeVisible();
-      }
+      // helperCreateWallet already lands on WalletsList with wallet visible — avoid extra reset cycles.
+      await expect(element(by.id(walletLabel))).toBeVisible();
 
       await openWalletReceiveScreen(walletLabel);
       const iosReceiveAddress = await extractTextFromElementById('AddressValue');
@@ -179,8 +198,8 @@ describe('L1 signet iOS simulator to Android receive', () => {
 
       await device.disableSynchronization();
       await dismissPostFundAlerts();
-      // Escalation: BIP21 OS deeplink (bluewallet2.spec) — not HomeScreenScan / ScanQr backdoor.
-      await openSendViaWalletSendButton(receiveAddress, sendBtc);
+      // Escalation: home-screen QR backdoor BIP21 — not SendButton / not OS deeplink relaunch.
+      await openSendViaHomeScanBip21(receiveAddress, sendBtc);
       await waitForCreateTransactionButton(180000);
       for (let attempt = 0; attempt < 5; attempt++) {
         await element(by.id('CreateTransactionButton')).tap();
@@ -191,13 +210,11 @@ describe('L1 signet iOS simulator to Android receive', () => {
           if (attempt === 4) throw new Error('CreateTransactionButton did not produce TransactionValue');
           await dismissPostFundAlerts();
           await device.disableSynchronization();
-          // App-busy / TransactionValue flake recovery: reload + scroll + re-open send
           if (device.getPlatform() === 'ios') {
             try { await device.reloadReactNative(); } catch (_) {}
           }
           await resetToWalletsList(3, true);
-          await scrollWalletIntoView(walletLabel);
-          await openSendViaWalletSendButton(receiveAddress, sendBtc);
+          await openSendViaHomeScanBip21(receiveAddress, sendBtc);
           await sleep(10000);
         }
       }

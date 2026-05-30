@@ -284,6 +284,43 @@ export const expectToBeVisible = async id => {
   }
 };
 
+
+/** Dismiss seed backup screen; lazy PleaseBackup + long SeedWords render on iOS sim. */
+async function tapPleaseBackupOk() {
+  try { await device.disableSynchronization(); } catch (_) {}
+  const scrollView = element(by.id('PleaseBackupScrollView'));
+  const ok = element(by.id('PleasebackupOk'));
+  const okText = element(by.text('OK, I wrote it down.'));
+  try {
+    await waitFor(scrollView).toBeVisible().withTimeout(120000);
+  } catch (e) {
+    console.log('[L1 E2E] PleaseBackupScrollView missing:', e && e.message ? e.message.slice(0, 160) : e);
+    throw e;
+  }
+  for (let attempt = 0; attempt < 15; attempt++) {
+    for (const target of [ok, okText, element(by.label('OK, I wrote it down.'))]) {
+      try {
+        await waitFor(target).toBeVisible().withTimeout(5000);
+        await target.tap();
+        await sleep(500);
+        try { await device.enableSynchronization(); } catch (_) {}
+        return;
+      } catch (_) {}
+    }
+    try {
+      await scrollView.scroll(200, 'down', 0.5, 0.9);
+    } catch (_) {
+      try {
+        await scrollView.scroll(200, 'down');
+      } catch (_) {}
+    }
+    await sleep(400);
+  }
+  try { await device.enableSynchronization(); } catch (_) {}
+  await waitFor(ok).toBeVisible().withTimeout(60000);
+  await ok.tap();
+}
+
 export async function helperCreateWallet(walletName) {
   // Early disable + dismiss for fresh delete:true sim launches (addresses WalletsList/CreateAWallet flakes post-wip + modal snapshot blockers + Set up later system prompts)
   try {
@@ -343,13 +380,15 @@ export async function helperCreateWallet(walletName) {
   await element(by.id('ActivateBitcoinButton')).tap();
   // why tf we need 2 taps for it to work..? mystery
   await tapAndTapAgainIfElementIsNotVisible('Create', 'PleaseBackupScrollView');
+  try {
+    await waitFor(element(by.id('PleaseBackupScrollView'))).toBeVisible().withTimeout(120000);
+  } catch (e) {
+    console.log('[L1 E2E] PleaseBackup slow load, retry Create:', e && e.message ? e.message.slice(0, 120) : e);
+    await tapAndTapAgainIfElementIsNotVisible('Create', 'PleaseBackupScrollView');
+    await waitFor(element(by.id('PleaseBackupScrollView'))).toBeVisible().withTimeout(120000);
+  }
 
-  await waitFor(element(by.id('PleasebackupOk')))
-    .toBeVisible()
-    .whileElement(by.id('PleaseBackupScrollView'))
-    .scroll(500, 'down'); // in case emu screen is small and it doesnt fit
-
-  await element(by.id('PleasebackupOk')).tap();
+  await tapPleaseBackupOk();
   await sleep(400);
   try { await dismissPostFundAlerts(); } catch (_) {}
   if (device.getPlatform() === 'android') { try { await device.pressBack(); } catch (_) {} }
@@ -661,10 +700,16 @@ export async function waitForIncomingTransaction(maxWaitMs = 180000) {
  * Electrum is authoritative; brief settle before BIP21 send avoids stuck CreateTransactionButton while isLoading.
  */
 export async function proceedAfterElectrumFund() {
-  const maxWaitMs = Number(process.env.L1_E2E_POST_ELECTRUM_SETTLE_MS || 90000);
+  const maxWaitMs = Number(process.env.L1_E2E_POST_ELECTRUM_SETTLE_MS || 120000);
+  const skipUiBalance = process.env.L1_E2E_SKIP_UI_BALANCE_SYNC === '1';
   console.log(
     `[L1 E2E] electrum balance OK — force in-app UTXO sync via pull-refresh (BalanceSync force-scan, ${maxWaitMs}ms)`,
   );
+  if (skipUiBalance) {
+    console.log('[L1 E2E] L1_E2E_SKIP_UI_BALANCE_SYNC=1 — skipping WalletBalance poll (command-send hybrid)');
+    await sleep(3000);
+    return;
+  }
   const started = Date.now();
   while (Date.now() - started < maxWaitMs) {
     try {

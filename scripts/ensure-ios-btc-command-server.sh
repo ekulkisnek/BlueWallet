@@ -17,6 +17,13 @@ if [[ "${REDWALLET_SKIP_COMMAND_SERVER_RESTART:-0}" == 1 ]]; then
   exit 0
 fi
 
+health="$(curl -sS -m 3 http://127.0.0.1:6125/health 2>/dev/null || true)"
+if [[ "$health" == *'"ok":true'* || "$health" == ok* ]]; then
+  if lsof -tiTCP:6125 -sTCP:LISTEN >/dev/null 2>&1; then
+    exit 0
+  fi
+fi
+
 pkill -f 'redwallet-btc-command-server.js' 2>/dev/null || true
 perl -e 'alarm 3; exec @ARGV' 3 bash -c 'lsof -tiTCP:6125 -sTCP:LISTEN 2>/dev/null | xargs kill 2>/dev/null || true' || true
 sleep 1

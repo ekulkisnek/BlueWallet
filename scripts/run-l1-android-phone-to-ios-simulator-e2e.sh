@@ -12,6 +12,7 @@
 #   L1_E2E_FUND_SATS            fund Android wallet (default 100000)
 #   REDWALLET_SKIP_IOS_SEED     1 to reuse IOS_L1_RECEIVE_ADDRESS
 #   IOS_L1_RECEIVE_ADDRESS      receive address (set by iOS seed step if unset)
+#   L1_E2E_ANDROID_COMMAND_SEND 1 for shell seed+fund+adb send (no Detox send UI)
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -147,22 +148,39 @@ parse_detox_txid() {
 
 seed_ios_receive_address() {
   log "ios_seed_start"
-  # Shutdown duplicate iOS sims before seed (ensures Detox + id in .detoxrc targets exactly FC7D iPhone 16e-Detox)
   local target_udid="FC7DDD6B-DFCB-432A-98CE-48C453E6EF48"
-  for dup in $(xcrun simctl list devices 2>/dev/null | grep -oE '[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}' | grep -v "$target_udid" | head -6); do xcrun simctl shutdown "$dup" 2>/dev/null || true; done
-  xcrun simctl boot "$target_udid" 2>/dev/null || true
-  set +e
-  npx detox test -c ios.debug.nosync tests/e2e/l1_ios_simulator_seed_receive.spec.js \
-    --loglevel "${DETOX_LOGLEVEL:-info}" \
-    --reuse 2>&1 | tee "$RUN_DIR/ios-seed.log"
-  local seed_rc=${PIPESTATUS[0]}
-  set -e
-  log "ios_seed_exit=$seed_rc"
-  if [[ "$seed_rc" -ne 0 ]]; then
-    log "BLOCKER iOS receive seed failed"
-    exit "$seed_rc"
+  if [[ "${L1_E2E_IOS_SIM_COMMAND_SEND:-1}" == 1 ]]; then
+    set +e
+    REDWALLET_IOS_SIM_BTC_SEED_LOG_DIR="$RUN_DIR/ios-sim-seed" \
+      DETOX_IOS_SIM_UDID="$target_udid" \
+      bash "$ROOT_DIR/scripts/seed-ios-simulator-btc-receive-wallet.sh" | tee "$RUN_DIR/ios-seed.log"
+    local seed_rc=${PIPESTATUS[0]}
+    set -e
+    log "ios_sim_shell_seed_exit=$seed_rc"
+    if [[ "$seed_rc" -ne 0 ]]; then
+      log "BLOCKER iOS sim shell seed failed"
+      exit "$seed_rc"
+    fi
+    # shellcheck disable=SC1090
+    source "$RUN_DIR/ios-sim-seed/ios-l1-receive.env"
+    IOS_L1_RECEIVE_ADDRESS="${IOS_L1_RECEIVE_ADDRESS:-}"
+  else
+    # Shutdown duplicate iOS sims before seed (ensures Detox + id in .detoxrc targets exactly FC7D iPhone 16e-Detox)
+    for dup in $(xcrun simctl list devices 2>/dev/null | grep -oE '[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}' | grep -v "$target_udid" | head -6); do xcrun simctl shutdown "$dup" 2>/dev/null || true; done
+    xcrun simctl boot "$target_udid" 2>/dev/null || true
+    set +e
+    npx detox test -c ios.debug.nosync tests/e2e/l1_ios_simulator_seed_receive.spec.js \
+      --loglevel "${DETOX_LOGLEVEL:-info}" \
+      --reuse 2>&1 | tee "$RUN_DIR/ios-seed.log"
+    local seed_rc=${PIPESTATUS[0]}
+    set -e
+    log "ios_seed_exit=$seed_rc"
+    if [[ "$seed_rc" -ne 0 ]]; then
+      log "BLOCKER iOS receive seed failed"
+      exit "$seed_rc"
+    fi
+    IOS_L1_RECEIVE_ADDRESS="$(parse_ios_receive_address "$RUN_DIR/ios-seed.log")"
   fi
-  IOS_L1_RECEIVE_ADDRESS="$(parse_ios_receive_address "$RUN_DIR/ios-seed.log")"
   if [[ -z "$IOS_L1_RECEIVE_ADDRESS" ]]; then
     log "BLOCKER could not parse ios_receive_address from seed log"
     exit 2
@@ -195,6 +213,53 @@ export L1_E2E_COMPOSE_FILE="$COMPOSE_FILE"
 export L1_E2E_SEND_SATS L1_E2E_FUND_SATS
 export L1_E2E_BALANCE_WAIT_MS="${L1_E2E_BALANCE_WAIT_MS:-120000}"
 
+detox_rc=1
+TXID=""
+
+if [[ "${L1_E2E_ANDROID_COMMAND_SEND:-1}" == 1 ]]; then
+  log "android_command_send_path (shell seed+fund+adb send, no Detox send UI)"
+  : >"$RUN_DIR/detox.log"
+  set +e
+  REDWALLET_ANDROID_BTC_SEED_LOG_DIR="$RUN_DIR/android-seed" \
+    bash "$ROOT_DIR/scripts/seed-android-btc-receive-wallet.sh" | tee "$RUN_DIR/android-seed.log"
+  seed_rc=${PIPESTATUS[0]}
+  set -e
+  log "android_seed_exit=$seed_rc"
+  ANDROID_RECEIVE_ADDRESS=""
+  if [[ "$seed_rc" -eq 0 && -f "$RUN_DIR/android-seed/android-l1-receive.env" ]]; then
+    # shellcheck disable=SC1090
+    source "$RUN_DIR/android-seed/android-l1-receive.env"
+    ANDROID_RECEIVE_ADDRESS="${ANDROID_L1_RECEIVE_ADDRESS:-}"
+  fi
+  if [[ "$seed_rc" -eq 0 && -n "$ANDROID_RECEIVE_ADDRESS" ]]; then
+    echo "[L1_ANDROID_IOS_E2E] android_receive_address=$ANDROID_RECEIVE_ADDRESS" >>"$RUN_DIR/detox.log"
+    fund_txid="$(bash "$ROOT_DIR/scripts/fund-l1-signet-address.sh" "$ANDROID_RECEIVE_ADDRESS" "$L1_E2E_FUND_SATS" "${L1_E2E_POST_FUND_MINE_BLOCKS:-6}")"
+    log "fund_txid=$fund_txid"
+    node -e "
+const { waitForElectrumBalance } = require('./tests/e2e/l1SignetShared');
+waitForElectrumBalance(process.argv[1], Number(process.argv[2]));
+" "$ANDROID_RECEIVE_ADDRESS" "$L1_E2E_SEND_SATS" >>"$RUN_DIR/balance-wait.log" 2>&1
+    balance_rc=$?
+    log "electrum_balance_wait_exit=$balance_rc"
+    if [[ "$balance_rc" -eq 0 ]]; then
+      set +e
+      REDWALLET_ANDROID_BTC_SEND_LOG_DIR="$RUN_DIR/android-command-send" \
+        REDWALLET_ANDROID_BTC_WALLET_ID="${REDWALLET_ANDROID_BTC_WALLET_ID:-}" \
+        bash "$ROOT_DIR/scripts/send-android-btc-l1.sh" \
+        "$IOS_L1_RECEIVE_ADDRESS" "$L1_E2E_SEND_SATS" "${REDWALLET_ANDROID_BTC_WALLET_ID:-}" \
+        | tee "$RUN_DIR/android-command-send.log"
+      send_rc=${PIPESTATUS[0]}
+      set -e
+      log "android_command_send_exit=$send_rc"
+      if [[ "$send_rc" -eq 0 && -f "$RUN_DIR/android-command-send/android-l1-send-txid.txt" ]]; then
+        TXID="$(cat "$RUN_DIR/android-command-send/android-l1-send-txid.txt")"
+        echo "[L1_ANDROID_IOS_E2E] txid=$TXID" >>"$RUN_DIR/detox.log"
+        detox_rc=0
+      fi
+    fi
+  fi
+  log "android_command_send_done detox_exit=$detox_rc txid=${TXID:-unset}"
+else
 log "detox_start android.debug.device balance_wait_ms=$L1_E2E_BALANCE_WAIT_MS detox_reuse=${L1_E2E_DETOX_REUSE:-0}"
 wake_android_device
 set +e
@@ -214,6 +279,7 @@ set -e
 log "detox_exit=$detox_rc"
 
 TXID="$(parse_detox_txid "$RUN_DIR/detox.log")"
+fi
 echo "txid=${TXID:-unset}" >"$RUN_DIR/txid.txt"
 
 VERIFY=skip

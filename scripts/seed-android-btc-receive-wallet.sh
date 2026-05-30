@@ -116,6 +116,10 @@ cat >"$CMD_DIR/command.json" <<EOF
 EOF
 log "SEEDED command.json dir=$CMD_DIR"
 
+log "warm_launch wallet load wait"
+adb -s "$ANDROID_SERIAL" shell monkey -p "$ANDROID_PACKAGE" -c android.intent.category.LAUNCHER 1 >>"$RUN_DIR/launch.log" 2>&1 || true
+sleep "${REDWALLET_ANDROID_BTC_SEED_WARMUP_SEC:-25}"
+
 android_push_app_file "$CMD_DIR/command.json" "redwallet-btc-selftest-command.json" || true
 
 set +e
@@ -165,6 +169,8 @@ PY
         break
       fi
     fi
+    android_push_app_file "$CMD_DIR/command.json" "redwallet-btc-selftest-command.json" || true
+    adb -s "$ANDROID_SERIAL" shell monkey -p "$ANDROID_PACKAGE" -c android.intent.category.LAUNCHER 1 >>"$RUN_DIR/launch.log" 2>&1 || true
     sleep 2
   done
 fi
