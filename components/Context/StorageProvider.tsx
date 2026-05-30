@@ -473,6 +473,9 @@ async function executeBtcSendL1Command(
   const minBalance = amountSats + 2000;
   for (let attempt = 0; attempt < 20; attempt++) {
     await wallet.fetchBalance();
+    if (typeof wallet.fetchUtxo === 'function') {
+      await wallet.fetchUtxo();
+    }
     await wallet.fetchTransactions();
     if (wallet.getBalance() >= minBalance) {
       break;

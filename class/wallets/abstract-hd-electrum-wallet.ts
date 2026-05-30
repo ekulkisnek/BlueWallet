@@ -974,6 +974,13 @@ export class AbstractHDElectrumWallet extends AbstractHDWallet {
     // to fetch (or maybe even several fetches), which is not critical but undesirable.
     // anyway, result has `.confirmations` property for each utxo, so outside caller can easily filter out unconfirmed if he wants to
 
+    // Electrs can report scripthash balance before per-index cache is populated; scan used receive addrs.
+    if (addressess.length === 0 && this.next_free_address_index > 0) {
+      for (let c = 0; c < this.next_free_address_index; c++) {
+        addressess.push(this._getExternalAddressByIndex(c));
+      }
+    }
+
     addressess = [...new Set(addressess)]; // deduplicate just for any case
 
     const fetchedUtxo = await BlueElectrum.multiGetUtxoByAddress(addressess);
@@ -989,6 +996,20 @@ export class AbstractHDElectrumWallet extends AbstractHDWallet {
     }
 
     this._utxo = this._utxo.sort((a, b) => Number(a.value) - Number(b.value));
+    // Hydrate balance indices from UTXOs when electrum balance fetch lagged (L1 signet E2E).
+    if (this._utxo.length > 0) {
+      const confirmedByAddress: Record<string, number> = {};
+      for (const u of this._utxo) {
+        confirmedByAddress[u.address] = (confirmedByAddress[u.address] || 0) + Number(u.value);
+      }
+      for (let c = 0; c < this.next_free_address_index + this.gap_limit; c++) {
+        const addr = this._getExternalAddressByIndex(c);
+        const sum = confirmedByAddress[addr];
+        if (sum > 0) {
+          this._balances_by_external_index[c] = { c: sum, u: 0 };
+        }
+      }
+    }
     // more consistent, so txhex in unit tests wont change
   }
 

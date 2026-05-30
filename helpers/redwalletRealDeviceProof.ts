@@ -41,12 +41,13 @@ export function isRedWalletMobilePhysicalDevice(): boolean {
 
 export function isRedWalletIosRealDeviceProofEnabled(): boolean {
   if (Platform.OS !== 'ios' || Platform.isPad) return false;
+  // __DEV__ includes iOS simulator (Detox + simctl command-server L1 E2E).
+  if (__DEV__) return true;
   try {
     if (isEmulatorSync()) return false;
   } catch {
     // fall through
   }
-  if (__DEV__) return true;
   try {
     return REAL_DEVICE_PROOF_BUNDLE_IDS.has(getBundleId());
   } catch {
