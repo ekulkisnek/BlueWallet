@@ -32,7 +32,7 @@ function fundL1Address(address, sats) {
 }
 
 function mineL1Blocks(n) {
-  const { localDev, composeFile } = localDevPaths();
+  const { localDev } = localDevPaths();
   const blocks = Number(n);
   if (!Number.isFinite(blocks) || blocks < 1) {
     throw new Error(`mineL1Blocks: invalid block count ${n}`);
