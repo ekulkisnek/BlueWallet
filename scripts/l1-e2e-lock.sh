@@ -33,16 +33,22 @@ l1_lock_acquire() {
   local run_dir="${1:-unknown}"
   local holder="${2:-l1-e2e}"
   mkdir -p "$(dirname "$LOCK_FILE")"
-  exec 9>"${LOCK_FILE}.flock"
-  if ! flock -n 9; then
-    echo "L1 lock flock busy (another orchestrator starting)"
-    return 1
-  fi
+  local acquire_dir="${LOCK_FILE}.acquire"
+  local wait=0
+  while ! mkdir "$acquire_dir" 2>/dev/null; do
+    wait=$((wait + 1))
+    if [[ "$wait" -gt 120 ]]; then
+      echo "L1 lock acquire stuck >60s at $acquire_dir"
+      return 1
+    fi
+    sleep 0.5
+  done
   if [[ -f "$LOCK_FILE" ]]; then
     local old_pid
     old_pid="$(python3 -c "import json; print(json.load(open('$LOCK_FILE')).get('pid',0))" 2>/dev/null || echo 0)"
     if l1_lock_pid_alive "$old_pid"; then
       echo "L1 lock held by pid=$old_pid run_dir=$(python3 -c "import json; print(json.load(open('$LOCK_FILE')).get('run_dir','?'))" 2>/dev/null)"
+      rm -rf "$acquire_dir"
       return 1
     fi
     rm -f "$LOCK_FILE"
@@ -63,6 +69,7 @@ with open("$LOCK_FILE", "w") as f:
     f.write("\n")
 print(f"L1 lock acquired pid={payload['pid']} run_dir=$run_dir")
 PY
+  rm -rf "$acquire_dir"
 }
 
 l1_lock_release() {

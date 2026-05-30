@@ -498,11 +498,19 @@ export async function openSendViaBip21DeepLink(receiveAddress, sendBtc) {
   const uri = `bitcoin:${receiveAddress}?amount=${sendBtc}`;
   console.log(`[L1 E2E] openSendViaBip21DeepLink uri=${uri}`);
   await dismissPostFundAlerts();
-  await device.launchApp({
-    newInstance: false,
-    url: uri,
-    launchArgs: { detoxEnableSynchronization: 'NO' },
-  });
+  await device.disableSynchronization();
+  if (device.getPlatform() === 'ios') {
+    const udid = device.id;
+    const { execSync } = require('child_process');
+    execSync(`/usr/bin/xcrun simctl openurl ${udid} ${JSON.stringify(uri)}`, { stdio: 'ignore' });
+    await sleep(3000);
+  } else {
+    await device.launchApp({
+      newInstance: false,
+      url: uri,
+      launchArgs: { detoxEnableSynchronization: 'NO' },
+    });
+  }
   await device.disableSynchronization();
   try {
     await waitForId('chooseFee', 90000);
@@ -653,8 +661,25 @@ export async function waitForIncomingTransaction(maxWaitMs = 180000) {
  * Electrum is authoritative; brief settle before BIP21 send avoids stuck CreateTransactionButton while isLoading.
  */
 export async function proceedAfterElectrumFund() {
-  console.log('[L1 E2E] electrum balance OK — skipping UI balance sync gate (BalanceSync escalation)');
-  await sleep(Number(process.env.L1_E2E_POST_ELECTRUM_SETTLE_MS || 10000));
+  const maxWaitMs = Number(process.env.L1_E2E_POST_ELECTRUM_SETTLE_MS || 90000);
+  console.log(
+    `[L1 E2E] electrum balance OK — force in-app UTXO sync via pull-refresh (BalanceSync force-scan, ${maxWaitMs}ms)`,
+  );
+  const started = Date.now();
+  while (Date.now() - started < maxWaitMs) {
+    try {
+      await pullRefreshWalletTransactions();
+      await sleep(1500);
+      const balAttrs = await element(by.id('WalletBalance')).getAttributes();
+      const text = String((balAttrs && (balAttrs.text || balAttrs.label)) || '').trim();
+      if (text && text !== '0' && !/^0\.0+$/.test(text)) {
+        console.log(`[L1 E2E] WalletBalance synced after force-scan path: ${text}`);
+        return;
+      }
+    } catch (_) {}
+    await sleep(2500);
+  }
+  console.log('[L1 E2E] WalletBalance still zero after force-scan refresh — continuing send (on-chain UTXO scan)');
 }
 
 /** Open send from wallet detail (SendButton + form). Avoids BIP21 OS deeplink flake after post-fund relaunch. */
@@ -739,7 +764,10 @@ export async function launchAppUntilWalletsList(options = {}) {
       await device.launchApp({
         delete: deleteOnFirst && attempt === 0,
         newInstance: true,
-        permissions: { notifications: 'NO' },
+        permissions:
+          device.getPlatform() === 'ios'
+            ? { notifications: 'YES', camera: 'YES', photos: 'YES' }
+            : { notifications: 'NO' },
         launchArgs: { detoxEnableSynchronization: 'NO' },
       });
       await device.disableSynchronization();
