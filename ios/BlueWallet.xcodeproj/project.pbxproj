@@ -56,6 +56,9 @@
 		B4BA50012FA1BD0000AAAA10 /* BitAssetsWallet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4BA50002FA1BD0000AAAA10 /* BitAssetsWallet.swift */; };
 		B4BA50032FA1BD0000AAAA12 /* BitAssetsWallet.mm in Sources */ = {isa = PBXBuildFile; fileRef = B4BA50022FA1BD0000AAAA11 /* BitAssetsWallet.mm */; };
 		B4BA50052FA1BD0000AAAA14 /* Frameworks/floresta_bitassets_wallet.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = B4BA50062FA1BD0000AAAA15 /* Frameworks/floresta_bitassets_wallet.xcframework */; };
+		B4BA50A12FA1BD0000AAAA31 /* LiquidWallet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4BA50A02FA1BD0000AAAA30 /* LiquidWallet.swift */; };
+		B4BA50A32FA1BD0000AAAA33 /* LiquidWallet.mm in Sources */ = {isa = PBXBuildFile; fileRef = B4BA50A22FA1BD0000AAAA32 /* LiquidWallet.mm */; };
+		B4BA50A62FA1BD0000AAAA36 /* Frameworks/liquid_wallet.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = B4BA50A52FA1BD0000AAAA35 /* Frameworks/liquid_wallet.xcframework */; };
 		B4D899942DCAE67700B959AA /* CustomSegmentedControl.m in Sources */ = {isa = PBXBuildFile; fileRef = B4D899932DCAE67700B959AA /* CustomSegmentedControl.m */; };
 		B4F0A4A22FA1BC0000AAAA01 /* WidgetHelper.mm in Sources */ = {isa = PBXBuildFile; fileRef = B4F0A4A12FA1BC0000AAAA00 /* WidgetHelper.mm */; };
 		B4F0A4A42FA1BC0000AAAA03 /* EventEmitter.mm in Sources */ = {isa = PBXBuildFile; fileRef = B4F0A4A32FA1BC0000AAAA02 /* EventEmitter.mm */; };
@@ -240,6 +243,10 @@
 		B4BA50022FA1BD0000AAAA11 /* BitAssetsWallet.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = BitAssetsWallet.mm; sourceTree = "<group>"; };
 		B4BA50042FA1BD0000AAAA13 /* NativeBitAssetsWalletSpec.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NativeBitAssetsWalletSpec.h; sourceTree = "<group>"; };
 		B4BA50062FA1BD0000AAAA15 /* Frameworks/floresta_bitassets_wallet.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = Frameworks/floresta_bitassets_wallet.xcframework; sourceTree = "<group>"; };
+		B4BA50A02FA1BD0000AAAA30 /* LiquidWallet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiquidWallet.swift; sourceTree = "<group>"; };
+		B4BA50A22FA1BD0000AAAA32 /* LiquidWallet.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = LiquidWallet.mm; sourceTree = "<group>"; };
+		B4BA50A42FA1BD0000AAAA34 /* NativeLiquidWalletSpec.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NativeLiquidWalletSpec.h; sourceTree = "<group>"; };
+		B4BA50A52FA1BD0000AAAA35 /* Frameworks/liquid_wallet.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = Frameworks/liquid_wallet.xcframework; sourceTree = "<group>"; };
 		B4D0B2612C1DEA11006B6B1B /* ReceivePageInterfaceController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceivePageInterfaceController.swift; sourceTree = "<group>"; };
 		B4D0B2632C1DEA99006B6B1B /* ReceiveType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiveType.swift; sourceTree = "<group>"; };
 		B4D0B2652C1DEB7F006B6B1B /* ReceiveInterfaceMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiveInterfaceMode.swift; sourceTree = "<group>"; };
@@ -274,6 +281,7 @@
 				782F075B5DD048449E2DECE9 /* libz.tbd in Frameworks */,
 				764B49B1420D4AEB8109BF62 /* libsqlite3.0.tbd in Frameworks */,
 				B4BA50052FA1BD0000AAAA14 /* Frameworks/floresta_bitassets_wallet.xcframework in Frameworks */,
+				B4BA50A62FA1BD0000AAAA36 /* Frameworks/liquid_wallet.xcframework in Frameworks */,
 				C978A716948AB7DEC5B6F677 /* (null) in Frameworks */,
 				17CDA0718F42DB2CE856C872 /* libPods-BlueWallet.a in Frameworks */,
 			);
@@ -332,6 +340,7 @@
 				6D333B3A252FE1A3004D72DF /* WidgetKit.framework */,
 				6D333B3C252FE1A3004D72DF /* SwiftUI.framework */,
 				B4BA50062FA1BD0000AAAA15 /* Frameworks/floresta_bitassets_wallet.xcframework */,
+				B4BA50A52FA1BD0000AAAA35 /* Frameworks/liquid_wallet.xcframework */,
 				040819EDF8BD9C50A9C83E24 /* libPods-BlueWallet.a */,
 			);
 			name = Frameworks;
@@ -446,6 +455,7 @@
 				B4F0A4A52FA1BC0000AAAA05 /* NativeEventEmitterSpec.h */,
 				B4F0A4A62FA1BC0000AAAA06 /* NativeMenuElementsEmitterSpec.h */,
 				B4BA50042FA1BD0000AAAA13 /* NativeBitAssetsWalletSpec.h */,
+				B4BA50A42FA1BD0000AAAA34 /* NativeLiquidWalletSpec.h */,
 				B45010A12C1504E900619044 /* Components */,
 				B44033C82BCC34AC00162242 /* Shared */,
 				B41C2E552BB3DCB8000FE097 /* PrivacyInfo.xcprivacy */,
@@ -599,6 +609,8 @@
 				B4F0A4A12FA1BC0000AAAA00 /* WidgetHelper.mm */,
 				B4BA50002FA1BD0000AAAA10 /* BitAssetsWallet.swift */,
 				B4BA50022FA1BD0000AAAA11 /* BitAssetsWallet.mm */,
+				B4BA50A02FA1BD0000AAAA30 /* LiquidWallet.swift */,
+				B4BA50A22FA1BD0000AAAA32 /* LiquidWallet.mm */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -637,6 +649,7 @@
 			buildPhases = (
 				3B467A525D105B531AB91B81 /* [CP] Check Pods Manifest.lock */,
 				B4BA50072FA1BD0000AAAA16 /* Verify BitAssets Rust Mobile Library */,
+				B4BA50A72FA1BD0000AAAA37 /* Verify Liquid Rust Mobile Library */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
@@ -841,6 +854,24 @@
 			shellPath = /bin/sh;
 			shellScript = "FRAMEWORK=\"$PROJECT_DIR/Frameworks/floresta_bitassets_wallet.xcframework\"\nif [ ! -d \"$FRAMEWORK\" ]; then\n  echo \"error: Missing $FRAMEWORK. Run: FLORESTA_DIR=/path/to/Floresta npm run bitassets:mobile-libs -- aarch64-apple-ios aarch64-apple-ios-sim\" >&2\n  exit 1\nfi\n";
 		};
+		B4BA50A72FA1BD0000AAAA37 /* Verify Liquid Rust Mobile Library */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Verify Liquid Rust Mobile Library";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "FRAMEWORK=\"$PROJECT_DIR/Frameworks/liquid_wallet.xcframework\"\nif [ ! -d \"$FRAMEWORK\" ]; then\n  echo \"error: Missing $FRAMEWORK (placeholder stub for PR 3; real from PR 8). Run future: LIQUID_SIMPLICITY_DIR=... npm run liquid:mobile-libs\" >&2\n  exit 1\nfi\n";
+		};
 		BFE56A9A22A21E360BF7A1EC /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -920,6 +951,8 @@
 				B4F0A4A22FA1BC0000AAAA01 /* WidgetHelper.mm in Sources */,
 				B4BA50012FA1BD0000AAAA10 /* BitAssetsWallet.swift in Sources */,
 				B4BA50032FA1BD0000AAAA12 /* BitAssetsWallet.mm in Sources */,
+				B4BA50A12FA1BD0000AAAA31 /* LiquidWallet.swift in Sources */,
+				B4BA50A32FA1BD0000AAAA33 /* LiquidWallet.mm in Sources */,
 				B48630E12CCEE7C800A8425C /* PriceWidgetEntryView.swift in Sources */,
 				B44033DA2BCC369A00162242 /* Colors.swift in Sources */,
 				B44033D32BCC368800162242 /* UserDefaultsGroupKey.swift in Sources */,
