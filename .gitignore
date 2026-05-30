@@ -107,3 +107,10 @@ android/app/.classpath
 android/app/.project
 fastlane/README.md
 fastlane/report.xml
+
+# Rust / mobile L1 build outputs (utreexo quic, aarch sim libs, etc. - not source)
+aarch64-apple-ios-sim/
+target/
+**/*.a
+**/libfloresta_bitassets_wallet.so
+
