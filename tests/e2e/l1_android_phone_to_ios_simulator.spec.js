@@ -3,6 +3,7 @@ import * as bitcoin from 'bitcoinjs-lib';
 import {
   dismissGeneralAlerts,
   dismissPostFundAlerts,
+  ensureWalletsListReady,
   extractTextFromElementById,
   goBack,
   launchAppUntilWalletsList,
@@ -141,7 +142,7 @@ describe('L1 signet Android phone to iOS simulator receive', () => {
       await resetToWalletsList(5);
       await dismissBlockingAlerts();
 
-      await waitForId('WalletsList');
+      await ensureWalletsListReady();
       await createBitcoinWallet(walletLabel);
       await tapAndTapAgainIfElementIsNotVisible(walletLabel, 'ReceiveButton');
       await dismissBlockingAlerts();

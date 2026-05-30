@@ -510,7 +510,34 @@ export async function pullRefreshWalletTransactions() {
   await sleep(2500);
 }
 
+/** Recover WalletsList after Android activity loss (No activities found). */
+export async function ensureWalletsListReady(maxAttempts = 3) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      await waitForId('WalletsList', 15000);
+      return;
+    } catch (_) {
+      console.log(`[L1 E2E] ensureWalletsListReady attempt ${attempt + 1}/${maxAttempts}`);
+      try {
+        await device.launchApp({
+          newInstance: false,
+          permissions: { notifications: 'NO' },
+          launchArgs: { detoxEnableSynchronization: 'NO' },
+        });
+      } catch (_) {
+        await launchAppUntilWalletsList({ deleteOnFirst: false, maxAttempts: 1, walletsTimeout: 60000 });
+      }
+      await device.disableSynchronization();
+      await sleep(2000);
+    }
+  }
+  await waitForId('WalletsList', 60000);
+}
+
 /**
+ * Launch app with retries until WalletsList is visible (fixes Android "No activities found" flake).
+ */
+export async function launchAppUntilWalletsList(options = {}) {
   const { deleteOnFirst = true, maxAttempts = 3, walletsTimeout = 120000 } = options;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {

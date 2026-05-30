@@ -200,13 +200,15 @@ wake_android_device
 set +e
 # shellcheck source=with-android-build-env.sh
 source "$ROOT_DIR/scripts/with-android-build-env.sh"
-DETOX_EXTRA=()
 if [[ "${L1_E2E_DETOX_REUSE:-0}" == 1 ]]; then
-  DETOX_EXTRA+=(--reuse)
+  npx detox test -c android.debug.device tests/e2e/l1_android_phone_to_ios_simulator.spec.js \
+    --loglevel "${DETOX_LOGLEVEL:-info}" \
+    --reuse "$@" 2>&1 | tee "$RUN_DIR/detox.log"
+else
+  npx detox test -c android.debug.device tests/e2e/l1_android_phone_to_ios_simulator.spec.js \
+    --loglevel "${DETOX_LOGLEVEL:-info}" \
+    "$@" 2>&1 | tee "$RUN_DIR/detox.log"
 fi
-npx detox test -c android.debug.device tests/e2e/l1_android_phone_to_ios_simulator.spec.js \
-  --loglevel "${DETOX_LOGLEVEL:-info}" \
-  "${DETOX_EXTRA[@]}" "$@" 2>&1 | tee "$RUN_DIR/detox.log"
 detox_rc=${PIPESTATUS[0]}
 set -e
 log "detox_exit=$detox_rc"
