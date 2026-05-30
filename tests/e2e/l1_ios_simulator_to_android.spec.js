@@ -88,12 +88,8 @@ async function openWalletSendScreen(walletName) {
   await device.disableSynchronization();
   await resetToWalletsList(6, true);
   await dismissPostFundAlerts();
-  // Extra recovery swipe + re-scroll + reload for L1SendE2E not found after fund (list may need bounce/refresh post-balance update) + Detox app busy
   try { await element(by.id('WalletsList')).swipe('down', 'slow', 0.4); } catch (_) {}
   await sleep(400);
-  try { await device.reloadReactNative(); } catch (_) {}
-  try { await device.disableSynchronization(); } catch (_) {}
-  await dismissPostFundAlerts();
   await scrollWalletIntoView(walletName);
   await tapAndTapAgainIfElementIsNotVisible(walletName, 'SendButton');
   await waitFor(element(by.id('SendButton')))
@@ -197,22 +193,10 @@ describe('L1 signet iOS simulator to Android receive', () => {
           await element(by.id('WalletTransactionsScrollView')).swipe('down', 'slow');
         } catch (_) {}
       }
-      // Short UI settle instead of full BALANCE_WAIT_MS (electrum preflight already waited for chain; long blind sleep was causing 20min jest timeout + leftover permission expectations like "Don't Allow").
-      // Keep some settle for balance render in send form on iOS sim post-mine.
-      await sleep(Math.min(15000, BALANCE_WAIT_MS));
+      // Short UI settle for balance render on wallet detail (electrum preflight already confirmed chain balance).
+      await sleep(Math.min(8000, BALANCE_WAIT_MS));
 
-      // Post-balance-wait reset + safe dismiss (use resetToWalletsList with safePostFund=true to avoid Skip/Continue alert loops that cause Detox app-busy after L1 fund/mine). Matches Android leg and L1_E2E requirements.
-      await device.disableSynchronization();
-      await resetToWalletsList(5, true);
-      await dismissPostFundAlerts();
-      try { await element(by.id('WalletsList')).swipe('down', 'slow', 0.3); } catch (_) {}
-      await sleep(400);
-
-      // After resetToWalletsList (for app-busy post-fund), must re-enter wallet from list before SendButton is hittable.
-      // This completes the safe post-fund reset path (using dismissPostFundAlerts inside reset to avoid Skip/Continue loops).
-      await scrollWalletIntoView(walletLabel);
-      await tapAndTapAgainIfElementIsNotVisible(walletLabel, 'SendButton');
-      await waitForId('SendButton', 60000);
+      // openWalletSendScreen already navigated to wallet detail with SendButton visible — do not resetToWalletsList again (that was undoing nav and causing L1SendE2E wedge).
       await element(by.id('SendButton')).tap();
       await waitForId('AddressInput');
       await element(by.id('AddressInput')).replaceText(receiveAddress);
