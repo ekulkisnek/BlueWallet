@@ -107,6 +107,14 @@ run_preflight() {
   bash "$ROOT_DIR/scripts/l1-e2e-preflight.sh"
 }
 
+wake_android_device() {
+  adb -s "$ANDROID_SERIAL" shell input keyevent KEYCODE_WAKEUP >/dev/null 2>&1 || true
+  adb -s "$ANDROID_SERIAL" shell wm dismiss-keyguard >/dev/null 2>&1 || true
+  adb -s "$ANDROID_SERIAL" shell am force-stop com.layertwolabs.bluewallet >/dev/null 2>&1 || true
+  sleep 1
+  log "android_wake serial=$ANDROID_SERIAL"
+}
+
 ensure_android_build() {
   local apk="android/app/build/outputs/apk/debug/app-debug.apk"
   if [[ -f "$apk" ]]; then
@@ -188,6 +196,7 @@ export L1_E2E_SEND_SATS L1_E2E_FUND_SATS
 export L1_E2E_BALANCE_WAIT_MS="${L1_E2E_BALANCE_WAIT_MS:-120000}"
 
 log "detox_start android.debug.device balance_wait_ms=$L1_E2E_BALANCE_WAIT_MS"
+wake_android_device
 set +e
 # shellcheck source=with-android-build-env.sh
 source "$ROOT_DIR/scripts/with-android-build-env.sh"

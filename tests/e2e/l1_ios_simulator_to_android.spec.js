@@ -6,9 +6,11 @@ import {
   extractTextFromElementById,
   goBack,
   helperCreateWallet,
+  launchAppUntilWalletsList,
   resetToWalletsList,
   sleep,
   tapAndTapAgainIfElementIsNotVisible,
+  waitForCreateTransactionButton,
   waitForId,
   waitForText,
 } from './helperz';
@@ -106,13 +108,7 @@ describe('L1 signet iOS simulator to Android receive', () => {
     }
     await device.terminateApp();
     await device.clearKeychain();
-    await device.launchApp({
-      delete: true,
-      permissions: { notifications: 'NO' },
-      launchArgs: { detoxEnableSynchronization: 'NO' },
-    });
-    await device.disableSynchronization();
-    await waitForId('WalletsList', 120000);
+    await launchAppUntilWalletsList({ deleteOnFirst: true });
   }, 600000);
 
   it(
@@ -232,9 +228,8 @@ describe('L1 signet iOS simulator to Android receive', () => {
       // Explicit wait + scroll + re-enable before taps. Matches known simulator blocker.
       try { await element(by.id('SendDetailsScroll')).swipe('up', 'fast', 0.3); } catch (_) {}
       try { await element(by.type('RCTScrollView')).atIndex(0).swipe('up', 'fast', 0.3); } catch (_) {}
-      await waitFor(element(by.id('CreateTransactionButton')))
-        .toBeVisible()
-        .withTimeout(45000);
+      await sleep(2000);
+      await waitForCreateTransactionButton(180000);
       for (let attempt = 0; attempt < 5; attempt++) {
         await element(by.id('CreateTransactionButton')).tap();
         try {

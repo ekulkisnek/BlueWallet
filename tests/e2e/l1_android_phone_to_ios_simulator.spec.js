@@ -5,10 +5,12 @@ import {
   dismissPostFundAlerts,
   extractTextFromElementById,
   goBack,
+  launchAppUntilWalletsList,
   resetToWalletsList,
   scrollUpOnHomeScreen,
   sleep,
   tapAndTapAgainIfElementIsNotVisible,
+  waitForCreateTransactionButton,
   waitForId,
   waitForText,
 } from './helperz';
@@ -125,14 +127,8 @@ describe('L1 signet Android phone to iOS simulator receive', () => {
       throw new Error('IOS_L1_RECEIVE_ADDRESS or L1_RECEIVE_ADDRESS is required');
     }
     await device.clearKeychain();
-    await device.launchApp({
-      delete: true,
-      permissions: { notifications: 'NO' },
-      launchArgs: { detoxEnableSynchronization: 'NO' },
-    });
-    await device.disableSynchronization();
+    await launchAppUntilWalletsList({ deleteOnFirst: true });
     await dismissGeneralAlerts();
-    await waitForId('WalletsList', 120000);
   }, 600000);
 
   it(
@@ -214,9 +210,8 @@ describe('L1 signet Android phone to iOS simulator receive', () => {
       // Harden against CreateTransactionButton not found after fund on Android device (app busy / balance render lag post-mine).
       try { await element(by.id('SendDetailsScroll')).swipe('up', 'fast', 0.3); } catch (_) {}
       try { await element(by.type('RCTScrollView')).atIndex(0).swipe('up', 'fast', 0.3); } catch (_) {}
-      await waitFor(element(by.id('CreateTransactionButton')))
-        .toBeVisible()
-        .withTimeout(45000);
+      await sleep(2000);
+      await waitForCreateTransactionButton(180000);
       for (let attempt = 0; attempt < 5; attempt++) {
         await element(by.id('CreateTransactionButton')).tap();
         try {

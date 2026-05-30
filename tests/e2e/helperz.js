@@ -496,6 +496,70 @@ export async function scrollUpOnHomeScreen() {
   await sleep(200); // bounce animation
 }
 
+/**
+ * Launch app with retries until WalletsList is visible (fixes Android "No activities found" flake).
+ */
+export async function launchAppUntilWalletsList(options = {}) {
+  const { deleteOnFirst = true, maxAttempts = 3, walletsTimeout = 120000 } = options;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      if (attempt > 0) {
+        try {
+          await device.terminateApp();
+        } catch (_) {}
+        await sleep(2000);
+      }
+      await device.launchApp({
+        delete: deleteOnFirst && attempt === 0,
+        newInstance: true,
+        permissions: { notifications: 'NO' },
+        launchArgs: { detoxEnableSynchronization: 'NO' },
+      });
+      await device.disableSynchronization();
+      await sleep(attempt === 0 ? 1500 : 3500);
+      await waitForId('WalletsList', walletsTimeout);
+      return;
+    } catch (e) {
+      console.log(
+        `[L1 E2E] launchAppUntilWalletsList attempt ${attempt + 1}/${maxAttempts} failed:`,
+        e && e.message ? e.message.slice(0, 160) : e,
+      );
+      if (attempt === maxAttempts - 1) {
+        throw e;
+      }
+    }
+  }
+}
+
+/**
+ * Wait for CreateTransactionButton after fee calc / balance sync (ActivityIndicator hides the button while isLoading).
+ */
+export async function waitForCreateTransactionButton(maxWaitMs = 180000) {
+  const started = Date.now();
+  while (Date.now() - started < maxWaitMs) {
+    const remaining = maxWaitMs - (Date.now() - started);
+    try {
+      await waitFor(element(by.id('CreateTransactionButton')))
+        .toBeVisible()
+        .withTimeout(Math.min(30000, remaining));
+      return;
+    } catch (_) {
+      try {
+        await device.disableSynchronization();
+      } catch (_) {}
+      await dismissPostFundAlerts();
+      try {
+        await element(by.id('SendDetailsScroll')).swipe('up', 'fast', 0.3);
+      } catch (_) {}
+      try {
+        await element(by.type('RCTScrollView')).atIndex(0).swipe('up', 'fast', 0.3);
+      } catch (_) {}
+      await sleep(3000);
+    }
+  }
+  throw new Error(`CreateTransactionButton not visible after ${maxWaitMs}ms`);
+}
+
 // We really only need this function when running tests locally.
 // In GitHub Actions, we run Android tests with a hardware keyboard, so the onscreen keyboard doesn’t appear.
 // On iOS, it doesn’t cause any known issues.
