@@ -6,6 +6,7 @@ import {
   extractTextFromElementById,
   goBack,
   launchAppUntilWalletsList,
+  pullRefreshWalletTransactions,
   resetToWalletsList,
   scrollUpOnHomeScreen,
   sleep,
@@ -154,7 +155,6 @@ describe('L1 signet Android phone to iOS simulator receive', () => {
       // Re-disable sync + settle after external fund/mine (parity with ios-sim leg; addresses app busy + nav flakes on Android device)
       await device.disableSynchronization();
       await sleep(2500);
-      try { await device.reloadReactNative(); } catch (_) {}
       await resetToWalletsList(10, true);
       await dismissPostFundAlerts();
       await dismissBlockingAlerts();
@@ -171,19 +171,8 @@ describe('L1 signet Android phone to iOS simulator receive', () => {
       }
 
       waitForElectrumBalance(androidReceiveAddress, sendSats);
-      await sleep(BALANCE_WAIT_MS);
+      await sleep(Math.min(8000, BALANCE_WAIT_MS));
 
-      // Post-balance-wait reset + safe dismiss to clear any lingering app-busy state before send flow
-      await device.disableSynchronization();
-      await resetToWalletsList(5, true);
-      await dismissPostFundAlerts();
-      try {
-        await element(by.id('WalletTransactionsScrollView')).swipe('down', 'slow');
-      } catch (_) {}
-      await sleep(800);
-
-      // After resetToWalletsList (for app-busy post-fund), must re-enter wallet from list (tap label) before SendButton is hittable.
-      // Complements the safePostFund=true reset (avoids Skip/Continue that wedge Detox after L1 fund/mine).
       try {
         await waitFor(element(by.id(walletLabel)))
           .toBeVisible()
@@ -196,7 +185,8 @@ describe('L1 signet Android phone to iOS simulator receive', () => {
           .scroll(500, 'left');
       }
       await tapAndTapAgainIfElementIsNotVisible(walletLabel, 'SendButton');
-      await waitForId('SendButton', 30000);
+      await pullRefreshWalletTransactions();
+      await waitForId('SendButton', 60000);
       await element(by.id('SendButton')).tap();
       await waitForId('AddressInput');
       await element(by.id('AddressInput')).tap();

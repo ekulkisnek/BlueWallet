@@ -497,9 +497,20 @@ export async function scrollUpOnHomeScreen() {
 }
 
 /**
- * Launch app with retries until WalletsList is visible (fixes Android "No activities found" flake).
+ * Pull-to-refresh on wallet detail to force Electrum balance sync into wallet.getBalance() before send.
  */
-export async function launchAppUntilWalletsList(options = {}) {
+export async function pullRefreshWalletTransactions() {
+  try {
+    await element(by.id('TransactionsListEmpty')).swipe('down', 'slow', 0.5);
+  } catch (_) {
+    try {
+      await element(by.id('WalletTransactionsScrollView')).swipe('down', 'slow', 0.5);
+    } catch (_) {}
+  }
+  await sleep(2500);
+}
+
+/**
   const { deleteOnFirst = true, maxAttempts = 3, walletsTimeout = 120000 } = options;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {

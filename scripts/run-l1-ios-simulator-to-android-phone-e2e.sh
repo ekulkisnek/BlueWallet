@@ -174,11 +174,15 @@ export L1_E2E_BALANCE_WAIT_MS="${L1_E2E_BALANCE_WAIT_MS:-180000}"
 export L1_E2E_POST_FUND_RELAUNCH="${L1_E2E_POST_FUND_RELAUNCH:-0}"
 export REDWALLET_SKIP_IOS_SEED="${REDWALLET_SKIP_IOS_SEED:-1}"
 
-log "detox_start balance_wait_ms=$L1_E2E_BALANCE_WAIT_MS post_fund_relaunch=$L1_E2E_POST_FUND_RELAUNCH"
+log "detox_start balance_wait_ms=$L1_E2E_BALANCE_WAIT_MS post_fund_relaunch=$L1_E2E_POST_FUND_RELAUNCH detox_reuse=${L1_E2E_DETOX_REUSE:-0}"
 set +e
+DETOX_EXTRA=()
+if [[ "${L1_E2E_DETOX_REUSE:-0}" == 1 ]]; then
+  DETOX_EXTRA+=(--reuse)
+fi
 npx detox test -c ios.debug.nosync tests/e2e/l1_ios_simulator_to_android.spec.js \
   --loglevel "${DETOX_LOGLEVEL:-info}" \
-  --reuse "$@" 2>&1 | tee "$RUN_DIR/detox.log"
+  "${DETOX_EXTRA[@]}" "$@" 2>&1 | tee "$RUN_DIR/detox.log"
 detox_rc=${PIPESTATUS[0]}
 set -e
 log "detox_exit=$detox_rc"

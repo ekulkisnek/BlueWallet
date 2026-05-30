@@ -7,6 +7,7 @@ import {
   goBack,
   helperCreateWallet,
   launchAppUntilWalletsList,
+  pullRefreshWalletTransactions,
   resetToWalletsList,
   sleep,
   tapAndTapAgainIfElementIsNotVisible,
@@ -92,6 +93,7 @@ async function openWalletSendScreen(walletName) {
   await sleep(400);
   await scrollWalletIntoView(walletName);
   await tapAndTapAgainIfElementIsNotVisible(walletName, 'SendButton');
+  await pullRefreshWalletTransactions();
   await waitFor(element(by.id('SendButton')))
     .toBeVisible()
     .withTimeout(120000);
@@ -204,7 +206,14 @@ describe('L1 signet iOS simulator to Android receive', () => {
       if (device.getPlatform() === 'ios') {
         await element(by.id('BitcoinAmountInput')).tapReturnKey();
       }
-      await sleep(500);
+      await sleep(1500);
+      // Re-trigger fee calc if CreateTransactionButton still hidden (ActivityIndicator while isLoading / balance=0).
+      try {
+        await element(by.id('BitcoinAmountInput')).tap();
+        await element(by.id('BitcoinAmountInput')).replaceText(sendBtc);
+        await element(by.id('BitcoinAmountInput')).tapReturnKey();
+      } catch (_) {}
+      await sleep(1500);
 
       await device.disableSynchronization();
       await dismissPostFundAlerts();
