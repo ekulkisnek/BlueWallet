@@ -14,6 +14,7 @@ import {
   waitForCreateTransactionButton,
   waitForId,
   waitForText,
+  waitForWalletBalancePositive,
 } from './helperz';
 import { fundL1Address, mineL1Blocks, waitForElectrumBalance } from './l1SignetShared';
 
@@ -94,6 +95,7 @@ async function openWalletSendScreen(walletName) {
   await scrollWalletIntoView(walletName);
   await tapAndTapAgainIfElementIsNotVisible(walletName, 'SendButton');
   await pullRefreshWalletTransactions();
+  await waitForWalletBalancePositive(BALANCE_WAIT_MS);
   await waitFor(element(by.id('SendButton')))
     .toBeVisible()
     .withTimeout(120000);
@@ -232,6 +234,12 @@ describe('L1 signet iOS simulator to Android receive', () => {
           if (attempt === 4) throw new Error('CreateTransactionButton did not produce TransactionValue');
           await dismissPostFundAlerts();
           await device.disableSynchronization();
+          // App-busy / TransactionValue flake recovery: reload + scroll + re-open send
+          if (device.getPlatform() === 'ios') {
+            try { await device.reloadReactNative(); } catch (_) {}
+          }
+          await resetToWalletsList(3, true);
+          await openWalletSendScreen(walletLabel);
           await sleep(10000);
         }
       }

@@ -15,6 +15,7 @@ import {
   waitForCreateTransactionButton,
   waitForId,
   waitForText,
+  waitForWalletBalancePositive,
 } from './helperz';
 import { fundL1Address, mineL1Blocks, waitForElectrumBalance } from './l1SignetShared';
 
@@ -187,6 +188,7 @@ describe('L1 signet Android phone to iOS simulator receive', () => {
       }
       await tapAndTapAgainIfElementIsNotVisible(walletLabel, 'SendButton');
       await pullRefreshWalletTransactions();
+      await waitForWalletBalancePositive(BALANCE_WAIT_MS);
       await waitForId('SendButton', 60000);
       await element(by.id('SendButton')).tap();
       await waitForId('AddressInput');
@@ -212,6 +214,13 @@ describe('L1 signet Android phone to iOS simulator receive', () => {
           if (attempt === 4) throw new Error('CreateTransactionButton did not produce TransactionValue');
           await dismissPostFundAlerts();
           await device.disableSynchronization();
+          // Android app-busy / WalletsList recovery post-fund
+          await resetToWalletsList(3, true);
+          await dismissPostFundAlerts();
+          try {
+            await element(by.id(walletLabel)).tap();
+          } catch (_) {}
+          await waitForId('SendButton', 30000);
           await sleep(10000);
         }
       }

@@ -510,6 +510,24 @@ export async function pullRefreshWalletTransactions() {
   await sleep(2500);
 }
 
+/** Wait until wallet detail shows non-zero balance (Electrum may be funded while wallet.getBalance() is still 0). */
+export async function waitForWalletBalancePositive(maxWaitMs = 180000) {
+  const started = Date.now();
+  while (Date.now() - started < maxWaitMs) {
+    try {
+      await pullRefreshWalletTransactions();
+      const attrs = await element(by.id('WalletBalance')).getAttributes();
+      const text = String((attrs && (attrs.text || attrs.label)) || '').trim();
+      if (text && text !== '0' && !/^0\.0+$/.test(text)) {
+        console.log(`[L1 E2E] WalletBalance synced: ${text}`);
+        return text;
+      }
+    } catch (_) {}
+    await sleep(3000);
+  }
+  throw new Error(`WalletBalance still zero after ${maxWaitMs}ms`);
+}
+
 /** Recover WalletsList after Android activity loss (No activities found). */
 export async function ensureWalletsListReady(maxAttempts = 3) {
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -587,11 +605,28 @@ export async function waitForCreateTransactionButton(maxWaitMs = 180000) {
       } catch (_) {}
       await dismissPostFundAlerts();
       try {
+        await waitForWalletBalancePositive(Math.min(60000, remaining));
+      } catch (_) {}
+      // Extra hardening for app-busy / main-queue pending / L1SendE2E post-fund on iOS sim: reload + reset + re-scroll
+      if (device.getPlatform() === 'ios' && (Date.now() - started) % 25000 < 5000) {
+        try { await device.reloadReactNative(); } catch (_) {}
+        try { await device.disableSynchronization(); } catch (_) {}
+        await resetToWalletsList(3, true);
+        await dismissPostFundAlerts();
+        try { await element(by.id('WalletsList')).swipe('down', 'slow', 0.4); } catch (_) {}
+      }
+      try {
+        await element(by.id('BitcoinAmountInput')).tap();
+        await element(by.id('BitcoinAmountInput')).tapReturnKey();
+      } catch (_) {}
+      try {
         await element(by.id('SendDetailsScroll')).swipe('up', 'fast', 0.3);
       } catch (_) {}
       try {
         await element(by.type('RCTScrollView')).atIndex(0).swipe('up', 'fast', 0.3);
       } catch (_) {}
+      // Re-tap wallet label to re-focus send screen (L1SendE2E wedge recovery)
+      try { await element(by.id('L1SendE2E')).tap(); } catch (_) {}
       await sleep(3000);
     }
   }
