@@ -33,6 +33,11 @@ l1_lock_acquire() {
   local run_dir="${1:-unknown}"
   local holder="${2:-l1-e2e}"
   mkdir -p "$(dirname "$LOCK_FILE")"
+  exec 9>"${LOCK_FILE}.flock"
+  if ! flock -n 9; then
+    echo "L1 lock flock busy (another orchestrator starting)"
+    return 1
+  fi
   if [[ -f "$LOCK_FILE" ]]; then
     local old_pid
     old_pid="$(python3 -c "import json; print(json.load(open('$LOCK_FILE')).get('pid',0))" 2>/dev/null || echo 0)"
