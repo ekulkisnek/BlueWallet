@@ -691,5 +691,8 @@ describe('BitAssets mobile wallet bridge', () => {
     expect(normalizedLoopback).toMatch(/127\.0\.0\.1|localhost|100\.|signet/);
     // Exercise with trailing slash etc
     expect(normalizeBitAssetsRpcUrlForRuntime(' http://100.76.117.106:6004/ ')).toMatch(/100\.76\.117\.106/);
+    // Extra edge cases: malformed still validated and rejected
+    expect(() => normalizeBitAssetsRpcUrlForRuntime('')).toThrow('BitAssets RPC URL is required');
+    expect(() => normalizeBitAssetsRpcUrlForRuntime('ftp://127.0.0.1:6004')).toThrow('must use http or https');
   });
 });
