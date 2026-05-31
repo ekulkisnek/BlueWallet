@@ -72,11 +72,14 @@ export function sanitizeRpcUrlForLog(rpcUrl: string): string {
 }
 
 export function normalizeLiquidError(error: unknown): string {
-  const message = redactSensitiveLiquidDetails(error instanceof Error ? error.message : String(error));
+  let raw = error instanceof Error ? error.message : String(error);
+  // Unwrap common RN/native bridge and grok error envelopes so users never see raw JSON or code prefixes
+  raw = raw.replace(/^(?:LIQUID_WALLET_(?:ERROR|CONFIG_ERROR)|Error|NativeModules?Error)[:\s]*/i, '');
+  const message = redactSensitiveLiquidDetails(raw);
   if (/fee[_ ]?sats|nonzero fee/i.test(message)) {
     return 'Liquid constructors currently support fee_sats = 0 only for MVP.';
   }
-  if (/network request failed|failed to fetch|abort/i.test(message)) {
+  if (/network request failed|failed to fetch|abort|connection refused|connect.*failed|econn|unreachable|timeout|could not (connect|reach)|rpc.*(error|fail)|native.*(error|fail)/i.test(message)) {
     return 'Could not reach the Elements RPC endpoint. Check the RPC URL and local regtest/signet elementsd.';
   }
   if (/not enough funds|insufficient/i.test(message)) {

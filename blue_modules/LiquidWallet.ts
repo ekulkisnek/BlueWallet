@@ -242,7 +242,7 @@ export class JsonRpcLiquidWalletClient implements LiquidWalletClient {
   }
 
   async transfer(params: TransferParams): Promise<Txid> {
-    const { destinationAddress, amount, assetId = 'bitcoin', feeSats } = params;
+    const { destinationAddress, amount, assetId = 'bitcoin' } = params;
     const txid = await this.rpc('sendtoaddress', [
       destinationAddress,
       amount,

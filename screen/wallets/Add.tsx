@@ -32,7 +32,7 @@ import { BitAssetsWallet, hasBitAssetsWallet } from '../../class/wallets/bitasse
 import { validateBitAssetsRpcUrl } from '../../blue_modules/BitAssetsWalletForms';
 import { REDWALLET_SIGNET_BITASSETS_RPC_URL, REDWALLET_SIGNET_PHONE_HOST } from '../../helpers/redwalletSignetEndpoints.generated';
 import { LiquidWallet, hasLiquidWallet } from '../../class/wallets/liquid-wallet';
-import { validateLiquidRpcUrl } from '../../blue_modules/LiquidWalletForms';
+import { normalizeLiquidError, validateLiquidRpcUrl } from '../../blue_modules/LiquidWalletForms';
 
 const DEFAULT_BITASSETS_RPC_URL = (() => {
   if (Platform.OS === 'android') {
@@ -537,7 +537,8 @@ const WalletsAdd: React.FC = () => {
       if (__DEV__) {
         console.warn('liquid create failure', Err);
       }
-      return presentAlert({ message: Err.message ?? 'Could not create Liquid wallet' });
+      const userMessage = normalizeLiquidError(Err);
+      return presentAlert({ message: userMessage || 'Could not create Liquid wallet' });
     }
 
     addWallet(wallet);
@@ -720,7 +721,7 @@ const WalletsAdd: React.FC = () => {
             <>
               <BlueSpacing20 />
               <BlueFormLabel>{loc.wallets.add_liquid || 'Liquid (L-BTC)'} RPC URL</BlueFormLabel>
-              <BlueText style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>
+              <BlueText style={styles.liquidRpcExplain}>
                 {loc.wallets.add_liquid_explain || 'Liquid sidechain (confidential L-BTC via embedded elementsd signer). From iOS Simulator use 127.0.0.1 (reaches your Mac).'}
               </BlueText>
               <View style={[styles.lndUri, stylesHook.lndUri]}>
@@ -827,6 +828,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  liquidRpcExplain: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 4,
   },
 });
 
