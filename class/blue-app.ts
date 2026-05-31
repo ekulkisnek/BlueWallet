@@ -845,8 +845,8 @@ export class BlueApp {
       await wallet.fetchBalance();
       if (
         wallet.chain === Chain.ONCHAIN &&
-        wallet.type !== BitAssetsWallet.type &&
-        wallet.type !== LiquidWallet.type &&
+        (wallet.type as string) !== BitAssetsWallet.type &&
+        (wallet.type as string) !== LiquidWallet.type &&
         typeof wallet.fetchUtxo === 'function'
       ) {
         await wallet.fetchUtxo();

@@ -155,7 +155,7 @@ export class BitAssetsWallet extends LegacyWallet {
   static readonly typeReadable = 'BitAssets';
   static readonly subtitleReadable = 'Drivechain';
   // @ts-ignore: override
-  public readonly type = BitAssetsWallet.type;
+  public readonly type: 'bitassetsWallet' = BitAssetsWallet.type;
   // @ts-ignore: override
   public readonly typeReadable = BitAssetsWallet.typeReadable;
 

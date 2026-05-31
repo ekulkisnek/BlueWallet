@@ -109,7 +109,7 @@ export class LiquidWallet extends LegacyWallet {
   static readonly typeReadable = 'Liquid (L-BTC)';
   static readonly subtitleReadable = 'Sidechain';
   // @ts-ignore: override
-  public readonly type = LiquidWallet.type;
+  public readonly type: 'liquidWallet' = LiquidWallet.type;
   // @ts-ignore: override
   public readonly typeReadable = LiquidWallet.typeReadable;
 
