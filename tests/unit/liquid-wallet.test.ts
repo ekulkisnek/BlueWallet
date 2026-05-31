@@ -50,13 +50,7 @@ jest.mock('../../class/wallets/legacy-wallet', () => ({
 }));
 
 const { LiquidWallet, hasLiquidWallet, normalizeLiquidRpcUrlForRuntime } = require('../../class/wallets/liquid-wallet');
-const {
-  EmbeddedLiquidWalletClient,
-} = require('../../blue_modules/LiquidWallet');
-const {
-  normalizeLiquidError,
-  validateLiquidRpcUrl,
-} = require('../../blue_modules/LiquidWalletForms');
+const { validateLiquidRpcUrl } = require('../../blue_modules/LiquidWalletForms');
 
 describe('Liquid mobile wallet bridge', () => {
   beforeEach(() => {
@@ -107,7 +101,6 @@ describe('Liquid mobile wallet bridge', () => {
 
     // Simulate physical device by overriding device-info + force physical path
     const deviceInfo = require('react-native-device-info');
-    const origEmu = deviceInfo.isEmulatorSync.getMockImplementation?.();
     (deviceInfo.isEmulatorSync as jest.Mock).mockReturnValue(false);
 
     // Re-require to pick up new mock behavior for physical branch (isPhysicalDeviceForLiquid true)
@@ -117,8 +110,21 @@ describe('Liquid mobile wallet bridge', () => {
     jest.mock('../../blue_modules/BlueElectrum', () => ({ connectMain: jest.fn() }));
     jest.mock('../../class/wallets/legacy-wallet', () => ({
       LegacyWallet: class {
-        static fromJson(obj: string) { const p = JSON.parse(obj); const w = new this(); Object.assign(w, p); return w; }
-        secret = ''; setLabel(l: string) { (this as any).label = l; } getLabel() { return (this as any).label || ''; }
+        static fromJson(obj: string) {
+          const p = JSON.parse(obj);
+          const w = new this();
+          Object.assign(w, p);
+          return w;
+        }
+
+        secret = '';
+        setLabel(l: string) {
+          (this as any).label = l;
+        }
+
+        getLabel() {
+          return (this as any).label || '';
+        }
       },
     }));
     const { normalizeLiquidRpcUrlForRuntime: normOnDevice } = require('../../class/wallets/liquid-wallet');
@@ -180,8 +186,21 @@ describe('Liquid mobile wallet bridge', () => {
     jest.mock('../../blue_modules/BlueElectrum', () => ({ connectMain: jest.fn() }));
     jest.mock('../../class/wallets/legacy-wallet', () => ({
       LegacyWallet: class {
-        static fromJson(obj: string) { const p=JSON.parse(obj); const w=new this(); Object.assign(w,p); return w; }
-        secret=''; setLabel(l:string){(this as any).label=l;} getLabel(){return (this as any).label||'';}
+        static fromJson(obj: string) {
+          const p = JSON.parse(obj);
+          const w = new this();
+          Object.assign(w, p);
+          return w;
+        }
+
+        secret = '';
+        setLabel(l: string) {
+          (this as any).label = l;
+        }
+
+        getLabel() {
+          return (this as any).label || '';
+        }
       },
     }));
 

@@ -74,7 +74,7 @@ export function sanitizeRpcUrlForLog(rpcUrl: string): string {
 export function normalizeLiquidError(error: unknown): string {
   let raw = error instanceof Error ? error.message : String(error);
   // Unwrap common RN/native bridge and grok error envelopes so users never see raw JSON or code prefixes
-  raw = raw.replace(/^(?:LIQUID_WALLET_(?:ERROR|CONFIG_ERROR)|Error|NativeModules?Error)[:\s]*/i, '');
+  raw = raw.replace(/^(?:LIQUID_WALLET_(?:ERROR|CONFIG_ERROR)|Error|NativeModules?Error|RCTNativeModuleError)[:\s]*/i, '');
   // If the error payload is JSON (e.g. from bridge or RPC), extract a human message
   try {
     const parsed = JSON.parse(raw);
@@ -85,12 +85,21 @@ export function normalizeLiquidError(error: unknown): string {
   } catch {
     // not JSON, keep raw
   }
+  // Handle RN error objects and userInfo shapes from native
+  if (error && typeof error === 'object') {
+    const anyErr = error as any;
+    if (anyErr.message && typeof anyErr.message === 'string') raw = anyErr.message;
+    if (anyErr.userInfo?.message) raw = anyErr.userInfo.message;
+    if (anyErr.code && typeof anyErr.code === 'string' && !raw.includes(anyErr.code)) {
+      raw = `${raw} [${anyErr.code}]`;
+    }
+  }
   const message = redactSensitiveLiquidDetails(raw);
   if (/fee[_ ]?sats|nonzero fee/i.test(message)) {
     return 'Liquid constructors currently support fee_sats = 0 only for MVP.';
   }
   if (
-    /network request failed|failed to fetch|abort|connection refused|connect.*failed|econn|unreachable|timeout|could not (connect|reach)|rpc.*(error|fail)|native.*(error|fail)/i.test(
+    /network request failed|failed to fetch|abort|connection refused|connect.*failed|econn|unreachable|timeout|could not (connect|reach)|rpc.*(error|fail)|native.*(error|fail)|elementsd|signet/i.test(
       message,
     )
   ) {
