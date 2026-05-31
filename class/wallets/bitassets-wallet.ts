@@ -14,7 +14,7 @@ import {
   ReserveParams,
   TransferParams,
 } from '../../blue_modules/BitAssetsWallet';
-import { normalizeBitAssetsError, validateBitAssetsRpcUrl } from '../../blue_modules/BitAssetsWalletForms';
+import { normalizeBitAssetsError, sanitizeRpcUrlForLog, validateBitAssetsRpcUrl } from '../../blue_modules/BitAssetsWalletForms';
 import { BitcoinUnit, Chain } from '../../models/bitcoinUnits';
 import { LegacyWallet } from './legacy-wallet';
 import { Transaction } from './types';
@@ -381,7 +381,7 @@ export class BitAssetsWallet extends LegacyWallet {
   }
 
   private logBitAssetsEvent(operation: string, status: string, fields: Record<string, unknown> = {}): void {
-    const rpcUrl = normalizeBitAssetsRpcUrlForRuntime(this.bitassetsRpcUrl || canonicalBitAssetsRpcUrlForRuntime());
+    const rpcUrl = sanitizeRpcUrlForLog(normalizeBitAssetsRpcUrlForRuntime(this.bitassetsRpcUrl || canonicalBitAssetsRpcUrlForRuntime()));
     const liteWalletQuicUrl = normalizeBitAssetsLiteWalletQuicUrlForRuntime(
       rpcUrl,
       this.bitassetsLiteWalletQuicUrl || canonicalBitAssetsQuicUrlForRuntime(),
@@ -393,7 +393,7 @@ export class BitAssetsWallet extends LegacyWallet {
       walletID: this.getID?.(),
       address: this._address || undefined,
       rpcUrl,
-      bitassetsLiteWalletQuicUrl: liteWalletQuicUrl,
+      bitassetsLiteWalletQuicUrl: sanitizeRpcUrlForLog(liteWalletQuicUrl),
       time: new Date().toISOString(),
       ...fields,
     };

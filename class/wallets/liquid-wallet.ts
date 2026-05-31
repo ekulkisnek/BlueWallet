@@ -5,7 +5,7 @@ import {
   LiquidUtxo,
   TransferParams,
 } from '../../blue_modules/LiquidWallet';
-import { normalizeLiquidError, validateLiquidRpcUrl } from '../../blue_modules/LiquidWalletForms';
+import { normalizeLiquidError, sanitizeRpcUrlForLog, validateLiquidRpcUrl } from '../../blue_modules/LiquidWalletForms';
 import { BitcoinUnit, Chain } from '../../models/bitcoinUnits';
 import { LegacyWallet } from './legacy-wallet';
 import { Transaction } from './types';
@@ -268,7 +268,7 @@ export class LiquidWallet extends LegacyWallet {
   }
 
   private logLiquidEvent(operation: string, status: string, fields: Record<string, unknown> = {}): void {
-    const rpcUrl = normalizeLiquidRpcUrlForRuntime(this.elementsRpcUrl || canonicalLiquidRpcUrlForRuntime());
+    const rpcUrl = sanitizeRpcUrlForLog(normalizeLiquidRpcUrlForRuntime(this.elementsRpcUrl || canonicalLiquidRpcUrlForRuntime()));
     const payload = {
       component: 'js.LiquidWallet',
       operation,

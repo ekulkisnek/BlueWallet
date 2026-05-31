@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, ScrollView, StyleSheet, View } from 'react-native';
 import { RouteProp, useFocusEffect, useRoute } from '@react-navigation/native';
 
@@ -24,6 +24,10 @@ const LiquidTools: React.FC = () => {
   const wallet = wallets.find(w => w.getID() === walletID) as LiquidWalletClass | undefined;
   const navigation = useExtendedNavigation();
   const syncInFlight = useRef(false);
+
+  useEffect(() => {
+    navigation.setOptions({ title: loc.wallets.liquid_tools || 'Liquid Tools' });
+  }, [navigation]);
 
   const [info, setInfo] = useState<LiquidWalletInfo | undefined>(wallet?.liquidInfo);
   const [utxos, setUtxos] = useState<LiquidUtxo[]>(wallet?.liquidUtxos ?? []);

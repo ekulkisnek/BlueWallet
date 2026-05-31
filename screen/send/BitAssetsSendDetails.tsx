@@ -2,6 +2,7 @@ import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { RouteProp, useFocusEffect, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { unlockWithBiometrics, useBiometrics } from '../../hooks/useBiometrics';
 
 import { BlueCard, BlueFormLabel, BlueText } from '../../BlueComponents';
 import AddressInput from '../../components/AddressInput';
@@ -34,6 +35,8 @@ const BitAssetsSendDetails: React.FC = () => {
   const [memo, setMemo] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [balances, setBalances] = useState<Record<string, number>>({});
+
+  const { isBiometricUseCapableAndEnabled } = useBiometrics();
 
   const syncBalances = useCallback(async () => {
     if (!wallet) return;
@@ -79,6 +82,13 @@ const BitAssetsSendDetails: React.FC = () => {
     const availableBalance = balances[selectedAsset] ?? 0;
     if (numAmount > availableBalance) {
       return presentAlert({ message: 'Amount exceeds available balance for this asset' });
+    }
+
+    // Biometric / PIN gate before spend (security parity with BTC and Liquid)
+    if (await isBiometricUseCapableAndEnabled()) {
+      if (!(await unlockWithBiometrics())) {
+        return;
+      }
     }
 
     setIsLoading(true);

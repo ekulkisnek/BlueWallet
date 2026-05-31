@@ -512,11 +512,18 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
                 options: .regularExpression
             )
         }
-        return sanitized.replacingOccurrences(
+        sanitized = sanitized.replacingOccurrences(
             of: #"\b[0-9a-fA-F]{128}\b"#,
             with: "[redacted-seed]",
             options: .regularExpression
         )
+        // Redact credentials in RPC URLs (user:pass@host) for security audit
+        sanitized = sanitized.replacingOccurrences(
+            of: #"(?i)(https?://)[^/\s@]+@([^\s/]+)"#,
+            with: "$1***@$2",
+            options: .regularExpression
+        )
+        return sanitized
     }
 
     private func sanitizedError(_ error: Error) -> NSError {

@@ -362,6 +362,7 @@ class BitAssetsWalletModule(private val reactContext: ReactApplicationContext) :
             .replace(Regex("""(?i)(seed_hex["'\s:=]+)[0-9a-f]{128}"""), "\$1[redacted]")
             .replace(Regex("""(?i)(seedHex["'\s:=]+)[0-9a-f]{128}"""), "\$1[redacted]")
             .replace(Regex("""\b[0-9a-fA-F]{128}\b"""), "[redacted-seed]")
+            .replace(Regex("""(?i)(https?://)[^/\s@]+@([^\s/]+)"""), "\$1***@\$2")
     }
 
     private fun eventLog(operation: String, status: String, fields: Map<String, Any?> = emptyMap()) {

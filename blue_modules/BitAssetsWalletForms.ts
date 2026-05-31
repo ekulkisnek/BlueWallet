@@ -314,6 +314,20 @@ export function redactSensitiveBitAssetsDetails(message: string): string {
     .replace(/\b[0-9a-f]{128}\b/gi, '[redacted-seed]');
 }
 
+export function sanitizeRpcUrlForLog(rpcUrl: string): string {
+  try {
+    const u = new URL(rpcUrl);
+    if (u.username || u.password) {
+      u.username = '***';
+      u.password = '***';
+      return u.toString().replace(/:\/\/\*\*\*:\*\*\*@/, '://***@');
+    }
+    return rpcUrl;
+  } catch {
+    return rpcUrl.replace(/:\/\/[^@]+@/, '://***@');
+  }
+}
+
 export function normalizeBitAssetsError(error: unknown): string {
   const message = redactSensitiveBitAssetsDetails(error instanceof Error ? error.message : String(error));
   if (/fee[_ ]?sats|nonzero fee|fee must be 0/i.test(message)) {

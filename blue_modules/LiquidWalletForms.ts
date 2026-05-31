@@ -57,6 +57,20 @@ export function redactSensitiveLiquidDetails(message: string): string {
     .replace(/\b[0-9a-f]{64,}\b/gi, '[redacted-secret]');
 }
 
+export function sanitizeRpcUrlForLog(rpcUrl: string): string {
+  try {
+    const u = new URL(rpcUrl);
+    if (u.username || u.password) {
+      u.username = '***';
+      u.password = '***';
+      return u.toString().replace(/:\/\/\*\*\*:\*\*\*@/, '://***@');
+    }
+    return rpcUrl;
+  } catch {
+    return rpcUrl.replace(/:\/\/[^@]+@/, '://***@');
+  }
+}
+
 export function normalizeLiquidError(error: unknown): string {
   const message = redactSensitiveLiquidDetails(error instanceof Error ? error.message : String(error));
   if (/fee[_ ]?sats|nonzero fee/i.test(message)) {

@@ -9,6 +9,7 @@ import { LegacyWallet } from './wallets/legacy-wallet';
 import { LightningCustodianWallet } from './wallets/lightning-custodian-wallet'; // Missing import
 import { MultisigHDWallet } from './wallets/multisig-hd-wallet';
 import { BitAssetsWallet } from './wallets/bitassets-wallet';
+import { LiquidWallet } from './wallets/liquid-wallet';
 import { SegwitBech32Wallet } from './wallets/segwit-bech32-wallet';
 import { SLIP39LegacyP2PKHWallet, SLIP39SegwitBech32Wallet, SLIP39SegwitP2SHWallet } from './wallets/slip39-wallets';
 import { WatchOnlyWallet } from './wallets/watch-only-wallet';
@@ -28,6 +29,7 @@ export default class WalletGradient {
   static defaultGradients: string[] = ['#B770F6', '#9013FE'];
   static lightningCustodianWallet: string[] = ['#F1AA07', '#FD7E37']; // Corrected property with missing colors
   static bitAssetsWallet: string[] = ['#1E7A59', '#0E3E64'];
+  static liquidWallet: string[] = ['#00B4D8', '#0077B6'];
   static aezeedWallet: string[] = ['#8584FF', '#5351FB'];
 
   static createWallet = () => {
@@ -78,6 +80,9 @@ export default class WalletGradient {
         break;
       case BitAssetsWallet.type:
         gradient = WalletGradient.bitAssetsWallet;
+        break;
+      case LiquidWallet.type:
+        gradient = WalletGradient.liquidWallet;
         break;
       default:
         gradient = WalletGradient.defaultGradients;

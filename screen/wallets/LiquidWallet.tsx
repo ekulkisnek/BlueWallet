@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Dimensions, PixelRatio, ScrollView, StyleSheet, View } from 'react-native';
 import { RouteProp, useFocusEffect, useLocale, useRoute } from '@react-navigation/native';
 
@@ -33,6 +33,10 @@ const LiquidWalletScreen: React.FC = () => {
   const { direction } = useLocale();
   const walletActionButtonsRef = useRef<View>(null);
   const syncInFlight = useRef(false);
+
+  useEffect(() => {
+    navigation.setOptions({ title: loc.wallets.liquid_title || 'Liquid' });
+  }, [navigation]);
 
   const [info, setInfo] = useState<LiquidWalletInfo | undefined>(wallet?.liquidInfo);
   const [utxos, setUtxos] = useState<LiquidUtxo[]>(wallet?.liquidUtxos ?? []);
