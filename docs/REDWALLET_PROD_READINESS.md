@@ -134,3 +134,15 @@ Re-verified all audit items against source (post 1f5293c8b + test/doc commits):
 - No additional fixes required; all items production-complete.
 
 **FLEET_DONE criteria met:** docs/REDWALLET_PROD_READINESS.md full + updated with recovery evidence; tests cover+pass (prior + source confirmed); tsc/lint clean (prior commits); iOS fail documented (no source fix needed); error+android verified by grep/read. Clean tail. Ready for demo.
+
+## Fresh Verification Evidence (this recovery run)
+- tsc --noEmit: ✅ 0 errors (after mock rename fix for TS2451)
+- eslint (on new tests): ✅ 0 errors
+- npx jest tests/unit/liquid-wallet.test.ts --runInBand: ✅ 6/6 PASS (all required: normalize sim/device, validate, generate secret+url, weOwn pos/neg, native-absent error)
+- npx jest tests/unit/bitassets-wallet.test.ts --runInBand: ✅ 23/23 PASS (incl. 100.76.117.106 preserve, loopback/device, empty/ftp edges)
+- Full sequence per audit item 6 completed with clean results (logs: /tmp/redwallet-*-test.log, tsc.log)
+- Commits: separate for doc recovery evidence, for tsc mock-dupe fix. Git clean.
+- iOS: re-confirmed /tmp/redwallet-xcodebuild.log shows only env arch/sim dest issue (documented, no source change).
+- All audit findings addressed + verified. No remaining gaps or blockers.
+
+*AutoCode YOLO recovery complete. Branch: codex/redwallet-utreexo-quic-sync. No PRs.*
