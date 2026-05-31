@@ -123,7 +123,8 @@ class LiquidWalletModule: NSObject, NativeLiquidWalletSpec {
 
     // prepare* are declared in PR 2 NativeLiquidWalletSpec + codegen/NativeLiquidWallet.ts but FFI not present in PR 1 liquid_wallet.h yet.
     // Stubs per "with stub if needed" for xcodebuild verification (real impl + FFI in PR 8).
-    @objc func preparePegIn(_ paramsJson: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
+    // Swift renames ObjC 'preparePegIn:' to 'preparePeg(in:)' due to 'in' being a keyword
+    @objc func preparePeg(in paramsJson: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         let err = NSError(domain: "LiquidWallet", code: 99, userInfo: [NSLocalizedDescriptionKey: "preparePegIn not implemented in liquid_wallet FFI (PR 1 header; see PR 8)"])
         reject("LIQUID_WALLET_ERROR", "preparePegIn not implemented", err)
     }
