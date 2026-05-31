@@ -1,4 +1,4 @@
-const mockNativeModule = {
+const mockBitAssetsNativeModule = {
   configure: jest.fn(),
   getNewAddress: jest.fn(),
   walletInfo: jest.fn(),
@@ -17,7 +17,7 @@ const mockNativeModule = {
   clear: jest.fn(),
 };
 
-jest.mock('../../codegen/NativeBitAssetsWallet', () => mockNativeModule);
+jest.mock('../../codegen/NativeBitAssetsWallet', () => mockBitAssetsNativeModule);
 jest.mock('../../blue_modules/BlueElectrum', () => ({
   connectMain: jest.fn(),
 }));
@@ -86,9 +86,9 @@ const TXID_AUCTION_COLLECT = '99'.repeat(32);
 describe('BitAssets mobile wallet bridge', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockNativeModule.configure.mockResolvedValue('{"configured":true}');
-    mockNativeModule.getNewAddress.mockResolvedValue('bitassets-address-1');
-    mockNativeModule.walletInfo.mockResolvedValue(
+    mockBitAssetsNativeModule.configure.mockResolvedValue('{"configured":true}');
+    mockBitAssetsNativeModule.getNewAddress.mockResolvedValue('bitassets-address-1');
+    mockBitAssetsNativeModule.walletInfo.mockResolvedValue(
       JSON.stringify({
         enabled: true,
         address_count: 1,
@@ -99,7 +99,7 @@ describe('BitAssets mobile wallet bridge', () => {
         last_tip_height: 7,
       }),
     );
-    mockNativeModule.sync.mockResolvedValue(
+    mockBitAssetsNativeModule.sync.mockResolvedValue(
       JSON.stringify({
         enabled: true,
         address_count: 1,
@@ -108,7 +108,7 @@ describe('BitAssets mobile wallet bridge', () => {
         balances: { asset_a: 25 },
       }),
     );
-    mockNativeModule.listUtxos.mockResolvedValue(
+    mockBitAssetsNativeModule.listUtxos.mockResolvedValue(
       JSON.stringify({
         confirmed: [
           {
@@ -141,8 +141,8 @@ describe('BitAssets mobile wallet bridge', () => {
         ],
       }),
     );
-    mockNativeModule.getBalance.mockResolvedValue(JSON.stringify({ asset_a: 25 }));
-    mockNativeModule.clear.mockResolvedValue('{"cleared":true}');
+    mockBitAssetsNativeModule.getBalance.mockResolvedValue(JSON.stringify({ asset_a: 25 }));
+    mockBitAssetsNativeModule.clear.mockResolvedValue('{"cleared":true}');
   });
 
   it('creates a native wallet, stores its address, and sums balances', async () => {
@@ -152,10 +152,10 @@ describe('BitAssets mobile wallet bridge', () => {
     await wallet.generate('http://127.0.0.1:6004');
     await wallet.fetchBalance();
 
-    expect(mockNativeModule.configure).toHaveBeenCalledWith(
+    expect(mockBitAssetsNativeModule.configure).toHaveBeenCalledWith(
       JSON.stringify({ rpcUrl: 'http://127.0.0.1:6004', bitassetsLiteWalletQuicUrl: '127.0.0.1:6104' }),
     );
-    expect(mockNativeModule.getNewAddress).toHaveBeenCalledTimes(1);
+    expect(mockBitAssetsNativeModule.getNewAddress).toHaveBeenCalledTimes(1);
     expect(wallet.getAddress()).toBe('bitassets-address-1');
     expect(wallet.secret).toBe('bitassets://bitassets-address-1');
     expect(wallet.getBalance()).toBe(42);
@@ -167,8 +167,8 @@ describe('BitAssets mobile wallet bridge', () => {
     await expect(wallet.generate()).rejects.toThrow('BitAssets RPC URL is required');
     await expect(wallet.fetchBalance()).rejects.toThrow('BitAssets RPC URL is required');
 
-    expect(mockNativeModule.configure).not.toHaveBeenCalled();
-    expect(mockNativeModule.getNewAddress).not.toHaveBeenCalled();
+    expect(mockBitAssetsNativeModule.configure).not.toHaveBeenCalled();
+    expect(mockBitAssetsNativeModule.getNewAddress).not.toHaveBeenCalled();
   });
 
   it('detects existing BitAssets wallets before creating another native signer entry', () => {
@@ -180,18 +180,18 @@ describe('BitAssets mobile wallet bridge', () => {
     const wallet = new BitAssetsWallet();
     wallet.secret = 'bitassets://persisted-address';
     wallet.bitassetsRpcUrl = 'http://127.0.0.1:6004';
-    mockNativeModule.reserve.mockResolvedValue(TXID_RESERVE);
+    mockBitAssetsNativeModule.reserve.mockResolvedValue(TXID_RESERVE);
 
     await wallet.init();
     await wallet.fetchBalance();
     await expect(wallet.reserveBitAsset({ name: 'PERSISTED', feeSats: 0 })).resolves.toBe(TXID_RESERVE);
 
     expect(wallet.getAddress()).toBe('persisted-address');
-    expect(mockNativeModule.configure).toHaveBeenCalledTimes(2);
-    expect(mockNativeModule.configure).toHaveBeenCalledWith(
+    expect(mockBitAssetsNativeModule.configure).toHaveBeenCalledTimes(2);
+    expect(mockBitAssetsNativeModule.configure).toHaveBeenCalledWith(
       JSON.stringify({ rpcUrl: 'http://127.0.0.1:6004', bitassetsLiteWalletQuicUrl: '127.0.0.1:6104' }),
     );
-    expect(mockNativeModule.reserve).toHaveBeenCalledWith(JSON.stringify({ name: 'PERSISTED', feeSats: 0 }));
+    expect(mockBitAssetsNativeModule.reserve).toHaveBeenCalledWith(JSON.stringify({ name: 'PERSISTED', feeSats: 0 }));
   });
 
   it('keeps only persistent BitAssets wallet fields on the JS wallet', async () => {
@@ -210,7 +210,7 @@ describe('BitAssets mobile wallet bridge', () => {
 
     await expect(wallet.clearNativeSigner()).resolves.toBeUndefined();
 
-    expect(mockNativeModule.clear).toHaveBeenCalledTimes(1);
+    expect(mockBitAssetsNativeModule.clear).toHaveBeenCalledTimes(1);
   });
 
   it('syncs and flattens confirmed and mempool UTXOs', async () => {
@@ -248,10 +248,10 @@ describe('BitAssets mobile wallet bridge', () => {
     const wallet = new BitAssetsWallet();
     wallet.secret = 'bitassets://persisted-address';
     wallet.bitassetsRpcUrl = 'http://127.0.0.1:6004';
-    mockNativeModule.reserve.mockResolvedValue(TXID_RESERVE);
-    mockNativeModule.register.mockResolvedValue(TXID_REGISTER);
-    mockNativeModule.transfer.mockResolvedValue(TXID_TRANSFER);
-    mockNativeModule.sync.mockResolvedValue(
+    mockBitAssetsNativeModule.reserve.mockResolvedValue(TXID_RESERVE);
+    mockBitAssetsNativeModule.register.mockResolvedValue(TXID_REGISTER);
+    mockBitAssetsNativeModule.transfer.mockResolvedValue(TXID_TRANSFER);
+    mockBitAssetsNativeModule.sync.mockResolvedValue(
       JSON.stringify({
         enabled: true,
         address_count: 2,
@@ -262,7 +262,7 @@ describe('BitAssets mobile wallet bridge', () => {
         last_tip_height: 125,
       }),
     );
-    mockNativeModule.listUtxos.mockResolvedValue(
+    mockBitAssetsNativeModule.listUtxos.mockResolvedValue(
       JSON.stringify({
         confirmed: [
           {
@@ -365,15 +365,15 @@ describe('BitAssets mobile wallet bridge', () => {
 
   it('serializes every native constructor payload and parses txids', async () => {
     const client = new EmbeddedBitAssetsWalletClient();
-    mockNativeModule.transfer.mockResolvedValue(JSON.stringify({ txid: TXID_TRANSFER }));
-    mockNativeModule.reserve.mockResolvedValue(TXID_RESERVE);
-    mockNativeModule.register.mockResolvedValue(JSON.stringify({ txid: TXID_REGISTER }));
-    mockNativeModule.ammMint.mockResolvedValue(JSON.stringify({ txid: TXID_MINT }));
-    mockNativeModule.ammSwap.mockResolvedValue(JSON.stringify({ txid: TXID_SWAP }));
-    mockNativeModule.ammBurn.mockResolvedValue(JSON.stringify({ txid: TXID_BURN }));
-    mockNativeModule.dutchAuctionCreate.mockResolvedValue(JSON.stringify({ txid: TXID_AUCTION_CREATE }));
-    mockNativeModule.dutchAuctionBid.mockResolvedValue(JSON.stringify({ txid: TXID_AUCTION_BID }));
-    mockNativeModule.dutchAuctionCollect.mockResolvedValue(JSON.stringify({ txid: TXID_AUCTION_COLLECT }));
+    mockBitAssetsNativeModule.transfer.mockResolvedValue(JSON.stringify({ txid: TXID_TRANSFER }));
+    mockBitAssetsNativeModule.reserve.mockResolvedValue(TXID_RESERVE);
+    mockBitAssetsNativeModule.register.mockResolvedValue(JSON.stringify({ txid: TXID_REGISTER }));
+    mockBitAssetsNativeModule.ammMint.mockResolvedValue(JSON.stringify({ txid: TXID_MINT }));
+    mockBitAssetsNativeModule.ammSwap.mockResolvedValue(JSON.stringify({ txid: TXID_SWAP }));
+    mockBitAssetsNativeModule.ammBurn.mockResolvedValue(JSON.stringify({ txid: TXID_BURN }));
+    mockBitAssetsNativeModule.dutchAuctionCreate.mockResolvedValue(JSON.stringify({ txid: TXID_AUCTION_CREATE }));
+    mockBitAssetsNativeModule.dutchAuctionBid.mockResolvedValue(JSON.stringify({ txid: TXID_AUCTION_BID }));
+    mockBitAssetsNativeModule.dutchAuctionCollect.mockResolvedValue(JSON.stringify({ txid: TXID_AUCTION_COLLECT }));
 
     await expect(
       client.transfer({
@@ -454,7 +454,7 @@ describe('BitAssets mobile wallet bridge', () => {
       }),
     ).resolves.toBe(TXID_AUCTION_COLLECT);
 
-    expect(JSON.parse(mockNativeModule.ammMint.mock.calls[0][0])).toEqual({
+    expect(JSON.parse(mockBitAssetsNativeModule.ammMint.mock.calls[0][0])).toEqual({
       asset0: 'a',
       asset1: 'b',
       amount0: 1,
@@ -466,7 +466,7 @@ describe('BitAssets mobile wallet bridge', () => {
 
   it('rejects malformed native constructor txids before surfacing broadcast success', async () => {
     const client = new EmbeddedBitAssetsWalletClient();
-    mockNativeModule.reserve.mockResolvedValue('not-a-txid');
+    mockBitAssetsNativeModule.reserve.mockResolvedValue('not-a-txid');
 
     await expect(client.reserve({ name: 'ASSET', feeSats: 0 })).rejects.toThrow('expected 64-character hex txid');
   });

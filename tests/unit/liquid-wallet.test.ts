@@ -1,4 +1,4 @@
-const mockNativeModule = {
+const mockLiquidNativeModule = {
   configure: jest.fn(),
   getNewAddress: jest.fn(),
   walletInfo: jest.fn(),
@@ -11,7 +11,7 @@ const mockNativeModule = {
   clear: jest.fn(),
 };
 
-jest.mock('../../codegen/NativeLiquidWallet', () => mockNativeModule);
+jest.mock('../../codegen/NativeLiquidWallet', () => mockLiquidNativeModule);
 
 jest.mock('../../blue_modules/BlueElectrum', () => ({
   connectMain: jest.fn(),
@@ -55,9 +55,9 @@ const { validateLiquidRpcUrl } = require('../../blue_modules/LiquidWalletForms')
 describe('Liquid mobile wallet bridge', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockNativeModule.configure.mockResolvedValue('{"configured":true}');
-    mockNativeModule.getNewAddress.mockResolvedValue('lqtb1qtestaddressliquid1234567890abcdef');
-    mockNativeModule.walletInfo.mockResolvedValue(
+    mockLiquidNativeModule.configure.mockResolvedValue('{"configured":true}');
+    mockLiquidNativeModule.getNewAddress.mockResolvedValue('lqtb1qtestaddressliquid1234567890abcdef');
+    mockLiquidNativeModule.walletInfo.mockResolvedValue(
       JSON.stringify({
         enabled: true,
         balances: { bitcoin: 100000000 },
@@ -66,7 +66,7 @@ describe('Liquid mobile wallet bridge', () => {
         mempool_utxo_count: 0,
       }),
     );
-    mockNativeModule.listUtxos.mockResolvedValue(
+    mockLiquidNativeModule.listUtxos.mockResolvedValue(
       JSON.stringify({
         confirmed: [
           {
@@ -81,7 +81,7 @@ describe('Liquid mobile wallet bridge', () => {
         mempool: [],
       }),
     );
-    mockNativeModule.sync.mockResolvedValue(
+    mockLiquidNativeModule.sync.mockResolvedValue(
       JSON.stringify({
         enabled: true,
         balances: { bitcoin: 100000000 },
@@ -90,7 +90,7 @@ describe('Liquid mobile wallet bridge', () => {
         mempool_utxo_count: 0,
       }),
     );
-    mockNativeModule.clear.mockResolvedValue('{"cleared":true}');
+    mockLiquidNativeModule.clear.mockResolvedValue('{"cleared":true}');
   });
 
   it('normalizeLiquidRpcUrlForRuntime keeps localhost/loopback in simulator, canonical on physical device (via helpers)', () => {
@@ -106,7 +106,7 @@ describe('Liquid mobile wallet bridge', () => {
     // Re-require to pick up new mock behavior for physical branch (isPhysicalDeviceForLiquid true)
     jest.resetModules();
     // Re-apply mocks after reset
-    jest.mock('../../codegen/NativeLiquidWallet', () => mockNativeModule);
+    jest.mock('../../codegen/NativeLiquidWallet', () => mockLiquidNativeModule);
     jest.mock('../../blue_modules/BlueElectrum', () => ({ connectMain: jest.fn() }));
     jest.mock('../../class/wallets/legacy-wallet', () => ({
       LegacyWallet: class {
@@ -156,8 +156,8 @@ describe('Liquid mobile wallet bridge', () => {
 
     await wallet.generate('http://127.0.0.1:18443');
 
-    expect(mockNativeModule.configure).toHaveBeenCalled();
-    expect(mockNativeModule.getNewAddress).toHaveBeenCalledTimes(1);
+    expect(mockLiquidNativeModule.configure).toHaveBeenCalled();
+    expect(mockLiquidNativeModule.getNewAddress).toHaveBeenCalledTimes(1);
     expect(wallet.elementsRpcUrl).toBe('http://127.0.0.1:18443');
     expect(wallet.secret).toMatch(/^liquid:\/\//);
     expect(wallet.getAddress()).toBe('lqtb1qtestaddressliquid1234567890abcdef');
