@@ -64,7 +64,15 @@ async function dismissBlockingAlerts() {
 }
 
 async function dismissReceiveNotificationPrompts() {
-  for (const label of ['Yes, I have.', 'No, and do not ask me again.', "Don't Allow", 'Don\u2019t Allow', 'Don‘t Allow', 'Allow', 'Allow While Using App']) {
+  for (const label of [
+    'Yes, I have.',
+    'No, and do not ask me again.',
+    "Don't Allow",
+    'Don\u2019t Allow',
+    'Don‘t Allow',
+    'Allow',
+    'Allow While Using App',
+  ]) {
     try {
       await waitFor(element(by.text(label)))
         .toBeVisible()
@@ -72,7 +80,9 @@ async function dismissReceiveNotificationPrompts() {
       await element(by.text(label)).tap();
       await sleep(100);
       if (label.startsWith('No,') || label.includes('Allow')) {
-        try { await element(by.text(label)).tap(); } catch (_) {}
+        try {
+          await element(by.text(label)).tap();
+        } catch (_) {}
       }
     } catch (_) {}
   }

@@ -6,6 +6,14 @@ import { setNetworkType } from '../models/network';
 // App defaults to signet; legacy unit fixtures use mainnet addresses and xpubs.
 setNetworkType('mainnet');
 
+// Prevent Worklets native init error in unit tests (transitive from WalletAddresses / reanimated deps)
+jest.mock('react-native-worklets', () => ({
+  Worklets: {
+    defaultContext: {},
+    createContext: jest.fn(() => ({})),
+  },
+}));
+
 const consoleWarnOrig = console.warn;
 console.warn = (...args) => {
   if (

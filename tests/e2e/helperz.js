@@ -131,14 +131,20 @@ async function tapIfVisible(matcher, timeoutMs = 120) {
 }
 
 async function dismissAlertLabels(labels, { rounds = 2, timeoutMs = 120 } = {}) {
-  try { await device.disableSynchronization(); } catch (_) {}
+  try {
+    await device.disableSynchronization();
+  } catch (_) {}
   for (let round = 0; round < rounds; round++) {
     for (const label of labels) {
       await tapIfVisible(element(by.text(label)), timeoutMs);
     }
     await tapIfVisible(element(by.id('NavigationCloseButton')).atIndex(0), 80);
     await tapIfVisible(element(by.id('CloseButton')).atIndex(0), 80);
-    if (device.getPlatform() === 'android') { try { await device.pressBack(); } catch (_) {} }
+    if (device.getPlatform() === 'android') {
+      try {
+        await device.pressBack();
+      } catch (_) {}
+    }
     await sleep(60);
   }
 }
@@ -176,7 +182,7 @@ export async function dismissGeneralAlerts() {
     ];
     await dismissAlertLabels(labels, { rounds: 1, timeoutMs: 80 });
     // Permission prompts: single quick pass only (polling "Don't Allow" wedges Detox for 20min).
-    for (const permLabel of ["Don't Allow", "Don\u2019t Allow", "Don‘t Allow", 'Allow', 'Allow While Using App']) {
+    for (const permLabel of ["Don't Allow", 'Don\u2019t Allow', 'Don‘t Allow', 'Allow', 'Allow While Using App']) {
       await tapIfVisible(element(by.text(permLabel)), 50);
     }
   } catch (_) {
@@ -190,7 +196,23 @@ export async function dismissGeneralAlerts() {
  * "app is busy" in Detox and blocking subsequent waits/taps. Use via resetToWalletsList(..., true).
  */
 export async function dismissPostFundAlerts() {
-  const labels = ['Cancel', 'Try again', 'OK', 'Ok', 'Not Now', 'Not now', 'Later', 'Close', 'Dismiss', 'Yes, I have.', 'No, and do not ask me again.', 'Set up later', 'Set Up Later', 'Maybe Later', 'Remind Me Later'];
+  const labels = [
+    'Cancel',
+    'Try again',
+    'OK',
+    'Ok',
+    'Not Now',
+    'Not now',
+    'Later',
+    'Close',
+    'Dismiss',
+    'Yes, I have.',
+    'No, and do not ask me again.',
+    'Set up later',
+    'Set Up Later',
+    'Maybe Later',
+    'Remind Me Later',
+  ];
   await dismissAlertLabels(labels, { rounds: 2, timeoutMs: 100 });
 }
 
@@ -202,7 +224,9 @@ export async function dismissPostFundAlerts() {
  */
 export async function resetToWalletsList(maxAttempts = 6, safePostFund = false) {
   if (safePostFund) {
-    try { await device.disableSynchronization(); } catch (_) {}
+    try {
+      await device.disableSynchronization();
+    } catch (_) {}
     await sleep(400);
   }
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -210,16 +234,28 @@ export async function resetToWalletsList(maxAttempts = 6, safePostFund = false) 
       await waitFor(element(by.id('WalletsList')))
         .toBeVisible()
         .withTimeout(3000);
-      try { await element(by.id('WalletsList')).swipe('down', 'slow', 0.3); } catch (_) {}
+      try {
+        await element(by.id('WalletsList')).swipe('down', 'slow', 0.3);
+      } catch (_) {}
       return true;
     } catch (_) {
       // Stuck on wallet tx/send/receive screens: back out before alert loops (avoids 20min Detox wedge on Reset).
       for (let back = 0; back < 3; back++) {
-        try { await element(by.id('BackButton')).atIndex(0).tap(); } catch (_) {}
-        try { await element(by.id('NavigationCloseButton')).atIndex(0).tap(); } catch (_) {}
-        if (device.getPlatform() === 'android') { try { await device.pressBack(); } catch (_) {} }
         try {
-          await waitFor(element(by.id('WalletsList'))).toBeVisible().withTimeout(800);
+          await element(by.id('BackButton')).atIndex(0).tap();
+        } catch (_) {}
+        try {
+          await element(by.id('NavigationCloseButton')).atIndex(0).tap();
+        } catch (_) {}
+        if (device.getPlatform() === 'android') {
+          try {
+            await device.pressBack();
+          } catch (_) {}
+        }
+        try {
+          await waitFor(element(by.id('WalletsList')))
+            .toBeVisible()
+            .withTimeout(800);
           return true;
         } catch (_) {}
       }
@@ -228,8 +264,12 @@ export async function resetToWalletsList(maxAttempts = 6, safePostFund = false) 
       }
       await sleep(300);
       if (safePostFund && attempt === maxAttempts - 2) {
-        try { await device.reloadReactNative(); } catch (_) {}
-        try { await device.disableSynchronization(); } catch (_) {}
+        try {
+          await device.reloadReactNative();
+        } catch (_) {}
+        try {
+          await device.disableSynchronization();
+        } catch (_) {}
       }
     }
   }
@@ -238,7 +278,9 @@ export async function resetToWalletsList(maxAttempts = 6, safePostFund = false) 
     await waitFor(element(by.id('WalletsList')))
       .toBeVisible()
       .withTimeout(4000);
-    try { await element(by.id('WalletsList')).swipe('down', 'slow', 0.3); } catch (_) {}
+    try {
+      await element(by.id('WalletsList')).swipe('down', 'slow', 0.3);
+    } catch (_) {}
     return true;
   } catch (_) {
     return false;
@@ -284,10 +326,11 @@ export const expectToBeVisible = async id => {
   }
 };
 
-
 /** Dismiss seed backup screen; lazy PleaseBackup + long SeedWords render on iOS sim. */
 async function tapPleaseBackupOk() {
-  try { await device.disableSynchronization(); } catch (_) {}
+  try {
+    await device.disableSynchronization();
+  } catch (_) {}
   const scrollView = element(by.id('PleaseBackupScrollView'));
   const ok = element(by.id('PleasebackupOk'));
   const okText = element(by.text('OK, I wrote it down.'));
@@ -303,7 +346,9 @@ async function tapPleaseBackupOk() {
         await waitFor(target).toBeVisible().withTimeout(5000);
         await target.tap();
         await sleep(500);
-        try { await device.enableSynchronization(); } catch (_) {}
+        try {
+          await device.enableSynchronization();
+        } catch (_) {}
         return;
       } catch (_) {}
     }
@@ -316,7 +361,9 @@ async function tapPleaseBackupOk() {
     }
     await sleep(400);
   }
-  try { await device.enableSynchronization(); } catch (_) {}
+  try {
+    await device.enableSynchronization();
+  } catch (_) {}
   await waitFor(ok).toBeVisible().withTimeout(60000);
   await ok.tap();
 }
@@ -328,19 +375,31 @@ export async function helperCreateWallet(walletName) {
       await device.disableSynchronization();
     }
   } catch (_) {}
-  try { await dismissPostFundAlerts(); } catch (_) {}
+  try {
+    await dismissPostFundAlerts();
+  } catch (_) {}
   let onWalletsList = false;
   try {
-    await waitFor(element(by.id('WalletsList'))).toBeVisible().withTimeout(5000);
+    await waitFor(element(by.id('WalletsList')))
+      .toBeVisible()
+      .withTimeout(5000);
     onWalletsList = true;
   } catch (_) {}
   if (!onWalletsList) {
     await resetToWalletsList(device.getPlatform() === 'android' ? 2 : 4, true);
   }
   // Additional overlay clear for RNSModalScreen hit-test issues on simulator
-  try { await element(by.type('RCTModalHostView')).atIndex(0).tap(); } catch (_) {}
-  if (device.getPlatform() === 'android') { try { await device.pressBack(); } catch (_) {} }
-  try { await device.disableSynchronization(); } catch (_) {}
+  try {
+    await element(by.type('RCTModalHostView')).atIndex(0).tap();
+  } catch (_) {}
+  if (device.getPlatform() === 'android') {
+    try {
+      await device.pressBack();
+    } catch (_) {}
+  }
+  try {
+    await device.disableSynchronization();
+  } catch (_) {}
 
   await ensureWalletsListReady(device.getPlatform() === 'android' ? 5 : 3);
 
@@ -352,10 +411,7 @@ export async function helperCreateWallet(walletName) {
         .scroll(500, 'right'); // in case emu screen is small and it doesnt fit
       break;
     } catch (e) {
-      console.log(
-        `[L1 E2E] CreateAWallet scroll attempt ${scrollAttempt + 1}/3:`,
-        e && e.message ? e.message.slice(0, 140) : e,
-      );
+      console.log(`[L1 E2E] CreateAWallet scroll attempt ${scrollAttempt + 1}/3:`, e && e.message ? e.message.slice(0, 140) : e);
       await ensureWalletsListReady(3);
       if (scrollAttempt === 2) {
         throw e;
@@ -364,13 +420,19 @@ export async function helperCreateWallet(walletName) {
   }
 
   await sleep(300); // Wait until bounce animation finishes.
-  try { await dismissPostFundAlerts(); } catch (_) {}
+  try {
+    await dismissPostFundAlerts();
+  } catch (_) {}
   if (device.getPlatform() === 'android') {
     try {
-      await waitFor(element(by.id('CreateAWallet'))).toBeVisible().withTimeout(45000);
+      await waitFor(element(by.id('CreateAWallet')))
+        .toBeVisible()
+        .withTimeout(45000);
     } catch (_) {
       await ensureWalletsListReady(3);
-      await waitFor(element(by.id('CreateAWallet'))).toBeVisible().withTimeout(60000);
+      await waitFor(element(by.id('CreateAWallet')))
+        .toBeVisible()
+        .withTimeout(60000);
     }
   }
   await tapAndTapAgainIfElementIsNotVisible('CreateAWallet', 'WalletNameInput');
@@ -381,17 +443,27 @@ export async function helperCreateWallet(walletName) {
   // why tf we need 2 taps for it to work..? mystery
   await tapAndTapAgainIfElementIsNotVisible('Create', 'PleaseBackupScrollView');
   try {
-    await waitFor(element(by.id('PleaseBackupScrollView'))).toBeVisible().withTimeout(120000);
+    await waitFor(element(by.id('PleaseBackupScrollView')))
+      .toBeVisible()
+      .withTimeout(120000);
   } catch (e) {
     console.log('[L1 E2E] PleaseBackup slow load, retry Create:', e && e.message ? e.message.slice(0, 120) : e);
     await tapAndTapAgainIfElementIsNotVisible('Create', 'PleaseBackupScrollView');
-    await waitFor(element(by.id('PleaseBackupScrollView'))).toBeVisible().withTimeout(120000);
+    await waitFor(element(by.id('PleaseBackupScrollView')))
+      .toBeVisible()
+      .withTimeout(120000);
   }
 
   await tapPleaseBackupOk();
   await sleep(400);
-  try { await dismissPostFundAlerts(); } catch (_) {}
-  if (device.getPlatform() === 'android') { try { await device.pressBack(); } catch (_) {} }
+  try {
+    await dismissPostFundAlerts();
+  } catch (_) {}
+  if (device.getPlatform() === 'android') {
+    try {
+      await device.pressBack();
+    } catch (_) {}
+  }
   await resetToWalletsList(8, true);
   await scrollUpOnHomeScreen();
   await expect(element(by.id('WalletsList'))).toBeVisible();
@@ -399,7 +471,6 @@ export async function helperCreateWallet(walletName) {
   await sleep(300);
   await expect(element(by.id(walletName || 'cr34t3d'))).toBeVisible();
 }
-
 
 /** Tap by id; on Android "No activities found" relaunch app and retry (activity died mid-test). */
 async function detoxTapByIdWithAndroidRecovery(elementId) {
@@ -412,7 +483,9 @@ async function detoxTapByIdWithAndroidRecovery(elementId) {
     }
     console.log(`[L1 E2E] detoxTapByIdWithAndroidRecovery ${elementId}: activity lost, cold relaunch`);
     await ensureWalletsListReady(3);
-    await waitFor(element(by.id(elementId))).toBeVisible().withTimeout(60000);
+    await waitFor(element(by.id(elementId)))
+      .toBeVisible()
+      .withTimeout(60000);
     await element(by.id(elementId)).tap();
   }
 }
@@ -702,9 +775,7 @@ export async function waitForIncomingTransaction(maxWaitMs = 180000) {
 export async function proceedAfterElectrumFund() {
   const maxWaitMs = Number(process.env.L1_E2E_POST_ELECTRUM_SETTLE_MS || 120000);
   const skipUiBalance = process.env.L1_E2E_SKIP_UI_BALANCE_SYNC === '1';
-  console.log(
-    `[L1 E2E] electrum balance OK — force in-app UTXO sync via pull-refresh (BalanceSync force-scan, ${maxWaitMs}ms)`,
-  );
+  console.log(`[L1 E2E] electrum balance OK — force in-app UTXO sync via pull-refresh (BalanceSync force-scan, ${maxWaitMs}ms)`);
   if (skipUiBalance) {
     console.log('[L1 E2E] L1_E2E_SKIP_UI_BALANCE_SYNC=1 — skipping WalletBalance poll (command-send hybrid)');
     await sleep(3000);
@@ -809,10 +880,7 @@ export async function launchAppUntilWalletsList(options = {}) {
       await device.launchApp({
         delete: deleteOnFirst && attempt === 0,
         newInstance: true,
-        permissions:
-          device.getPlatform() === 'ios'
-            ? { notifications: 'YES', camera: 'YES', photos: 'YES' }
-            : { notifications: 'NO' },
+        permissions: device.getPlatform() === 'ios' ? { notifications: 'YES', camera: 'YES', photos: 'YES' } : { notifications: 'NO' },
         launchArgs: { detoxEnableSynchronization: 'NO' },
       });
       await device.disableSynchronization();

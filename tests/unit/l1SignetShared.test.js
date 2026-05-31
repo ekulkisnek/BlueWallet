@@ -30,7 +30,10 @@ describe('l1SignetShared', () => {
   it('sumPaidSatsToAddress handles missing/empty vout and malformed entries', () => {
     assert.strictEqual(sumPaidSatsToAddress({}, 'any'), 0);
     assert.strictEqual(sumPaidSatsToAddress({ vout: [] }, 'any'), 0);
-    assert.strictEqual(sumPaidSatsToAddress({ vout: [{}, { value: 0.1, scriptPubKey: null }, { value: 0.1, scriptPubKey: {} }] }, 'any'), 0);
+    assert.strictEqual(
+      sumPaidSatsToAddress({ vout: [{}, { value: 0.1, scriptPubKey: null }, { value: 0.1, scriptPubKey: {} }] }, 'any'),
+      0,
+    );
     assert.strictEqual(sumPaidSatsToAddress({ vout: [{ value: 0.1 }] }, 'any'), 0); // no scriptPubKey
     assert.strictEqual(sumPaidSatsToAddress({ vout: [{ scriptPubKey: {} }] }, 'any'), 0); // no value
   });

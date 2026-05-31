@@ -60,7 +60,9 @@ const BitAssetsWallet: React.FC = () => {
     try {
       const [nextInfo] = await Promise.all([
         wallet.syncBitAssets(),
-        fetchBitAssetsChainInfo(wallet.bitassetsRpcUrl).then(setChainInfo).catch(() => {}),
+        fetchBitAssetsChainInfo(wallet.bitassetsRpcUrl)
+          .then(setChainInfo)
+          .catch(() => {}),
       ]);
       await wallet.fetchTransactions();
       await saveToDisk();
@@ -119,22 +121,10 @@ const BitAssetsWallet: React.FC = () => {
             <StatusItem label="Proof status" value={proofSummary.label} testID="BitAssetsProofBackedUtxoStatus" />
           </View>
           <View style={styles.statusGrid}>
-            <StatusItem
-              label="Mainchain"
-              value={chainInfo?.mainchain_hash ? chainInfo.mainchain_hash.slice(0, 8) + '…' : '—'}
-            />
-            <StatusItem
-              label="Peers"
-              value={chainInfo != null ? String(chainInfo.peer_count) : '—'}
-            />
-            <StatusItem
-              label="BTC (sats)"
-              value={chainInfo?.bitcoin_total_sats != null ? String(chainInfo.bitcoin_total_sats) : '—'}
-            />
-            <StatusItem
-              label="QUIC"
-              value={info?.quic != null ? (info.quic.connected ? 'connected' : 'disconnected') : '—'}
-            />
+            <StatusItem label="Mainchain" value={chainInfo?.mainchain_hash ? chainInfo.mainchain_hash.slice(0, 8) + '…' : '—'} />
+            <StatusItem label="Peers" value={chainInfo != null ? String(chainInfo.peer_count) : '—'} />
+            <StatusItem label="BTC (sats)" value={chainInfo?.bitcoin_total_sats != null ? String(chainInfo.bitcoin_total_sats) : '—'} />
+            <StatusItem label="QUIC" value={info?.quic != null ? (info.quic.connected ? 'connected' : 'disconnected') : '—'} />
           </View>
         </BlueCard>
 

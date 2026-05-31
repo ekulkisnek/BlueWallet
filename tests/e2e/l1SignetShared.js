@@ -6,7 +6,8 @@ function shellQuote(value) {
 
 function localDevPaths() {
   return {
-    localDev: process.env.L1_E2E_LOCAL_DEV_DIR || process.env.BITASSETS_E2E_LOCAL_DEV_DIR || '/Volumes/T705/code/drivechain-wallet-dev/local-dev',
+    localDev:
+      process.env.L1_E2E_LOCAL_DEV_DIR || process.env.BITASSETS_E2E_LOCAL_DEV_DIR || '/Volumes/T705/code/drivechain-wallet-dev/local-dev',
     composeFile: process.env.L1_E2E_COMPOSE_FILE || process.env.BITASSETS_E2E_COMPOSE_FILE || 'docker-compose.local-minimal.yml',
   };
 }

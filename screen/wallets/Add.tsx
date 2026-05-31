@@ -535,7 +535,7 @@ const WalletsAdd: React.FC = () => {
     } catch (Err: any) {
       setIsLoading(false);
       if (__DEV__) {
-        console.warn('liquid create failure', Err);
+        console.warn('liquid create failure', normalizeLiquidError(Err));
       }
       const userMessage = normalizeLiquidError(Err);
       return presentAlert({ message: userMessage || 'Could not create Liquid wallet' });
@@ -722,13 +722,14 @@ const WalletsAdd: React.FC = () => {
               <BlueSpacing20 />
               <BlueFormLabel>{loc.wallets.add_liquid || 'Liquid (L-BTC)'} RPC URL</BlueFormLabel>
               <BlueText style={styles.liquidRpcExplain}>
-                {loc.wallets.add_liquid_explain || 'Liquid sidechain (confidential L-BTC via embedded elementsd signer). From iOS Simulator use 127.0.0.1 (reaches your Mac).'}
+                {loc.wallets.add_liquid_explain ||
+                  'Liquid sidechain (confidential L-BTC via embedded elementsd signer). From iOS Simulator use 127.0.0.1 (reaches your Mac).'}
               </BlueText>
               <View style={[styles.lndUri, stylesHook.lndUri]}>
                 <TextInput
                   testID="LiquidRpcUrlInput"
                   value={state.liquidRpcUrl}
-                  onChangeText={(value) => dispatch({ type: ActionTypes.SET_LIQUID_RPC_URL, payload: value })}
+                  onChangeText={value => dispatch({ type: ActionTypes.SET_LIQUID_RPC_URL, payload: value })}
                   onSubmitEditing={Keyboard.dismiss}
                   placeholder={DEFAULT_LIQUID_RPC_URL}
                   clearButtonMode="while-editing"

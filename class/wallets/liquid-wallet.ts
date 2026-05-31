@@ -94,11 +94,7 @@ export function normalizeLiquidRpcUrlForRuntime(rpcUrl: string): string {
   if (!shouldUseCanonicalLiquidEndpoints()) {
     return validateLiquidRpcUrl(rpcUrl);
   }
-  if (
-    !rpcUrl.trim() ||
-    isLoopbackLiquidRpcUrl(rpcUrl) ||
-    (isRedWalletAndroidLanMacEndpointsOnly() && isUsbTunnelLiquidRpcUrl(rpcUrl))
-  ) {
+  if (!rpcUrl.trim() || isLoopbackLiquidRpcUrl(rpcUrl) || (isRedWalletAndroidLanMacEndpointsOnly() && isUsbTunnelLiquidRpcUrl(rpcUrl))) {
     return canonicalLiquidRpcUrlForRuntime();
   }
   return validateLiquidRpcUrl(rpcUrl);

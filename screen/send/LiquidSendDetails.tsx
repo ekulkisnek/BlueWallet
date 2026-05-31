@@ -69,6 +69,10 @@ const LiquidSendDetails: React.FC = () => {
     if (!destinationAddress.trim()) {
       return presentAlert({ message: loc.send.details_address_field_is_not_valid });
     }
+    const addr = destinationAddress.trim();
+    if (addr.length < 20 || !/^[a-zA-Z0-9:/.]+$/.test(addr)) {
+      return presentAlert({ message: 'Invalid Liquid address format' });
+    }
 
     if (!selectedAsset) {
       return presentAlert({ message: 'Please select an asset to send' });
@@ -94,7 +98,7 @@ const LiquidSendDetails: React.FC = () => {
     setIsLoading(true);
     try {
       const txid = await wallet.transferLiquid({
-        destinationAddress: destinationAddress.trim(),
+        destinationAddress: addr,
         assetId: selectedAsset,
         amount: numAmount,
         memo: memo.trim() || undefined,
@@ -249,6 +253,9 @@ const LiquidSendDetails: React.FC = () => {
           <BlueText style={styles.hint}>
             Amounts are in the asset's base unit (e.g. sats for L-BTC on Elements). Confirm with your node.
           </BlueText>
+          <BlueText style={styles.feeHint} testID="LiquidFeeEstimate">
+            Fee estimate: 0 sats (MVP demo network)
+          </BlueText>
         </BlueCard>
       </ScrollView>
 
@@ -359,6 +366,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     opacity: 0.6,
     marginTop: 8,
+  },
+  feeHint: {
+    fontSize: 11,
+    opacity: 0.7,
+    marginTop: 6,
+    color: '#81868e',
   },
 });
 

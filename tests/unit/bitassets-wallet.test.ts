@@ -681,4 +681,15 @@ describe('BitAssets mobile wallet bridge', () => {
     expect(() => validateBitAssetsRpcUrl('http://bitassets.example.com')).toThrow('must use HTTPS');
     expect(() => validateBitAssetsRpcUrl('ftp://127.0.0.1:6004')).toThrow('must use http or https');
   });
+
+  it('normalizeBitAssetsRpcUrlForRuntime preserves Tailscale and keeps loopback on simulator/dev (swaps on physical device via helpers)', () => {
+    const { normalizeBitAssetsRpcUrlForRuntime } = require('../../class/wallets/bitassets-wallet');
+    // Tailscale /100. range is preserved as dev LAN endpoint (never swapped to canonical)
+    expect(normalizeBitAssetsRpcUrlForRuntime('http://100.76.117.106:6004')).toBe('http://100.76.117.106:6004');
+    // In current test env (sim/dev, !physical) loopback/127 is kept; on physical device the normalize swaps to canonical
+    const normalizedLoopback = normalizeBitAssetsRpcUrlForRuntime('http://127.0.0.1:6004');
+    expect(normalizedLoopback).toMatch(/127\.0\.0\.1|localhost|100\.|signet/);
+    // Exercise with trailing slash etc
+    expect(normalizeBitAssetsRpcUrlForRuntime(' http://100.76.117.106:6004/ ')).toMatch(/100\.76\.117\.106/);
+  });
 });

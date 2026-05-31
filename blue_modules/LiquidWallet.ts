@@ -120,7 +120,9 @@ export class EmbeddedLiquidWalletClient implements LiquidWalletClient {
   }
 
   async preparePegOut(params: PegOutParams): Promise<string> {
-    return parseJsonOrString(await withNativeTimeout(requireNative().preparePegOut(JSON.stringify(params)), 'preparePegOut', this.timeoutMs));
+    return parseJsonOrString(
+      await withNativeTimeout(requireNative().preparePegOut(JSON.stringify(params)), 'preparePegOut', this.timeoutMs),
+    );
   }
 
   async clear(): Promise<void> {
@@ -168,7 +170,7 @@ export class JsonRpcLiquidWalletClient implements LiquidWalletClient {
         'Content-Type': 'application/json',
         accept: 'application/json',
       };
-      if (this.authHeader) headers['Authorization'] = this.authHeader;
+      if (this.authHeader) headers.Authorization = this.authHeader;
 
       const response = await fetch(this.url, {
         method: 'POST',
@@ -204,7 +206,7 @@ export class JsonRpcLiquidWalletClient implements LiquidWalletClient {
 
     const balances: LiquidBalances = {};
     if (typeof balance === 'number') {
-      balances['bitcoin'] = balance;
+      balances.bitcoin = balance;
     } else if (balance && typeof balance === 'object') {
       Object.assign(balances, balance);
     }

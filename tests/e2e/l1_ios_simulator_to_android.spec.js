@@ -31,8 +31,18 @@ async function dismissReceiveNotificationPrompts() {
       .withTimeout(5000);
     await element(by.text('Yes, I have.')).tap();
   } catch (_) {}
-  for (const label of ['No, and do not ask me again.', "Don't Allow", 'Don\u2019t Allow', 'Don‘t Allow', 'Allow', 'Allow While Using App']) {
-    try { await element(by.text(label)).tap(); await sleep(100); } catch (_) {}
+  for (const label of [
+    'No, and do not ask me again.',
+    "Don't Allow",
+    'Don\u2019t Allow',
+    'Don‘t Allow',
+    'Allow',
+    'Allow While Using App',
+  ]) {
+    try {
+      await element(by.text(label)).tap();
+      await sleep(100);
+    } catch (_) {}
   }
 }
 
@@ -55,9 +65,13 @@ async function scrollWalletIntoView(walletName) {
       await sleep(200);
     }
     // pull-to-refresh simulation to force list update post-fund
-    try { await element(by.id('WalletsList')).swipe('down', 'slow', 0.6); } catch (_) {}
+    try {
+      await element(by.id('WalletsList')).swipe('down', 'slow', 0.6);
+    } catch (_) {}
     await sleep(400);
-    try { await device.disableSynchronization(); } catch (_) {}
+    try {
+      await device.disableSynchronization();
+    } catch (_) {}
   }
   console.log('[L1_IOS_ANDROID_E2E] scrollWalletIntoView giving up after retries');
 }
@@ -89,11 +103,7 @@ async function openWalletReceiveScreen(walletName) {
       tapped = true;
       break;
     } catch (e) {
-      console.log(
-        '[L1_IOS_ANDROID_E2E] ReceiveButton tap attempt',
-        attempt + 1,
-        e && e.message ? e.message.slice(0, 120) : e,
-      );
+      console.log('[L1_IOS_ANDROID_E2E] ReceiveButton tap attempt', attempt + 1, e && e.message ? e.message.slice(0, 120) : e);
       try {
         await element(by.id('TransactionsListView')).swipe('up', 'slow', 0.3);
       } catch (_) {}
@@ -139,22 +149,26 @@ describe('L1 signet iOS simulator to Android receive', () => {
       try {
         await dismissGeneralAlerts();
       } catch (e) {
-        console.log('[L1_IOS_ANDROID_E2E] pre-create dismiss skipped (app busy/permission):', (e && e.message ? e.message.slice(0, 120) : e));
-        try { await device.disableSynchronization(); } catch (_) {}
+        console.log('[L1_IOS_ANDROID_E2E] pre-create dismiss skipped (app busy/permission):', e && e.message ? e.message.slice(0, 120) : e);
+        try {
+          await device.disableSynchronization();
+        } catch (_) {}
       }
       await resetToWalletsList(5);
       try {
         await dismissGeneralAlerts();
       } catch (e) {
-        console.log('[L1_IOS_ANDROID_E2E] post-reset dismiss skipped:', (e && e.message ? e.message.slice(0, 120) : e));
+        console.log('[L1_IOS_ANDROID_E2E] post-reset dismiss skipped:', e && e.message ? e.message.slice(0, 120) : e);
       }
       await device.disableSynchronization();
       await helperCreateWallet(walletLabel);
       try {
         await dismissGeneralAlerts();
       } catch (e) {
-        console.log('[L1_IOS_ANDROID_E2E] post-create dismiss skipped:', (e && e.message ? e.message.slice(0, 120) : e));
-        try { await device.disableSynchronization(); } catch (_) {}
+        console.log('[L1_IOS_ANDROID_E2E] post-create dismiss skipped:', e && e.message ? e.message.slice(0, 120) : e);
+        try {
+          await device.disableSynchronization();
+        } catch (_) {}
       }
       // helperCreateWallet already lands on WalletsList with wallet visible — avoid extra reset cycles.
       await expect(element(by.id(walletLabel))).toBeVisible();
@@ -209,7 +223,9 @@ describe('L1 signet iOS simulator to Android receive', () => {
           await dismissPostFundAlerts();
           await device.disableSynchronization();
           if (device.getPlatform() === 'ios') {
-            try { await device.reloadReactNative(); } catch (_) {}
+            try {
+              await device.reloadReactNative();
+            } catch (_) {}
           }
           await resetToWalletsList(3, true);
           await openSendViaHomeScanBip21(receiveAddress, sendBtc);

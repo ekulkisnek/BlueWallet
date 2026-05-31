@@ -93,6 +93,9 @@ const LiquidWalletScreen: React.FC = () => {
     info?.confirmed_utxo_count ?? wallet.liquidInfo?.confirmed_utxo_count ?? utxos.filter(utxo => utxo.confirmed).length;
   const mempoolCount = info?.mempool_utxo_count ?? wallet.liquidInfo?.mempool_utxo_count ?? utxos.filter(utxo => !utxo.confirmed).length;
 
+  const formatLbtcBalance = (asset: string, amount: number): string =>
+    asset.toLowerCase() === 'bitcoin' ? (amount / 100000000).toFixed(8) : String(amount);
+
   return (
     <View style={styles.flex}>
       <ScrollView style={[styles.root, stylesHook.root]} contentContainerStyle={styles.content} testID="LiquidWalletScreen">
@@ -121,7 +124,7 @@ const LiquidWalletScreen: React.FC = () => {
                   {asset}
                 </BlueText>
                 <BlueText bold testID={`LiquidBalanceAmount-${index}`}>
-                  {amount}
+                  {formatLbtcBalance(asset, amount)}
                 </BlueText>
               </View>
             ))

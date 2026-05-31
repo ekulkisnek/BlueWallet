@@ -183,18 +183,8 @@ const LiquidTools: React.FC = () => {
             Peg operations prepare data for mainchain &lt;-&gt; Liquid federation flows. Full end-to-end in later PR.
           </BlueText>
           <View style={styles.advancedButtons}>
-            <Button
-              testID="LiquidPreparePegInButton"
-              title="Prepare Peg-In"
-              onPress={() => onPreparePeg('in')}
-              disabled={isLoading}
-            />
-            <Button
-              testID="LiquidPreparePegOutButton"
-              title="Prepare Peg-Out"
-              onPress={() => onPreparePeg('out')}
-              disabled={isLoading}
-            />
+            <Button testID="LiquidPreparePegInButton" title="Prepare Peg-In" onPress={() => onPreparePeg('in')} disabled={isLoading} />
+            <Button testID="LiquidPreparePegOutButton" title="Prepare Peg-Out" onPress={() => onPreparePeg('out')} disabled={isLoading} />
           </View>
         </Section>
 
@@ -205,7 +195,7 @@ const LiquidTools: React.FC = () => {
             utxos.slice(0, 20).map((utxo, index) => (
               <View key={`${utxo.txid ?? index}:${utxo.vout ?? 0}`} style={styles.utxo}>
                 <BlueText selectable>
-                  {(utxo.assetId ?? (utxo as any).asset_id ?? 'L-BTC')} {utxo.amount ?? 0} {utxo.confirmed === false ? '(mempool)' : ''}
+                  {utxo.assetId ?? (utxo as any).asset_id ?? 'L-BTC'} {utxo.amount ?? 0} {utxo.confirmed === false ? '(mempool)' : ''}
                 </BlueText>
                 <BlueText selectable style={styles.txid}>
                   {utxo.txid ?? ''}:{utxo.vout ?? 0}

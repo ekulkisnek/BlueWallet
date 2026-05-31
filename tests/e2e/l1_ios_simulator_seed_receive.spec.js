@@ -18,8 +18,18 @@ async function dismissReceiveNotificationPrompts() {
       .withTimeout(5000);
     await element(by.text('Yes, I have.')).tap();
   } catch (_) {}
-  for (const label of ['No, and do not ask me again.', "Don't Allow", 'Don\u2019t Allow', 'Don‘t Allow', 'Allow', 'Allow While Using App']) {
-    try { await element(by.text(label)).tap(); await sleep(100); } catch (_) {}
+  for (const label of [
+    'No, and do not ask me again.',
+    "Don't Allow",
+    'Don\u2019t Allow',
+    'Don‘t Allow',
+    'Allow',
+    'Allow While Using App',
+  ]) {
+    try {
+      await element(by.text(label)).tap();
+      await sleep(100);
+    } catch (_) {}
   }
 }
 
@@ -41,9 +51,13 @@ async function scrollWalletIntoView(walletName) {
       } catch (_) {}
       await sleep(200);
     }
-    try { await element(by.id('WalletsList')).swipe('down', 'slow', 0.6); } catch (_) {}
+    try {
+      await element(by.id('WalletsList')).swipe('down', 'slow', 0.6);
+    } catch (_) {}
     await sleep(400);
-    try { await device.disableSynchronization(); } catch (_) {}
+    try {
+      await device.disableSynchronization();
+    } catch (_) {}
   }
   console.log('[L1_IOS_ANDROID_E2E] scrollWalletIntoView giving up after retries');
 }
@@ -86,8 +100,10 @@ describe('L1 signet iOS simulator receive seed', () => {
     try {
       await dismissGeneralAlerts();
     } catch (e) {
-      console.log('[L1_IOS_ANDROID_E2E] pre-create dismiss skipped:', (e && e.message ? e.message.slice(0, 180) : e));
-      try { await device.disableSynchronization(); } catch (_) {}
+      console.log('[L1_IOS_ANDROID_E2E] pre-create dismiss skipped:', e && e.message ? e.message.slice(0, 180) : e);
+      try {
+        await device.disableSynchronization();
+      } catch (_) {}
     }
     await resetToWalletsList(5);
     await device.disableSynchronization();
@@ -95,8 +111,10 @@ describe('L1 signet iOS simulator receive seed', () => {
     try {
       await dismissGeneralAlerts();
     } catch (e) {
-      console.log('[L1_IOS_ANDROID_E2E] post-create dismiss skipped:', (e && e.message ? e.message.slice(0, 180) : e));
-      try { await device.disableSynchronization(); } catch (_) {}
+      console.log('[L1_IOS_ANDROID_E2E] post-create dismiss skipped:', e && e.message ? e.message.slice(0, 180) : e);
+      try {
+        await device.disableSynchronization();
+      } catch (_) {}
     }
     await resetToWalletsList(5);
     try {
@@ -124,7 +142,9 @@ describe('L1 signet iOS simulator receive seed', () => {
       // retry once for flakey address render on sim
       await sleep(2000);
       await element(by.id('ReceiveButton')).tap();
-      await waitFor(element(by.id('AddressValue'))).toBeVisible().withTimeout(30000);
+      await waitFor(element(by.id('AddressValue')))
+        .toBeVisible()
+        .withTimeout(30000);
       const retryAddr = await extractTextFromElementById('AddressValue');
       console.log('[L1_IOS_ANDROID_E2E] ios_receive_address_retry=' + retryAddr);
     }

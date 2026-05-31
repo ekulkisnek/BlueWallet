@@ -5,8 +5,7 @@ import { mineBitAssetsTx } from './bitassetsE2eShared';
 
 const rpcUrl = process.env.BITASSETS_RPC_URL || 'http://127.0.0.1:6004';
 const walletLabel = 'BitAssets-Send-E2E';
-const destinationAddress =
-  process.env.BITASSETS_SEND_COINS_DESTINATION || '3AEJkR1vnY6jbQBN3oUgay7PNsUo';
+const destinationAddress = process.env.BITASSETS_SEND_COINS_DESTINATION || '3AEJkR1vnY6jbQBN3oUgay7PNsUo';
 let lastDepositTxid = '';
 
 describe('BitAssets Send Coins E2E', () => {
