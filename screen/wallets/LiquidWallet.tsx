@@ -157,7 +157,7 @@ const LiquidWalletScreen: React.FC = () => {
         <FButton
           onPress={() => {
             navigation.navigate('SendDetailsRoot', {
-              screen: 'SendDetails',
+              screen: 'LiquidSendDetails',
               params: { walletID },
             });
           }}

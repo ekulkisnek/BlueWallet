@@ -361,6 +361,9 @@ const WalletTransactions: React.FC<WalletTransactionsProps> = ({ route }: { rout
     if (wallet.type === BitAssetsWallet.type) {
       return navigate('BitAssetsWallet', { walletID });
     }
+    if (wallet.type === LiquidWallet.type) {
+      return navigate('LiquidWallet', { walletID });
+    }
 
     if (wallet.chain === Chain.OFFCHAIN) {
       return navigate('ScanLNDInvoiceRoot', { screen: 'ScanLNDInvoice', params: { walletID } });
@@ -648,6 +651,8 @@ const WalletTransactions: React.FC<WalletTransactionsProps> = ({ route }: { rout
             onPress={() => {
               if (wallet.type === BitAssetsWallet.type) {
                 navigate('BitAssetsWallet', { walletID });
+              } else if (wallet.type === LiquidWallet.type) {
+                navigate('LiquidWallet', { walletID });
               } else if (wallet.chain === Chain.OFFCHAIN) {
                 navigate('LNDCreateInvoiceRoot', { screen: 'LNDCreateInvoice', params: { walletID } });
               } else {

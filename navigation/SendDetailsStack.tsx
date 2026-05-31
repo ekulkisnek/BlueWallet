@@ -25,6 +25,7 @@ const CoinControl = lazy(() => import('../screen/send/CoinControl'));
 const PaymentCodesList = lazy(() => import('../screen/wallets/PaymentCodesList'));
 const ScanQRCode = lazy(() => import('../screen/send/ScanQRCode'));
 const BitAssetsSendDetails = lazy(() => import('../screen/send/BitAssetsSendDetails'));
+const LiquidSendDetails = lazy(() => import('../screen/send/LiquidSendDetails'));
 
 const SendDetailsComponent = withLazySuspense(SendDetails);
 const ConfirmComponent = withLazySuspense(Confirm);
@@ -38,6 +39,7 @@ const CoinControlComponent = withLazySuspense(CoinControl);
 const PaymentCodesListComponent = withLazySuspense(PaymentCodesList);
 const ScanQRCodeComponent = withLazySuspense(ScanQRCode);
 const BitAssetsSendDetailsComponent = withLazySuspense(BitAssetsSendDetails);
+const LiquidSendDetailsComponent = withLazySuspense(LiquidSendDetails);
 
 const SendDetailsStack = () => {
   const theme = useTheme();
@@ -61,6 +63,15 @@ const SendDetailsStack = () => {
       <Stack.Screen
         name="BitAssetsSendDetails"
         component={BitAssetsSendDetailsComponent}
+        options={navigationStyle({
+          title: loc.send.header,
+          statusBarStyle: 'light',
+          closeButtonPosition: CloseButtonPosition.Left,
+        })(theme)}
+      />
+      <Stack.Screen
+        name="LiquidSendDetails"
+        component={LiquidSendDetailsComponent}
         options={navigationStyle({
           title: loc.send.header,
           statusBarStyle: 'light',

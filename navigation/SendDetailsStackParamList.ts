@@ -47,6 +47,9 @@ export type SendDetailsStackParamList = {
   BitAssetsSendDetails: {
     walletID: string;
   };
+  LiquidSendDetails: {
+    walletID: string;
+  };
   CoinControlOutput: {
     walletID: string;
     utxo: Utxo;

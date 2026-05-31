@@ -12,3 +12,4 @@
 #import "NativeMenuElementsEmitterSpec.h"
 #import "NativeWidgetHelperSpec.h"
 #import "NativeBitAssetsWalletSpec.h"
+#import "NativeLiquidWalletSpec.h"

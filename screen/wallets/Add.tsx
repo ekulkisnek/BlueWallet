@@ -719,9 +719,9 @@ const WalletsAdd: React.FC = () => {
           {selectedWalletType === ButtonSelected.LIQUID && (
             <>
               <BlueSpacing20 />
-              <BlueFormLabel>Liquid (Elements ID5) RPC URL</BlueFormLabel>
+              <BlueFormLabel>{loc.wallets.add_liquid || 'Liquid (L-BTC)'} RPC URL</BlueFormLabel>
               <BlueText style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>
-                From iOS Simulator use 127.0.0.1 (reaches your Mac). Run your local ID5 stack first.
+                {loc.wallets.add_liquid_explain || 'Liquid sidechain (confidential L-BTC via embedded elementsd signer). From iOS Simulator use 127.0.0.1 (reaches your Mac).'}
               </BlueText>
               <View style={[styles.lndUri, stylesHook.lndUri]}>
                 <TextInput

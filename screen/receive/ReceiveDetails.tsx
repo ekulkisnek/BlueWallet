@@ -33,6 +33,7 @@ import { BlueSpacing40 } from '../../components/BlueSpacing';
 import { BlueLoading } from '../../components/BlueLoading';
 import SafeAreaScrollView from '../../components/SafeAreaScrollView';
 import { BitAssetsWallet } from '../../class/wallets/bitassets-wallet';
+import { LiquidWallet } from '../../class/wallets/liquid-wallet';
 
 const segmentControlValues = [loc.wallets.details_address, loc.bip47.payment_code];
 const HORIZONTAL_PADDING = 20;
@@ -111,7 +112,7 @@ const ReceiveDetails = () => {
 
   const setAddressBIP21Encoded = useCallback(
     (addr: string) => {
-      const newBip21encoded = wallet?.type === BitAssetsWallet.type ? addr : DeeplinkSchemaMatch.bip21encode(addr);
+      const newBip21encoded = wallet?.type === BitAssetsWallet.type || wallet?.type === LiquidWallet.type ? addr : DeeplinkSchemaMatch.bip21encode(addr);
       setParams({ address: addr });
       setBip21encoded(newBip21encoded);
       setShowAddress(true);
