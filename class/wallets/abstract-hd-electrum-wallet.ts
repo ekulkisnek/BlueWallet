@@ -140,7 +140,12 @@ export class AbstractHDElectrumWallet extends AbstractHDWallet {
     for (const pc of this._receive_payment_codes) {
       ret += this._getBalancesByPaymentCodeIndex(pc).c;
     }
-    return ret + (this.getUnconfirmedBalance() < 0 ? this.getUnconfirmedBalance() : 0);
+    const unconfirmedNegative = this.getUnconfirmedBalance() < 0 ? this.getUnconfirmedBalance() : 0;
+    // Electrs balance cache can lag after fund; fall back to fetched UTXOs (L1 signet E2E).
+    if (ret === 0 && this._utxo.length > 0) {
+      ret = this._utxo.reduce((sum, u) => sum + Number(u.value), 0);
+    }
+    return ret + unconfirmedNegative;
   }
 
   /**
@@ -1007,6 +1012,13 @@ export class AbstractHDElectrumWallet extends AbstractHDWallet {
         const sum = confirmedByAddress[addr];
         if (sum > 0) {
           this._balances_by_external_index[c] = { c: sum, u: 0 };
+        }
+      }
+      for (let c = 0; c < this.next_free_change_address_index + this.gap_limit; c++) {
+        const addr = this._getInternalAddressByIndex(c);
+        const sum = confirmedByAddress[addr];
+        if (sum > 0) {
+          this._balances_by_internal_index[c] = { c: sum, u: 0 };
         }
       }
     }

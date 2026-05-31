@@ -75,3 +75,10 @@ export function canonicalBitAssetsQuicUrlForRuntime(): string {
 }
 
 export { REDWALLET_SIGNET_BITASSETS_RPC_URL, REDWALLET_SIGNET_BITASSETS_QUIC_URL, REDWALLET_SIGNET_PHONE_HOST };
+
+/** Canonical LAN-reachable Elements RPC for Liquid (L-BTC) on physical devices (signet/regtest ID5 etc).
+ * Port 18443 is conventional for elementsd regtest; adjust via generated or caller override when Liquid signet endpoints added.
+ */
+export function canonicalLiquidRpcUrlForRuntime(): string {
+  return `http://${REDWALLET_SIGNET_PHONE_HOST}:18443`;
+}

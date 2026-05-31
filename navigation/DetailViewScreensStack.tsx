@@ -23,6 +23,8 @@ import WalletAddresses from '../screen/wallets/WalletAddresses';
 import WalletDetails from '../screen/wallets/WalletDetails';
 import BitAssetsTools from '../screen/wallets/BitAssetsTools';
 import BitAssetsWallet from '../screen/wallets/BitAssetsWallet';
+import LiquidTools from '../screen/wallets/LiquidTools';
+import LiquidWallet from '../screen/wallets/LiquidWallet';
 import GenerateWord from '../screen/wallets/generateWord';
 import SelectWallet from '../screen/wallets/SelectWallet';
 import WalletsList from '../screen/wallets/WalletsList';
@@ -157,6 +159,20 @@ const DetailViewStackScreensStack = () => {
         component={BitAssetsTools}
         options={navigationStyle({
           headerTitle: 'BitAssets Tools',
+        })(theme)}
+      />
+      <DetailViewStack.Screen
+        name="LiquidWallet"
+        component={LiquidWallet}
+        options={navigationStyle({
+          headerTitle: 'Liquid',
+        })(theme)}
+      />
+      <DetailViewStack.Screen
+        name="LiquidTools"
+        component={LiquidTools}
+        options={navigationStyle({
+          headerTitle: 'Liquid Tools',
         })(theme)}
       />
       <DetailViewStack.Screen

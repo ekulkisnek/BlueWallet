@@ -21,6 +21,7 @@ import * as fs from '../../blue_modules/fs';
 import triggerHapticFeedback, { HapticFeedbackTypes } from '../../blue_modules/hapticFeedback';
 import { LightningArkWallet, LightningCustodianWallet, MultisigHDWallet, WatchOnlyWallet } from '../../class';
 import { BitAssetsWallet } from '../../class/wallets/bitassets-wallet';
+import { LiquidWallet } from '../../class/wallets/liquid-wallet';
 import presentAlert, { AlertType } from '../../components/Alert';
 import { FButton, FContainer } from '../../components/FloatButtons';
 import { useTheme } from '../../components/themes';
@@ -191,7 +192,12 @@ const WalletTransactions: React.FC<WalletTransactionsProps> = ({ route }: { rout
         const oldBalance = wallet.getBalance();
         await wallet.fetchBalance();
         if (oldBalance !== wallet.getBalance()) smthChanged = true;
-        if (typeof wallet.fetchUtxo === 'function') {
+        if (
+          wallet.chain === Chain.ONCHAIN &&
+          wallet.type !== BitAssetsWallet.type &&
+          wallet.type !== LiquidWallet.type &&
+          typeof wallet.fetchUtxo === 'function'
+        ) {
           try {
             await wallet.fetchUtxo();
             if (oldBalance !== wallet.getBalance()) smthChanged = true;

@@ -39,6 +39,8 @@ export type DetailViewStackParamList = {
   WalletDetails: { walletID: string };
   BitAssetsWallet: { walletID: string };
   BitAssetsTools: { walletID: string };
+  LiquidWallet: { walletID: string };
+  LiquidTools: { walletID: string };
   TransactionDetails: { tx: Transaction; hash: string; walletID: string };
   TransactionStatus: { hash: string; walletID?: string };
   CPFP: {

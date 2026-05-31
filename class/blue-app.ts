@@ -20,6 +20,8 @@ import { LegacyWallet } from './wallets/legacy-wallet';
 import { LightningCustodianWallet } from './wallets/lightning-custodian-wallet';
 import { MultisigHDWallet } from './wallets/multisig-hd-wallet';
 import { BitAssetsWallet } from './wallets/bitassets-wallet';
+import { LiquidWallet } from './wallets/liquid-wallet';
+import { Chain } from '../models/bitcoinUnits';
 import { SegwitBech32Wallet } from './wallets/segwit-bech32-wallet';
 import { SegwitP2SHWallet } from './wallets/segwit-p2sh-wallet';
 import { SLIP39LegacyP2PKHWallet, SLIP39SegwitBech32Wallet, SLIP39SegwitP2SHWallet } from './wallets/slip39-wallets';
@@ -213,6 +215,7 @@ export class BlueApp {
       this.cachedPassword = undefined;
       await this.saveToDisk();
       await this.clearBitAssetsNativeSignerState(this.wallets);
+      await this.clearLiquidNativeSignerState(this.wallets);
       this.wallets = [];
       this.tx_metadata = {};
       this.counterparty_metadata = {};
@@ -243,6 +246,7 @@ export class BlueApp {
    */
   createFakeStorage = async (fakePassword: string): Promise<boolean> => {
     await this.clearBitAssetsNativeSignerState(this.wallets);
+    await this.clearLiquidNativeSignerState(this.wallets);
     usedBucketNum = false; // resetting currently used bucket so we wont overwrite it
     this.wallets = [];
     this.tx_metadata = {};
@@ -267,6 +271,13 @@ export class BlueApp {
     const bitAssetsWallet = wallets.find(wallet => wallet instanceof BitAssetsWallet) as BitAssetsWallet | undefined;
     if (!bitAssetsWallet && !clearOrphanState) return;
     const walletWithSigner = bitAssetsWallet ?? new BitAssetsWallet();
+    await walletWithSigner.clearNativeSigner();
+  };
+
+  private clearLiquidNativeSignerState = async (wallets: TWallet[], clearOrphanState = false): Promise<void> => {
+    const liquidWallet = wallets.find(wallet => wallet instanceof LiquidWallet) as LiquidWallet | undefined;
+    if (!liquidWallet && !clearOrphanState) return;
+    const walletWithSigner = liquidWallet ?? new LiquidWallet();
     await walletWithSigner.clearNativeSigner();
   };
 
@@ -473,6 +484,10 @@ export class BlueApp {
             unserializedWallet = BitAssetsWallet.fromJson(key) as unknown as BitAssetsWallet;
             unserializedWallet.init();
             break;
+          case LiquidWallet.type:
+            unserializedWallet = LiquidWallet.fromJson(key) as unknown as LiquidWallet;
+            unserializedWallet.init();
+            break;
           case LightningCustodianWallet.type: {
             unserializedWallet = LightningCustodianWallet.fromJson(key) as unknown as LightningCustodianWallet;
             let lndhub: false | any = false;
@@ -523,6 +538,9 @@ export class BlueApp {
       if (!this.wallets.some(wallet => wallet instanceof BitAssetsWallet)) {
         await this.clearBitAssetsNativeSignerState([], true);
       }
+      if (!this.wallets.some(wallet => wallet instanceof LiquidWallet)) {
+        await this.clearLiquidNativeSignerState([], true);
+      }
       return true;
     } else {
       return false; // failed loading data or loading/decryptin data
@@ -539,6 +557,7 @@ export class BlueApp {
     const ID = wallet.getID();
     const tempWallets = [];
     let shouldClearBitAssetsSigner = wallet instanceof BitAssetsWallet;
+    let shouldClearLiquidSigner = wallet instanceof LiquidWallet;
 
     for (const value of this.wallets) {
       if (value.getID() === ID) {
@@ -548,6 +567,9 @@ export class BlueApp {
         if (value instanceof BitAssetsWallet) {
           shouldClearBitAssetsSigner = false;
         }
+        if (value instanceof LiquidWallet) {
+          shouldClearLiquidSigner = false;
+        }
         tempWallets.push(value);
       }
     }
@@ -555,6 +577,11 @@ export class BlueApp {
       // The embedded signer is global to the native BitAssets wallet backend. Purge it
       // only when the last JS BitAssets wallet is removed.
       await (wallet as BitAssetsWallet).clearNativeSigner();
+    }
+    if (shouldClearLiquidSigner) {
+      // The embedded signer is global to the native Liquid wallet backend. Purge it
+      // only when the last JS Liquid wallet is removed.
+      await (wallet as LiquidWallet).clearNativeSigner();
     }
     this.wallets = tempWallets;
   };
@@ -720,6 +747,11 @@ export class BlueApp {
           delete (keyCloned as Partial<BitAssetsWallet>).bitassetsUtxos;
         }
 
+        if (key instanceof LiquidWallet) {
+          delete (keyCloned as Partial<LiquidWallet>).liquidInfo;
+          delete (keyCloned as Partial<LiquidWallet>).liquidUtxos;
+        }
+
         walletsToSave.push(JSON.stringify({ ...keyCloned, type: keyCloned.type }));
       }
       if (realm) realm.close();
@@ -809,17 +841,28 @@ export class BlueApp {
    */
   fetchWalletBalances = async (index?: number): Promise<void> => {
     console.log('fetchWalletBalances for wallet#', typeof index === 'undefined' ? '(all)' : index);
+    const syncWalletBalance = async (wallet: TWallet) => {
+      await wallet.fetchBalance();
+      if (
+        wallet.chain === Chain.ONCHAIN &&
+        wallet.type !== BitAssetsWallet.type &&
+        wallet.type !== LiquidWallet.type &&
+        typeof wallet.fetchUtxo === 'function'
+      ) {
+        await wallet.fetchUtxo();
+      }
+    };
     if (index || index === 0) {
       let c = 0;
       for (const wallet of this.wallets) {
         if (c++ === index) {
-          await wallet.fetchBalance();
+          await syncWalletBalance(wallet);
         }
       }
     } else {
       for (const wallet of this.wallets) {
         console.log('fetching balance for', wallet.getLabel());
-        await wallet.fetchBalance();
+        await syncWalletBalance(wallet);
       }
     }
   };

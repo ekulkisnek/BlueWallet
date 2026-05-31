@@ -30,7 +30,7 @@ import { LightningArkWallet } from '../../class/wallets/lightning-ark-wallet.ts'
 import { resetScanWasBBQR } from '../../helpers/scan-qr.ts';
 import { BitAssetsWallet, hasBitAssetsWallet } from '../../class/wallets/bitassets-wallet';
 import { validateBitAssetsRpcUrl } from '../../blue_modules/BitAssetsWalletForms';
-import { REDWALLET_SIGNET_BITASSETS_RPC_URL } from '../../helpers/redwalletSignetEndpoints.generated';
+import { REDWALLET_SIGNET_BITASSETS_RPC_URL, REDWALLET_SIGNET_PHONE_HOST } from '../../helpers/redwalletSignetEndpoints.generated';
 import { LiquidWallet, hasLiquidWallet } from '../../class/wallets/liquid-wallet';
 import { validateLiquidRpcUrl } from '../../blue_modules/LiquidWalletForms';
 
@@ -51,6 +51,26 @@ const DEFAULT_BITASSETS_RPC_URL = (() => {
     }
   }
   return 'http://127.0.0.1:6004';
+})();
+
+const DEFAULT_LIQUID_RPC_URL = (() => {
+  const phoneHost = REDWALLET_SIGNET_PHONE_HOST;
+  if (Platform.OS === 'android') {
+    try {
+      if (!isEmulatorSync()) return `http://${phoneHost}:18443`;
+    } catch {
+      return `http://${phoneHost}:18443`;
+    }
+    return 'http://10.0.2.2:18443';
+  }
+  if (Platform.OS === 'ios') {
+    try {
+      if (!isEmulatorSync()) return `http://${phoneHost}:18443`;
+    } catch {
+      // Fall through to the simulator/local default if device detection is unavailable.
+    }
+  }
+  return 'http://127.0.0.1:18443';
 })();
 
 enum ButtonSelected {
@@ -544,6 +564,14 @@ const WalletsAdd: React.FC = () => {
     confirmResetEntropy(ButtonSelected.BITASSETS);
   };
 
+  const handleOnLiquidButtonPressed = () => {
+    Keyboard.dismiss();
+    if (!state.liquidRpcUrl.trim() && DEFAULT_LIQUID_RPC_URL) {
+      dispatch({ type: ActionTypes.SET_LIQUID_RPC_URL, payload: DEFAULT_LIQUID_RPC_URL });
+    }
+    confirmResetEntropy(ButtonSelected.LIQUID);
+  };
+
   const handleOnBitcoinButtonPressed = () => {
     setBackdoorPressed(prevState => prevState + 1);
     Keyboard.dismiss();
@@ -621,7 +649,7 @@ const WalletsAdd: React.FC = () => {
               buttonType="Liquid"
               testID="ActivateLiquidButton"
               active={selectedWalletType === ButtonSelected.LIQUID}
-              onPress={() => confirmResetEntropy(ButtonSelected.LIQUID)}
+              onPress={handleOnLiquidButtonPressed}
               size={styles.button}
             />
           ) : null}
@@ -692,6 +720,9 @@ const WalletsAdd: React.FC = () => {
             <>
               <BlueSpacing20 />
               <BlueFormLabel>Liquid (Elements ID5) RPC URL</BlueFormLabel>
+              <BlueText style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>
+                From iOS Simulator use 127.0.0.1 (reaches your Mac). Run your local ID5 stack first.
+              </BlueText>
               <View style={[styles.lndUri, stylesHook.lndUri]}>
                 <TextInput
                   testID="LiquidRpcUrlInput"

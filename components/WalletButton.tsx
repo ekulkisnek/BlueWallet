@@ -54,6 +54,12 @@ const buttonDetails: Record<string, ButtonDetails> = {
     explain: 'Drivechain assets with embedded Floresta',
     borderColorActive: 'newBlue',
   },
+  Liquid: {
+    image: require('../img/addWallet/bitcoin.png'),
+    title: 'Liquid (L-BTC)',
+    explain: 'Liquid sidechain (confidential L-BTC via elementsd)',
+    borderColorActive: 'newBlue',
+  },
 };
 
 const WalletButton: React.FC<WalletButtonProps> = ({ buttonType, testID, onPress, size, active }) => {
