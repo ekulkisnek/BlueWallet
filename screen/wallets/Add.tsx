@@ -31,6 +31,8 @@ import { resetScanWasBBQR } from '../../helpers/scan-qr.ts';
 import { BitAssetsWallet, hasBitAssetsWallet } from '../../class/wallets/bitassets-wallet';
 import { validateBitAssetsRpcUrl } from '../../blue_modules/BitAssetsWalletForms';
 import { REDWALLET_SIGNET_BITASSETS_RPC_URL } from '../../helpers/redwalletSignetEndpoints.generated';
+import { LiquidWallet, hasLiquidWallet } from '../../class/wallets/liquid-wallet';
+import { validateLiquidRpcUrl } from '../../blue_modules/LiquidWalletForms';
 
 const DEFAULT_BITASSETS_RPC_URL = (() => {
   if (Platform.OS === 'android') {
@@ -59,12 +61,14 @@ enum ButtonSelected {
   VAULT = 'VAULT',
   ARK = 'ARK',
   BITASSETS = 'BITASSETS',
+  LIQUID = 'LIQUID',
 }
 
 interface State {
   isLoading: boolean;
   walletBaseURI: string;
   bitAssetsRpcUrl: string;
+  liquidRpcUrl: string;
   selectedIndex: number;
   label: string;
   selectedWalletType: ButtonSelected;
@@ -74,6 +78,7 @@ const ActionTypes = {
   SET_LOADING: 'SET_LOADING',
   SET_WALLET_BASE_URI: 'SET_WALLET_BASE_URI',
   SET_BITASSETS_RPC_URL: 'SET_BITASSETS_RPC_URL',
+  SET_LIQUID_RPC_URL: 'SET_LIQUID_RPC_URL',
   SET_SELECTED_INDEX: 'SET_SELECTED_INDEX',
   SET_LABEL: 'SET_LABEL',
   SET_SELECTED_WALLET_TYPE: 'SET_SELECTED_WALLET_TYPE',
@@ -101,6 +106,7 @@ const initialState: State = {
   isLoading: true,
   walletBaseURI: '',
   bitAssetsRpcUrl: '',
+  liquidRpcUrl: '',
   selectedIndex: 0,
   label: '',
   selectedWalletType: ButtonSelected.ONCHAIN,
@@ -114,6 +120,8 @@ const walletReducer = (state: State, action: TAction): State => {
       return { ...state, walletBaseURI: action.payload };
     case ActionTypes.SET_BITASSETS_RPC_URL:
       return { ...state, bitAssetsRpcUrl: action.payload };
+    case ActionTypes.SET_LIQUID_RPC_URL:
+      return { ...state, liquidRpcUrl: action.payload };
     case ActionTypes.SET_SELECTED_INDEX:
       return { ...state, selectedIndex: action.payload, selectedWalletType: ButtonSelected.ONCHAIN };
     case ActionTypes.SET_LABEL:
@@ -352,6 +360,8 @@ const WalletsAdd: React.FC = () => {
       createLightningArkWallet();
     } else if (selectedWalletType === ButtonSelected.BITASSETS) {
       createBitAssetsWallet();
+    } else if (selectedWalletType === ButtonSelected.LIQUID) {
+      createLiquidWallet();
     } else if (selectedWalletType === ButtonSelected.ONCHAIN) {
       let w: HDSegwitBech32Wallet | HDLegacyP2PKHWallet | HDTaprootWallet;
 
@@ -489,6 +499,34 @@ const WalletsAdd: React.FC = () => {
     goBack();
   };
 
+  const createLiquidWallet = async () => {
+    if (hasLiquidWallet(wallets)) {
+      setIsLoading(false);
+      return presentAlert({ message: 'A Liquid wallet already exists on this device.' });
+    }
+
+    const wallet = new LiquidWallet();
+    wallet.setLabel(label || 'Liquid (ID5)');
+
+    const rpcUrl = validateLiquidRpcUrl(state.liquidRpcUrl || DEFAULT_LIQUID_RPC_URL);
+
+    try {
+      await wallet.generate(rpcUrl);
+    } catch (Err: any) {
+      setIsLoading(false);
+      if (__DEV__) {
+        console.warn('liquid create failure', Err);
+      }
+      return presentAlert({ message: Err.message ?? 'Could not create Liquid wallet' });
+    }
+
+    addWallet(wallet);
+    await saveToDisk();
+
+    triggerHapticFeedback(HapticFeedbackTypes.NotificationSuccess);
+    goBack();
+  };
+
   const navigateToImportWallet = () => {
     navigate('ImportWallet');
   };
@@ -578,6 +616,15 @@ const WalletsAdd: React.FC = () => {
               size={styles.button}
             />
           ) : null}
+          {isTestnet ? (
+            <WalletButton
+              buttonType="Liquid"
+              testID="ActivateLiquidButton"
+              active={selectedWalletType === ButtonSelected.LIQUID}
+              onPress={() => confirmResetEntropy(ButtonSelected.LIQUID)}
+              size={styles.button}
+            />
+          ) : null}
           {!isTestnet && backdoorPressed >= 20 ? (
             <WalletButton
               buttonType="LightningArk"
@@ -641,6 +688,30 @@ const WalletsAdd: React.FC = () => {
             </>
           )}
 
+          {selectedWalletType === ButtonSelected.LIQUID && (
+            <>
+              <BlueSpacing20 />
+              <BlueFormLabel>Liquid (Elements ID5) RPC URL</BlueFormLabel>
+              <View style={[styles.lndUri, stylesHook.lndUri]}>
+                <TextInput
+                  testID="LiquidRpcUrlInput"
+                  value={state.liquidRpcUrl}
+                  onChangeText={(value) => dispatch({ type: ActionTypes.SET_LIQUID_RPC_URL, payload: value })}
+                  onSubmitEditing={Keyboard.dismiss}
+                  placeholder={DEFAULT_LIQUID_RPC_URL}
+                  clearButtonMode="while-editing"
+                  autoCapitalize="none"
+                  textContentType="URL"
+                  autoCorrect={false}
+                  placeholderTextColor="#81868e"
+                  style={styles.textInputCommon}
+                  editable={!isLoading}
+                  underlineColorAndroid="transparent"
+                />
+              </View>
+            </>
+          )}
+
           <BlueSpacing20 />
           {!isLoading ? (
             <>
@@ -650,7 +721,8 @@ const WalletsAdd: React.FC = () => {
                 disabled={
                   !selectedWalletType ||
                   (selectedWalletType === ButtonSelected.OFFCHAIN && (walletBaseURI ?? '').trim().length === 0) ||
-                  (selectedWalletType === ButtonSelected.BITASSETS && bitAssetsRpcUrl.trim().length === 0)
+                  (selectedWalletType === ButtonSelected.BITASSETS && bitAssetsRpcUrl.trim().length === 0) ||
+                  (selectedWalletType === ButtonSelected.LIQUID && (state.liquidRpcUrl ?? '').trim().length === 0)
                 }
                 onPress={createWallet}
               />
