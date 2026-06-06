@@ -773,7 +773,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "export EXTRA_PACKAGER_ARGS=\"--sourcemap-output $TMPDIR/$(md5 -qs \"$CONFIGURATION_BUILD_DIR\")-main.jsbundle.map\"\nexport NODE_BINARY=$(which node)\n../node_modules/react-native/scripts/react-native-xcode.sh\n\n";
+			shellScript = "export EXTRA_PACKAGER_ARGS=\"--sourcemap-output $TMPDIR/$(md5 -qs \"$CONFIGURATION_BUILD_DIR\")-main.jsbundle.map\"\nexport NODE_BINARY=/opt/homebrew/bin/node\n../node_modules/react-native/scripts/react-native-xcode.sh\n\n";
 		};
 		3B467A525D105B531AB91B81 /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -815,7 +815,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = "/usr/bin/env ruby";
-			shellScript = "api_key = nil # Insert your key here to use it directly from this script\n\n# Attempt to get the API key from an environment variable\nunless api_key\n  api_key = ENV[\"BUGSNAG_API_KEY\"]\n\n  # If not present, attempt to lookup the value from the Info.plist\n  unless api_key\n    info_plist_path = \"#{ENV[\"BUILT_PRODUCTS_DIR\"]}/#{ENV[\"INFOPLIST_PATH\"]}\"\n    plist_buddy_response = `/usr/libexec/PlistBuddy -c \"print :bugsnag:apiKey\" \"#{info_plist_path}\"`\n    plist_buddy_response = `/usr/libexec/PlistBuddy -c \"print :BugsnagAPIKey\" \"#{info_plist_path}\"` if !$?.success?\n    api_key = plist_buddy_response if $?.success?\n  end\nend\n\nfail(\"No Bugsnag API key detected - add your key to your Info.plist, BUGSNAG_API_KEY environment variable or this Run Script phase\") unless api_key\n\nfork do\n  Process.setsid\n  STDIN.reopen(\"/dev/null\")\n  STDOUT.reopen(\"/dev/null\", \"a\")\n  STDERR.reopen(\"/dev/null\", \"a\")\n\n  require 'shellwords'\n\n  Dir[\"#{ENV[\"DWARF_DSYM_FOLDER_PATH\"]}/*/Contents/Resources/DWARF/*\"].each do |dsym|\n    curl_command = \"curl --http1.1 -F dsym=@#{Shellwords.escape(dsym)} -F projectRoot=#{Shellwords.escape(ENV[\"PROJECT_DIR\"])} \"\n    curl_command += \"-F apiKey=#{Shellwords.escape(api_key)} \"\n    curl_command += \"https://upload.bugsnag.com/\"\n    system(curl_command)\n  end\nend\n\n";
+			shellScript = "if ENV[\"REDWALLET_ENABLE_BUGSNAG_UPLOAD\"] != \"1\"\n  puts \"Skipping Bugsnag dSYM upload; set REDWALLET_ENABLE_BUGSNAG_UPLOAD=1 to enable it.\"\n  exit 0\nend\n\napi_key = nil # Insert your key here to use it directly from this script\n\n# Attempt to get the API key from an environment variable\nunless api_key\n  api_key = ENV[\"BUGSNAG_API_KEY\"]\n\n  # If not present, attempt to lookup the value from the Info.plist\n  unless api_key\n    info_plist_path = \"#{ENV[\"BUILT_PRODUCTS_DIR\"]}/#{ENV[\"INFOPLIST_PATH\"]}\"\n    plist_buddy_response = `/usr/libexec/PlistBuddy -c \"print :bugsnag:apiKey\" \"#{info_plist_path}\"`\n    plist_buddy_response = `/usr/libexec/PlistBuddy -c \"print :BugsnagAPIKey\" \"#{info_plist_path}\"` if !$?.success?\n    api_key = plist_buddy_response if $?.success?\n  end\nend\n\nfail(\"No Bugsnag API key detected - add your key to your Info.plist, BUGSNAG_API_KEY environment variable or this Run Script phase\") unless api_key\n\nfork do\n  Process.setsid\n  STDIN.reopen(\"/dev/null\")\n  STDOUT.reopen(\"/dev/null\", \"a\")\n  STDERR.reopen(\"/dev/null\", \"a\")\n\n  require 'shellwords'\n\n  Dir[\"#{ENV[\"DWARF_DSYM_FOLDER_PATH\"]}/*/Contents/Resources/DWARF/*\"].each do |dsym|\n    curl_command = \"curl --http1.1 -F dsym=@#{Shellwords.escape(dsym)} -F projectRoot=#{Shellwords.escape(ENV[\"PROJECT_DIR\"])} \"\n    curl_command += \"-F apiKey=#{Shellwords.escape(api_key)} \"\n    curl_command += \"https://upload.bugsnag.com/\"\n    system(curl_command)\n  end\nend\n\n";
 			showEnvVarsInLog = 0;
 		};
 		A8D9893AE3CD454A9094B651 /* Upload source maps to Bugsnag */ = {
@@ -834,7 +834,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "SOURCE_MAP=\"$TMPDIR/$(md5 -qs \"$CONFIGURATION_BUILD_DIR\")-main.jsbundle.map\" ../node_modules/@bugsnag/react-native/bugsnag-react-native-xcode.sh\n\n";
+			shellScript = "if [ \"$REDWALLET_ENABLE_BUGSNAG_UPLOAD\" != \"1\" ]; then\n  echo \"Skipping Bugsnag source map upload; set REDWALLET_ENABLE_BUGSNAG_UPLOAD=1 to enable it.\"\n  exit 0\nfi\nexport PATH=\"/opt/homebrew/bin:/opt/homebrew/opt/node/bin:$PATH\"\nSOURCE_MAP=\"$TMPDIR/$(md5 -qs \"$CONFIGURATION_BUILD_DIR\")-main.jsbundle.map\" ../node_modules/@bugsnag/react-native/bugsnag-react-native-xcode.sh\n\n";
 		};
 		B4BA50072FA1BD0000AAAA16 /* Verify BitAssets Rust Mobile Library */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -1018,9 +1018,9 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = BlueWallet/BlueWallet.entitlements;
+				CODE_SIGN_ENTITLEMENTS = BlueWallet/PersonalDebug.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1703259999;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = "";
@@ -1054,7 +1054,7 @@
 				);
 				PRESERVE_DEAD_CODE_INITS_AND_TERMS = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = com.layertwolabs.bluewallet;
-				"PRODUCT_BUNDLE_IDENTIFIER[sdk=iphoneos*]" = com.lukekensik.redwallet.dev;
+				"PRODUCT_BUNDLE_IDENTIFIER[sdk=iphoneos*]" = com.lukekensik.redwallet.twophones;
 				PRODUCT_NAME = BlueWallet;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -1075,12 +1075,12 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = BlueWallet/BlueWalletRelease.entitlements;
+				CODE_SIGN_ENTITLEMENTS = BlueWallet/PersonalDebug.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1703259999;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = MG8A844939;
+				DEVELOPMENT_TEAM = "";
 				ENABLE_BITCODE = NO;
 				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = YES;
 				HEADER_SEARCH_PATHS = "$(inherited)";
@@ -1106,7 +1106,7 @@
 				);
 				PRESERVE_DEAD_CODE_INITS_AND_TERMS = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = com.layertwolabs.bluewallet;
-				"PRODUCT_BUNDLE_IDENTIFIER[sdk=iphoneos*]" = com.lukekensik.redwallet.dev;
+				"PRODUCT_BUNDLE_IDENTIFIER[sdk=iphoneos*]" = com.lukekensik.redwallet.twophones;
 				PRODUCT_NAME = BlueWallet;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -1154,7 +1154,7 @@
 				CXX = "";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
-				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = i386;
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = "i386 x86_64";
 				GCC_C_LANGUAGE_STANDARD = gnu99;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -1224,7 +1224,7 @@
 				CXX = "";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = i386;
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = "i386 x86_64";
 				GCC_C_LANGUAGE_STANDARD = gnu99;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = (

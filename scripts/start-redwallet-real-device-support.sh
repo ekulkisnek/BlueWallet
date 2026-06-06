@@ -9,14 +9,21 @@ if [[ -x "$LOCAL_DEV/scripts/ensure-colima-overcommit.sh" ]]; then
   bash "$LOCAL_DEV/scripts/ensure-colima-overcommit.sh" >/dev/null 2>&1 || true
 fi
 ENV_FILE="$(ls -t "$LOG_ROOT"/signet-endpoints-*/redwallet-signet.env 2>/dev/null | head -1 || true)"
-METRO_URL="${METRO_URL:-http://100.76.117.106:8081}"
-COLLECTOR_URL="${REDWALLET_LOG_COLLECTOR_HEALTH_URL:-http://192.168.1.50:6123/health}"
-COMMAND_URL="${REDWALLET_BITASSETS_COMMAND_HEALTH_URL:-http://192.168.1.50:6124/health}"
+EXPLICIT_METRO_URL="${METRO_URL:-}"
+EXPLICIT_COLLECTOR_URL="${REDWALLET_LOG_COLLECTOR_HEALTH_URL:-}"
+EXPLICIT_COMMAND_URL="${REDWALLET_BITASSETS_COMMAND_HEALTH_URL:-}"
+DEFAULT_PHONE_HOST="${REDWALLET_FORCE_PHONE_HOST:-${REDWALLET_SIGNET_PHONE_HOST:-100.76.117.106}}"
+METRO_URL="${EXPLICIT_METRO_URL:-http://${DEFAULT_PHONE_HOST}:8081}"
+COLLECTOR_URL="${EXPLICIT_COLLECTOR_URL:-http://${DEFAULT_PHONE_HOST}:6123/health}"
+COMMAND_URL="${EXPLICIT_COMMAND_URL:-http://${DEFAULT_PHONE_HOST}:6124/health}"
+LIQUID_RPC_URL="${REDWALLET_LIQUID_RPC_URL:-http://${DEFAULT_PHONE_HOST}:18443}"
 
 if [[ -n "$ENV_FILE" && -f "$ENV_FILE" ]]; then
   # shellcheck disable=SC1090
   source "$ENV_FILE"
-  METRO_URL="${METRO_URL:-http://100.76.117.106:8081}"
+  METRO_URL="${EXPLICIT_METRO_URL:-${METRO_URL:-http://100.76.117.106:8081}}"
+  COLLECTOR_URL="${EXPLICIT_COLLECTOR_URL:-$COLLECTOR_URL}"
+  COMMAND_URL="${EXPLICIT_COMMAND_URL:-$COMMAND_URL}"
 fi
 
 check() {
@@ -52,6 +59,7 @@ command_server_ok() {
 metro_ok=0
 collector_ok=0
 command_ok=0
+liquid_ok=0
 check metro "${METRO_URL}/status" && metro_ok=1 || true
 check collector "$COLLECTOR_URL" && collector_ok=1 || true
 if command_server_ok; then
@@ -59,6 +67,13 @@ if command_server_ok; then
   command_ok=1
 else
   echo "DOWN command $COMMAND_URL (no /health and no createWallet /command)"
+fi
+liquid_probe="$(curl -sS -m 5 -H 'Content-Type: application/json' --data '{"jsonrpc":"1.0","id":"redwallet-liquid-probe","method":"getblockcount","params":[]}' "$LIQUID_RPC_URL/" 2>/dev/null || true)"
+if [[ "$liquid_probe" == *'"result":'* && "$liquid_probe" != *'"error":{'* ]]; then
+  echo "OK   liquid $LIQUID_RPC_URL ($(printf '%s' "$liquid_probe" | tr -d '\n'))"
+  liquid_ok=1
+else
+  echo "DOWN liquid $LIQUID_RPC_URL (${liquid_probe:-no response})"
 fi
 
 echo ""
@@ -72,11 +87,14 @@ fi
 if [[ "$command_ok" -eq 0 ]]; then
   echo "  BITASSETS_RPC_URL='${BITASSETS_RPC_URL:-http://100.76.117.106:6004}' node '$ROOT_DIR/scripts/redwallet-bitassets-command-server.js'"
 fi
+if [[ "$liquid_ok" -eq 0 ]]; then
+  echo "  tmux new-session -d -s redwallet-elements-rpc-proxy \"cd '$ROOT_DIR' && exec scripts/start-redwallet-elements-rpc-proxy.sh\""
+fi
 echo ""
 echo "Then (phone unlocked + USB connected):"
 echo "  cd '$ROOT_DIR' && scripts/retry-phone-origin-bitassets-proof.sh"
 
-if [[ "$metro_ok" -eq 1 && "$collector_ok" -eq 1 && "$command_ok" -eq 1 ]]; then
+if [[ "$metro_ok" -eq 1 && "$collector_ok" -eq 1 && "$command_ok" -eq 1 && "$liquid_ok" -eq 1 ]]; then
   exit 0
 fi
 exit 1

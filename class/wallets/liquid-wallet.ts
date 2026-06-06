@@ -1,5 +1,7 @@
 import {
+  deriveLiquidLiteWalletQuicUrl,
   EmbeddedLiquidWalletClient,
+  JsonRpcLiquidWalletClient,
   LiquidWalletClient,
   LiquidWalletInfo,
   LiquidUtxo,
@@ -13,7 +15,10 @@ import { Platform } from 'react-native';
 import { isEmulatorSync } from 'react-native-device-info';
 import { isRedWalletCoreDeviceUsbTunnelHost } from '../../helpers/redwalletRealDeviceEndpoints';
 import {
+  canonicalLiquidElectrumUrlForRuntime,
   canonicalLiquidRpcUrlForRuntime,
+  canonicalLiquidQuicUrlForRuntime,
+  isRedWalletAndroidRealDeviceProofEnabled,
   isRedWalletAndroidLanMacEndpointsOnly,
   isRedWalletAndroidPhysicalDevice,
   isRedWalletIosPhysicalDevice,
@@ -71,6 +76,11 @@ function isPhysicalDeviceForLiquid(): boolean {
     return isRedWalletAndroidPhysicalDevice();
   }
   if (Platform.OS !== 'ios') return false;
+  try {
+    if (isEmulatorSync()) return false;
+  } catch {
+    // ignore
+  }
   // main.jsbundle is built with --dev false; __DEV__ is false on real devices using embedded bundle.
   if (!__DEV__) return true;
   try {
@@ -81,7 +91,70 @@ function isPhysicalDeviceForLiquid(): boolean {
   }
 }
 
+function isLoopbackLiquidQuicUrl(quicUrl: string): boolean {
+  if (!quicUrl.trim()) return true;
+  const host = quicUrl.split(':')[0] ?? '';
+  return isLoopbackLiquidHost(host);
+}
+
+function isUsbTunnelLiquidQuicUrl(quicUrl: string): boolean {
+  if (!quicUrl.trim()) return false;
+  const host = quicUrl.split(':')[0] ?? '';
+  return isRedWalletCoreDeviceUsbTunnelHost(host);
+}
+
+function shouldDeriveLoopbackLiquidQuicUrl(rpcUrl: string): boolean {
+  if (Platform.OS !== 'ios' || !isLoopbackLiquidRpcUrl(rpcUrl)) return true;
+  try {
+    return !isEmulatorSync();
+  } catch {
+    return true;
+  }
+}
+
+export function normalizeLiquidLiteWalletQuicUrlForRuntime(rpcUrl: string, quicUrl: string): string {
+  const explicit = quicUrl.trim().toLowerCase();
+  if (explicit === 'none' || explicit === 'disabled' || explicit === 'off') {
+    return '';
+  }
+  if (!rpcUrl.trim() && !quicUrl.trim()) {
+    return '';
+  }
+  const resolvedRpc = normalizeLiquidRpcUrlForRuntime(rpcUrl);
+  const derived = quicUrl || (shouldDeriveLoopbackLiquidQuicUrl(resolvedRpc) ? deriveLiquidLiteWalletQuicUrl(resolvedRpc) : '') || '';
+  if (isRedWalletAndroidRealDeviceProofEnabled() && isLoopbackLiquidQuicUrl(derived)) {
+    return derived;
+  }
+  if (
+    isPhysicalDeviceForLiquid() &&
+    (!derived.trim() ||
+      isLoopbackLiquidQuicUrl(derived) ||
+      (isRedWalletAndroidLanMacEndpointsOnly() && isUsbTunnelLiquidQuicUrl(derived)))
+  ) {
+    return canonicalLiquidQuicUrlForRuntime();
+  }
+  if (!shouldUseCanonicalLiquidEndpoints()) {
+    return derived;
+  }
+  if (
+    !derived.trim() ||
+    isLoopbackLiquidQuicUrl(derived) ||
+    (isRedWalletAndroidLanMacEndpointsOnly() && isUsbTunnelLiquidQuicUrl(derived))
+  ) {
+    return canonicalLiquidQuicUrlForRuntime();
+  }
+  return derived;
+}
+
+function isLiquidLiteWalletQuicDisabled(quicUrl?: string | null): boolean {
+  const explicit = String(quicUrl ?? '').trim().toLowerCase();
+  return explicit === 'none' || explicit === 'disabled' || explicit === 'off';
+}
+
 export function normalizeLiquidRpcUrlForRuntime(rpcUrl: string): string {
+  if (isRedWalletAndroidRealDeviceProofEnabled() && isLoopbackLiquidRpcUrl(rpcUrl)) {
+    return validateLiquidRpcUrl(rpcUrl);
+  }
   if (
     isPhysicalDeviceForLiquid() &&
     (!rpcUrl.trim() ||
@@ -100,6 +173,17 @@ export function normalizeLiquidRpcUrlForRuntime(rpcUrl: string): string {
   return validateLiquidRpcUrl(rpcUrl);
 }
 
+function shouldUseJsonRpcLiquidClient(rpcUrl: string): boolean {
+  try {
+    const url = new URL(validateLiquidRpcUrl(rpcUrl));
+    return url.username.length > 0 || url.password.length > 0 || url.pathname.includes('/wallet/');
+  } catch {
+    return false;
+  }
+}
+
+export const EMBEDDED_LIQUID_PLACEHOLDER_RPC_URL = 'http://127.0.0.1:18443';
+
 export class LiquidWallet extends LegacyWallet {
   static readonly type = 'liquidWallet';
   static readonly typeReadable = 'Liquid (L-BTC)';
@@ -113,6 +197,10 @@ export class LiquidWallet extends LegacyWallet {
   chain = Chain.OFFCHAIN;
   _address: string | false = false;
   elementsRpcUrl = '';
+  liquidWalletMode: 'lwk' | 'utreexo' | 'elements-rpc' | 'local-only' = 'lwk';
+  liquidElectrumUrl = '';
+  liquidLiteWalletQuicUrl = '';
+  liquidLiteWalletQuicDisabled = false;
   liquidInfo?: LiquidWalletInfo;
   liquidUtxos: LiquidUtxo[] = [];
 
@@ -132,14 +220,41 @@ export class LiquidWallet extends LegacyWallet {
     }
     if (shouldUseCanonicalLiquidEndpoints() && this.elementsRpcUrl) {
       this.elementsRpcUrl = normalizeLiquidRpcUrlForRuntime(this.elementsRpcUrl);
+      if (this.liquidLiteWalletQuicDisabled) {
+        this.liquidLiteWalletQuicUrl = '';
+      } else {
+        this.liquidLiteWalletQuicUrl = normalizeLiquidLiteWalletQuicUrlForRuntime(
+          this.elementsRpcUrl,
+          this.liquidLiteWalletQuicUrl,
+        );
+      }
     }
   }
 
-  async generate(rpcUrl?: string): Promise<void> {
-    this.elementsRpcUrl = normalizeLiquidRpcUrlForRuntime(validateLiquidRpcUrl(rpcUrl ?? this.elementsRpcUrl));
-    await this.withLiquidEvent('generate', { rpcUrl: this.elementsRpcUrl }, async () => {
-      const client = await this.getConfiguredClient();
-      const address = await client.getNewAddress();
+  async generate(rpcUrl?: string, liquidLiteWalletQuicUrl?: string | null): Promise<void> {
+    this.configureLiquidEndpoints(rpcUrl, liquidLiteWalletQuicUrl);
+    await this.withLiquidEvent('generate', { mode: this.elementsRpcUrl ? 'embedded-with-rpc' : 'embedded-local' }, async () => {
+      let client: LiquidWalletClient;
+      let address = '';
+      try {
+        client = await this.getConfiguredClient();
+        address = await client.getNewAddress();
+      } catch (error) {
+        await this.clearNativeSigner();
+        try {
+          client = await this.getConfiguredClient();
+          address = await client.getNewAddress();
+        } catch (retryError) {
+          if (!this.elementsRpcUrl) {
+            throw retryError;
+          }
+          if (__DEV__) {
+            console.warn('[LiquidWallet] native generate failed, falling back to JSON-RPC', normalizeLiquidError(retryError));
+          }
+          client = new JsonRpcLiquidWalletClient(this.elementsRpcUrl);
+          address = await client.getNewAddress();
+        }
+      }
       this._address = address;
       this.secret = `liquid://${address}`;
       return { address };
@@ -236,17 +351,58 @@ export class LiquidWallet extends LegacyWallet {
   }
 
   private getClient(): LiquidWalletClient {
+    if (this.liquidWalletMode === 'elements-rpc' && this.elementsRpcUrl && shouldUseJsonRpcLiquidClient(this.elementsRpcUrl)) {
+      return new JsonRpcLiquidWalletClient(this.elementsRpcUrl);
+    }
     return new EmbeddedLiquidWalletClient();
+  }
+
+  configureLiquidEndpoints(rpcUrl?: string, liquidLiteWalletQuicUrl?: string | null): void {
+    const requestedRpcUrl = (rpcUrl ?? this.elementsRpcUrl).trim();
+    this.elementsRpcUrl = requestedRpcUrl ? normalizeLiquidRpcUrlForRuntime(validateLiquidRpcUrl(requestedRpcUrl)) : '';
+    if (isLiquidLiteWalletQuicDisabled(liquidLiteWalletQuicUrl)) {
+      this.liquidLiteWalletQuicDisabled = true;
+      this.liquidLiteWalletQuicUrl = '';
+      this.liquidWalletMode = 'lwk';
+    } else {
+      this.liquidLiteWalletQuicDisabled = false;
+      this.liquidLiteWalletQuicUrl = normalizeLiquidLiteWalletQuicUrlForRuntime(
+        this.elementsRpcUrl,
+        liquidLiteWalletQuicUrl === undefined
+          ? ''
+          : (liquidLiteWalletQuicUrl ?? ''),
+      );
+      this.liquidWalletMode = this.liquidLiteWalletQuicUrl ? 'utreexo' : 'lwk';
+    }
   }
 
   private async getConfiguredClient(): Promise<LiquidWalletClient> {
     const client = this.getClient();
-    const rpcUrl = normalizeLiquidRpcUrlForRuntime(validateLiquidRpcUrl(this.elementsRpcUrl));
-    if (this.elementsRpcUrl !== rpcUrl) {
-      this.elementsRpcUrl = rpcUrl;
-    }
+    const rpcUrl = this.elementsRpcUrl
+      ? normalizeLiquidRpcUrlForRuntime(validateLiquidRpcUrl(this.elementsRpcUrl))
+      : '';
+    if (this.elementsRpcUrl && this.elementsRpcUrl !== rpcUrl) this.elementsRpcUrl = rpcUrl;
+    const quicUrl = this.liquidLiteWalletQuicDisabled
+      ? ''
+      : normalizeLiquidLiteWalletQuicUrlForRuntime(
+          rpcUrl,
+          this.liquidLiteWalletQuicUrl || '',
+        );
+    this.liquidLiteWalletQuicUrl = quicUrl;
+    const walletMode = (quicUrl && !this.liquidLiteWalletQuicDisabled) ? 'utreexo' : 'lwk';
+    this.liquidWalletMode = walletMode;
+    const electrumUrl =
+      walletMode === 'lwk'
+        ? this.liquidElectrumUrl || canonicalLiquidElectrumUrlForRuntime()
+        : '';
+    this.liquidElectrumUrl = electrumUrl;
     if (client.configure) {
-      await client.configure({ elementsRpcUrl: rpcUrl });
+      await client.configure({
+        elementsRpcUrl: rpcUrl,
+        walletMode,
+        electrumUrl,
+        ...(quicUrl ? { liquidLiteWalletQuicUrl: quicUrl } : {}),
+      });
     }
     return client;
   }
@@ -264,7 +420,17 @@ export class LiquidWallet extends LegacyWallet {
   }
 
   private logLiquidEvent(operation: string, status: string, fields: Record<string, unknown> = {}): void {
-    const rpcUrl = sanitizeRpcUrlForLog(normalizeLiquidRpcUrlForRuntime(this.elementsRpcUrl || canonicalLiquidRpcUrlForRuntime()));
+    const rpcUrl = this.elementsRpcUrl
+      ? sanitizeRpcUrlForLog(normalizeLiquidRpcUrlForRuntime(this.elementsRpcUrl))
+      : 'embedded-local';
+    const liteWalletQuicUrl = this.liquidLiteWalletQuicDisabled
+      ? 'disabled'
+      : !this.elementsRpcUrl && !this.liquidLiteWalletQuicUrl
+      ? ''
+      : normalizeLiquidLiteWalletQuicUrlForRuntime(
+          this.elementsRpcUrl,
+          this.liquidLiteWalletQuicUrl || canonicalLiquidQuicUrlForRuntime(),
+        );
     const payload = {
       component: 'js.LiquidWallet',
       operation,
@@ -272,6 +438,7 @@ export class LiquidWallet extends LegacyWallet {
       walletID: this.getID?.(),
       address: this._address || undefined,
       rpcUrl,
+      liquidLiteWalletQuicUrl: sanitizeRpcUrlForLog(liteWalletQuicUrl),
       time: new Date().toISOString(),
       ...fields,
     };

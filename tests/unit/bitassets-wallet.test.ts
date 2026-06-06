@@ -152,13 +152,23 @@ describe('BitAssets mobile wallet bridge', () => {
     await wallet.generate('http://127.0.0.1:6004');
     await wallet.fetchBalance();
 
-    expect(mockBitAssetsNativeModule.configure).toHaveBeenCalledWith(
-      JSON.stringify({ rpcUrl: 'http://127.0.0.1:6004', bitassetsLiteWalletQuicUrl: '127.0.0.1:6104' }),
-    );
+    expect(mockBitAssetsNativeModule.configure).toHaveBeenCalledWith(JSON.stringify({ rpcUrl: 'http://127.0.0.1:6004' }));
     expect(mockBitAssetsNativeModule.getNewAddress).toHaveBeenCalledTimes(1);
     expect(wallet.getAddress()).toBe('bitassets-address-1');
     expect(wallet.secret).toBe('bitassets://bitassets-address-1');
     expect(wallet.getBalance()).toBe(42);
+  });
+
+  it('keeps explicit BitAssets QUIC disablement through native configuration', async () => {
+    const wallet = new BitAssetsWallet();
+
+    await wallet.generate('http://127.0.0.1:6004', 'disabled');
+
+    expect(mockBitAssetsNativeModule.configure).toHaveBeenCalledWith(
+      JSON.stringify({ rpcUrl: 'http://127.0.0.1:6004', bitassetsLiteWalletQuicUrl: 'disabled' }),
+    );
+    expect(wallet.bitassetsLiteWalletQuicDisabled).toBe(true);
+    expect(wallet.bitassetsLiteWalletQuicUrl).toBe('');
   });
 
   it('requires the persisted BitAssets RPC URL before native signer use', async () => {
@@ -188,9 +198,7 @@ describe('BitAssets mobile wallet bridge', () => {
 
     expect(wallet.getAddress()).toBe('persisted-address');
     expect(mockBitAssetsNativeModule.configure).toHaveBeenCalledTimes(2);
-    expect(mockBitAssetsNativeModule.configure).toHaveBeenCalledWith(
-      JSON.stringify({ rpcUrl: 'http://127.0.0.1:6004', bitassetsLiteWalletQuicUrl: '127.0.0.1:6104' }),
-    );
+    expect(mockBitAssetsNativeModule.configure).toHaveBeenCalledWith(JSON.stringify({ rpcUrl: 'http://127.0.0.1:6004' }));
     expect(mockBitAssetsNativeModule.reserve).toHaveBeenCalledWith(JSON.stringify({ name: 'PERSISTED', feeSats: 0 }));
   });
 
@@ -202,7 +210,7 @@ describe('BitAssets mobile wallet bridge', () => {
 
     expect((wallet as any)._bitassetsConfiguredRpcUrl).toBeUndefined();
     expect(wallet.bitassetsRpcUrl).toBe('http://127.0.0.1:6004');
-    expect(wallet.bitassetsLiteWalletQuicUrl).toBe('127.0.0.1:6104');
+    expect(wallet.bitassetsLiteWalletQuicUrl).toBe('');
   });
 
   it('purges native signer persistence through the embedded bridge', async () => {

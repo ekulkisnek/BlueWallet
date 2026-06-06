@@ -77,6 +77,15 @@ setup_android_usb_reverse() {
   log "adb reverse 8081/60101/6123/6125"
 }
 
+pause_android_before_ios_btc_command() {
+  local package="${REDWALLET_ANDROID_PACKAGE:-com.layertwolabs.bluewallet}"
+  # The iOS BTC command server also listens on 6125. Once Android has seeded
+  # its receive wallet, keep Android from polling/consuming the iOS command.
+  adb -s "$ANDROID_SERIAL" reverse --remove tcp:6125 >/dev/null 2>&1 || true
+  adb -s "$ANDROID_SERIAL" shell am force-stop "$package" >/dev/null 2>&1 || true
+  log "android_paused_for_ios_btc_command package=$package removed_reverse=6125"
+}
+
 port_open() {
   curl --silent --max-time 1 "http://127.0.0.1:$METRO_PORT/status" >/dev/null 2>&1
 }
@@ -100,6 +109,60 @@ start_metro_if_needed() {
   exit 1
 }
 
+dc_mainchain() {
+  docker compose -f "$COMPOSE_FILE" exec -T mainchain \
+    drivechain-cli -signet -rpccookiefile=/data/signet/.cookie "$@"
+}
+
+funding_utxos_json() {
+  local txid="$1"
+  local address="$2"
+  local sats="$3"
+  dc_mainchain -rpcwallet=signet-miner gettransaction "$txid" true | python3 -c '
+import json, sys
+tx = json.load(sys.stdin)
+address = sys.argv[1]
+sats = int(sys.argv[2])
+txid = tx.get("txid", "")
+height = int(tx.get("blockheight") or 0)
+for detail in tx.get("details") or []:
+    if detail.get("address") == address:
+        print(json.dumps([{
+            "txid": txid,
+            "vout": int(detail.get("vout", 0)),
+            "value": sats,
+            "address": address,
+            "height": height,
+            "confirmations": int(tx.get("confirmations") or 1),
+        }]))
+        sys.exit(0)
+sys.exit("funding output not found for address " + address)
+' "$address" "$sats"
+}
+
+ensure_l1_broadcast_helper() {
+  local host="${REDWALLET_PHONE_LAN_HOST:-$(detect_lan_host)}"
+  local url="http://${host}:6126/broadcast"
+  if ! curl -sS -m 2 "http://${host}:6126/health" >/dev/null 2>&1; then
+    pkill -f 'redwallet-core-broadcast-helper.js' 2>/dev/null || true
+    nohup env REDWALLET_BROADCAST_HELPER_HOST=0.0.0.0 \
+      REDWALLET_BROADCAST_HELPER_PORT=6126 \
+      node "$ROOT_DIR/scripts/redwallet-core-broadcast-helper.js" \
+      >>"$RUN_DIR/core-broadcast-helper.log" 2>&1 &
+    for _ in $(seq 1 20); do
+      if curl -sS -m 2 "http://${host}:6126/health" >/dev/null 2>&1; then
+        break
+      fi
+      sleep 1
+    done
+  fi
+  if ! curl -sS -m 2 "http://${host}:6126/health" >/dev/null 2>&1; then
+    log "BLOCKER core broadcast helper not reachable at ${host}:6126"
+    exit 1
+  fi
+  printf '%s' "$url"
+}
+
 run_preflight() {
   export L1_E2E_COMPOSE_FILE="$COMPOSE_FILE"
   export L1_E2E_LOG_FILE="$RUN_DIR/preflight.log"
@@ -112,7 +175,7 @@ run_preflight() {
 }
 
 ensure_ios_device_app() {
-  local app="ios/build/PersonalDebugDerivedDataFixed/Build/Products/Debug-iphoneos/BlueWallet.app"
+  local app="${REDWALLET_IOS_APP_PATH:-ios/build/PersonalDebugDerivedDataFixed/Build/Products/Debug-iphoneos/BlueWallet.app}"
   if [[ ! -d "$app" ]]; then
     log "BLOCKER missing $app — build with scripts/run-redwallet-ios-device-install.sh"
     exit 1
@@ -147,6 +210,7 @@ if [[ "${REDWALLET_SKIP_ANDROID_SEED:-0}" != 1 ]]; then
 else
   : "${ANDROID_L1_RECEIVE_ADDRESS:?REDWALLET_SKIP_ANDROID_SEED=1 requires ANDROID_L1_RECEIVE_ADDRESS}"
 fi
+pause_android_before_ios_btc_command
 
 log "ios_send_wallet_seed start"
 REDWALLET_IOS_BTC_SEED_LOG_DIR="$RUN_DIR/ios-send-seed" \
@@ -162,12 +226,17 @@ log "ios_send_address=$IOS_SEND_ADDRESS wallet_id=$IOS_SEND_WALLET_ID"
 log "fund ios send wallet sats=$L1_E2E_FUND_SATS"
 FUND_TXID="$(bash "$ROOT_DIR/scripts/fund-l1-signet-address.sh" "$IOS_SEND_ADDRESS" "$L1_E2E_FUND_SATS")"
 log "fund_txid=$FUND_TXID"
+IOS_SEND_UTXOS_JSON="$(funding_utxos_json "$FUND_TXID" "$IOS_SEND_ADDRESS" "$L1_E2E_FUND_SATS")"
+L1_BROADCAST_URL="$(ensure_l1_broadcast_helper)"
+log "ios_send_manual_utxo=${IOS_SEND_UTXOS_JSON} broadcast_url=$L1_BROADCAST_URL"
 sleep "${L1_E2E_POST_FUND_WAIT_SEC:-10}"
 
 log "ios_send start dest=$ANDROID_L1_RECEIVE_ADDRESS sats=$L1_E2E_SEND_SATS"
 set +e
 REDWALLET_IOS_BTC_SEND_LOG_DIR="$RUN_DIR/ios-send" \
   REDWALLET_IOS_UDID="$IOS_UDID" \
+  REDWALLET_L1_UTXOS_JSON="$IOS_SEND_UTXOS_JSON" \
+  REDWALLET_L1_BROADCAST_URL="$L1_BROADCAST_URL" \
   bash "$ROOT_DIR/scripts/send-ios-btc-l1.sh" \
   "$ANDROID_L1_RECEIVE_ADDRESS" "$L1_E2E_SEND_SATS" "$IOS_SEND_WALLET_ID" \
   | tee "$RUN_DIR/ios-send.log"

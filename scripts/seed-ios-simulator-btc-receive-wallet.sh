@@ -9,6 +9,7 @@ RUN_DIR="${REDWALLET_IOS_SIM_BTC_SEED_LOG_DIR:-$LOG_ROOT/ios-sim-btc-seed-$STAMP
 IOS_SIM_UDID="${DETOX_IOS_SIM_UDID:-${REDWALLET_IOS_SIM_UDID:-FC7DDD6B-DFCB-432A-98CE-48C453E6EF48}}"
 BUNDLE_ID="${REDWALLET_IOS_SIM_BUNDLE_ID:-com.layertwolabs.bluewallet}"
 POLL_SECONDS="${REDWALLET_IOS_BTC_SEED_POLL_SECONDS:-180}"
+SIM_APP_LAUNCHED=0
 
 mkdir -p "$RUN_DIR"
 ln -sfn "$RUN_DIR" "${LOG_ROOT%/}/current-ios-sim-btc-seed"
@@ -38,8 +39,7 @@ sim_push_btc_command() {
     return 1
   fi
   mkdir -p "$container/Documents"
-  rm -f "$container/Documents/redwallet-btc-selftest-command.json" \
-    "$container/Documents/redwallet-btc-selftest-result.json" 2>/dev/null || true
+  rm -f "$container/Documents/redwallet-btc-selftest-command.json" 2>/dev/null || true
   cp "$local_file" "$container/Documents/redwallet-btc-selftest-command.json"
   log "PUSHED createWallet command to sim Documents"
   return 0
@@ -48,8 +48,16 @@ sim_push_btc_command() {
 sim_launch_app() {
   xcrun simctl boot "$IOS_SIM_UDID" >/dev/null 2>&1 || true
   xcrun simctl bootstatus "$IOS_SIM_UDID" -b >/dev/null 2>&1 || true
+  if [[ "$SIM_APP_LAUNCHED" == 1 ]]; then
+    return 0
+  fi
   xcrun simctl terminate "$IOS_SIM_UDID" "$BUNDLE_ID" >/dev/null 2>&1 || true
-  xcrun simctl launch "$IOS_SIM_UDID" "$BUNDLE_ID" >>"$RUN_DIR/launch.log" 2>&1 || true
+  local launch_args=()
+  if [[ "${REDWALLET_IOS_SIM_USE_EMBEDDED_BUNDLE:-1}" == 1 ]]; then
+    launch_args+=(REDWALLET_USE_EMBEDDED_BUNDLE)
+  fi
+  xcrun simctl launch "$IOS_SIM_UDID" "$BUNDLE_ID" "${launch_args[@]+"${launch_args[@]}"}" >>"$RUN_DIR/launch.log" 2>&1 || true
+  SIM_APP_LAUNCHED=1
 }
 
 metro_reload_bundle() {
@@ -69,6 +77,10 @@ bash "$ROOT_DIR/scripts/ensure-ios-btc-command-server.sh" >>"$RUN_DIR/ensure-ser
 CMD_DIR="$(resolve_command_dir)"
 export REDWALLET_IOS_BTC_COMMAND_DIR="$CMD_DIR"
 rm -f "$CMD_DIR/result.json"
+doc_container="$(xcrun simctl get_app_container "$IOS_SIM_UDID" "$BUNDLE_ID" data 2>/dev/null || true)"
+if [[ -n "$doc_container" && -d "$doc_container/Documents" ]]; then
+  rm -f "$doc_container/Documents/redwallet-btc-selftest-result.json" 2>/dev/null || true
+fi
 command_id="ios-sim-btc-receive-${STAMP}"
 label="${REDWALLET_IOS_BTC_WALLET_LABEL:-iOS L1 sim receive ${STAMP}}"
 cat >"$CMD_DIR/command.json" <<EOF

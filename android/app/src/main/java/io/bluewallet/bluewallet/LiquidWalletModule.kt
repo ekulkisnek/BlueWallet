@@ -45,18 +45,34 @@ class LiquidWalletModule(private val reactContext: ReactApplicationContext) : Na
             synchronized(walletLock) {
                 val config = JSONObject(configJson)
                 val rpcUrl = config.optString("rpcUrl", config.optString("rpc_url", "")).trim()
-                validateRpcUrl(rpcUrl)
-                eventLog("configure", "begin", mapOf("rpcUrl" to rpcUrl))
+                if (rpcUrl.isNotBlank()) {
+                    validateRpcUrl(rpcUrl)
+                }
+                val liteWalletRpcUrl = config.optString("liteWalletRpcUrl", config.optString("lite_wallet_rpc_url", "")).trim()
+                val liquidLiteWalletQuicUrl = config.optString("liquidLiteWalletQuicUrl", config.optString("liquid_lite_wallet_quic_url", "")).trim()
+                val walletMode = config.optString("walletMode", config.optString("wallet_mode", "lwk")).trim().ifBlank { "lwk" }
+                val requestedElectrumUrl = config.optString("electrumUrl", config.optString("electrum_url", "")).trim()
+                val electrumUrl = if (requestedElectrumUrl.isBlank() && walletMode == "lwk") defaultElectrumUrl(rpcUrl) else requestedElectrumUrl
+                eventLog("configure", "begin", mapOf("rpcUrl" to rpcUrl, "liteWalletRpcUrl" to liteWalletRpcUrl, "liquidLiteWalletQuicUrl" to liquidLiteWalletQuicUrl, "electrumUrl" to electrumUrl, "walletMode" to walletMode))
                 val sharedPref = reactContext.getSharedPreferences("group.com.layertwolabs.bluewallet", android.content.Context.MODE_PRIVATE)
+                val unchanged = sharedPref.getString("liquidRpcUrl", "") == rpcUrl &&
+                    sharedPref.getString("liquidLiteWalletRpcUrl", "") == liteWalletRpcUrl &&
+                    sharedPref.getString("liquidLiteWalletQuicUrl", "") == liquidLiteWalletQuicUrl &&
+                    sharedPref.getString("liquidElectrumUrl", "") == electrumUrl &&
+                    sharedPref.getString("liquidWalletMode", "lwk") == walletMode
                 sharedPref.edit()
                     .putString("liquidRpcUrl", rpcUrl)
+                    .putString("liquidLiteWalletRpcUrl", liteWalletRpcUrl)
+                    .putString("liquidLiteWalletQuicUrl", liquidLiteWalletQuicUrl)
+                    .putString("liquidElectrumUrl", electrumUrl)
+                    .putString("liquidWalletMode", walletMode)
                     .apply()
-                if (walletHandle != 0L) {
+                if (walletHandle != 0L && !unchanged) {
                     nativeFree(walletHandle)
                     walletHandle = 0
                 }
-                eventLog("configure", "ok", mapOf("rpcUrl" to rpcUrl))
-                promise.resolve(JSONObject().put("configured", true).put("rpcUrl", rpcUrl).toString())
+                eventLog("configure", "ok", mapOf("rpcUrl" to rpcUrl, "liteWalletRpcUrl" to liteWalletRpcUrl, "liquidLiteWalletQuicUrl" to liquidLiteWalletQuicUrl, "electrumUrl" to electrumUrl, "walletMode" to walletMode))
+                promise.resolve(JSONObject().put("configured", true).put("rpcUrl", rpcUrl).put("liteWalletRpcUrl", liteWalletRpcUrl).put("liquidLiteWalletQuicUrl", liquidLiteWalletQuicUrl).put("electrumUrl", electrumUrl).put("walletMode", walletMode).toString())
             }
         } catch (error: Throwable) {
             eventLog("configure", "error", mapOf("error" to (error.message ?: error.toString())))
@@ -130,6 +146,10 @@ class LiquidWalletModule(private val reactContext: ReactApplicationContext) : Na
                 sharedPref.edit()
                     .remove(SEED_PREF)
                     .remove("liquidRpcUrl")
+                    .remove("liquidLiteWalletRpcUrl")
+                    .remove("liquidLiteWalletQuicUrl")
+                    .remove("liquidElectrumUrl")
+                    .remove("liquidWalletMode")
                     .apply()
                 deleteSecretKey()
             }
@@ -147,21 +167,28 @@ class LiquidWalletModule(private val reactContext: ReactApplicationContext) : Na
         walletDir.mkdirs()
         val walletFile = File(walletDir, "wallet.json")
         val sharedPref = reactContext.getSharedPreferences("group.com.layertwolabs.bluewallet", android.content.Context.MODE_PRIVATE)
-        val rpcUrl = sharedPref.getString("liquidRpcUrl", null)
-            ?: throw IllegalStateException("Liquid RPC URL is not configured")
+        val rpcUrl = sharedPref.getString("liquidRpcUrl", "") ?: ""
+        val liteWalletRpcUrl = sharedPref.getString("liquidLiteWalletRpcUrl", "") ?: ""
+        val liquidLiteWalletQuicUrl = sharedPref.getString("liquidLiteWalletQuicUrl", "") ?: ""
+        val electrumUrl = sharedPref.getString("liquidElectrumUrl", "") ?: ""
+        val walletMode = sharedPref.getString("liquidWalletMode", "lwk") ?: "lwk"
         val seedHex = getOrCreateSeedHex(walletFile, sharedPref)
         val config = JSONObject()
             .put("path", walletFile.absolutePath)
+            .put("wallet_mode", walletMode)
             .put("rpc_url", rpcUrl)
+            .put("lite_wallet_rpc_url", liteWalletRpcUrl)
+            .put("liquidLiteWalletQuicUrl", liquidLiteWalletQuicUrl)
+            .put("electrum_url", electrumUrl)
             .put("seed_hex", seedHex)
             .put("create", true)
             .put("persist_seed", false)
         val configJson = config.toString()
 
-        eventLog("openWallet", "begin", mapOf("rpcUrl" to rpcUrl, "walletPath" to walletFile.absolutePath))
+        eventLog("openWallet", "begin", mapOf("rpcUrl" to rpcUrl, "liteWalletRpcUrl" to liteWalletRpcUrl, "liquidLiteWalletQuicUrl" to liquidLiteWalletQuicUrl, "electrumUrl" to electrumUrl, "walletMode" to walletMode, "walletPath" to walletFile.absolutePath))
         val result = unwrap(nativeOpen(configJson))
         walletHandle = java.lang.Long.parseUnsignedLong(result)
-        eventLog("openWallet", "ok", mapOf("rpcUrl" to rpcUrl, "walletPath" to walletFile.absolutePath))
+        eventLog("openWallet", "ok", mapOf("rpcUrl" to rpcUrl, "liteWalletRpcUrl" to liteWalletRpcUrl, "liquidLiteWalletQuicUrl" to liquidLiteWalletQuicUrl, "electrumUrl" to electrumUrl, "walletMode" to walletMode, "walletPath" to walletFile.absolutePath))
         return walletHandle
     }
 
@@ -267,6 +294,14 @@ class LiquidWalletModule(private val reactContext: ReactApplicationContext) : Na
         if (uri.scheme == "http" && !isLocalRpcHost(uri.host.lowercase())) {
             throw IllegalArgumentException("Liquid RPC URL must use HTTPS unless it points to a local or private development host")
         }
+    }
+
+    private fun defaultElectrumUrl(rpcUrl: String): String {
+        if (rpcUrl.isBlank()) return ""
+        val uri = URI(rpcUrl)
+        val host = uri.host ?: return ""
+        val formattedHost = if (host.contains(":") && !host.startsWith("[")) "[$host]" else host
+        return "tcp://$formattedHost:60401"
     }
 
     private fun validateQuicUrl(quicUrl: String) {

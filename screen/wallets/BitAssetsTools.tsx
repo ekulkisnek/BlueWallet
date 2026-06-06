@@ -286,7 +286,7 @@ const BitAssetsTools: React.FC = () => {
         style={[styles.root, stylesHook.root]}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="always"
-        testID="BitAssetsWalletScreen"
+        testID="BitAssetsToolsScreen"
       >
         <BlueCard>
           <BlueText h3>{wallet.getLabel()}</BlueText>

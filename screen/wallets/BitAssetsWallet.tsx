@@ -123,7 +123,6 @@ const BitAssetsWallet: React.FC = () => {
           <View style={styles.statusGrid}>
             <StatusItem label="Mainchain" value={chainInfo?.mainchain_hash ? chainInfo.mainchain_hash.slice(0, 8) + '…' : '—'} />
             <StatusItem label="Peers" value={chainInfo != null ? String(chainInfo.peer_count) : '—'} />
-            <StatusItem label="BTC (sats)" value={chainInfo?.bitcoin_total_sats != null ? String(chainInfo.bitcoin_total_sats) : '—'} />
             <StatusItem label="QUIC" value={info?.quic != null ? (info.quic.connected ? 'connected' : 'disconnected') : '—'} />
           </View>
         </BlueCard>

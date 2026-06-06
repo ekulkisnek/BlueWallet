@@ -49,8 +49,13 @@ jest.mock('../../class/wallets/legacy-wallet', () => ({
   },
 }));
 
-const { LiquidWallet, hasLiquidWallet, normalizeLiquidRpcUrlForRuntime } = require('../../class/wallets/liquid-wallet');
+const {
+  LiquidWallet,
+  hasLiquidWallet,
+  normalizeLiquidRpcUrlForRuntime,
+} = require('../../class/wallets/liquid-wallet');
 const { validateLiquidRpcUrl } = require('../../blue_modules/LiquidWalletForms');
+const { JsonRpcLiquidWalletClient } = require('../../blue_modules/LiquidWallet');
 
 describe('Liquid mobile wallet bridge', () => {
   beforeEach(() => {
@@ -163,6 +168,33 @@ describe('Liquid mobile wallet bridge', () => {
     expect(wallet.getAddress()).toBe('lqtb1qtestaddressliquid1234567890abcdef');
   });
 
+  it('LiquidWallet.generate can create an embedded local wallet without requiring an Elements RPC URL', async () => {
+    const wallet = new LiquidWallet();
+    wallet.setLabel('Phone-local Liquid');
+
+    await wallet.generate();
+
+    expect(mockLiquidNativeModule.configure).toHaveBeenCalledWith(expect.stringContaining('"elementsRpcUrl":""'));
+    expect(mockLiquidNativeModule.configure).toHaveBeenCalledWith(expect.stringContaining('"rpcUrl":""'));
+    expect(mockLiquidNativeModule.getNewAddress).toHaveBeenCalledTimes(1);
+    expect(wallet.elementsRpcUrl).toBe('');
+    expect(wallet.secret).toMatch(/^liquid:\/\//);
+    expect(wallet.getAddress()).toBe('lqtb1qtestaddressliquid1234567890abcdef');
+  });
+
+  it('does not fall back to Elements JSON-RPC for node-free local creation', async () => {
+    mockLiquidNativeModule.getNewAddress
+      .mockRejectedValueOnce(new Error('Embedded Liquid wallet native module is not available'))
+      .mockRejectedValueOnce(new Error('Embedded Liquid wallet native module is not available'));
+    const wallet = new LiquidWallet();
+
+    await expect(wallet.generate()).rejects.toThrow(/native module is not available/i);
+
+    expect(mockLiquidNativeModule.configure).toHaveBeenCalledTimes(2);
+    expect(mockLiquidNativeModule.getNewAddress).toHaveBeenCalledTimes(2);
+    expect(wallet.elementsRpcUrl).toBe('');
+  });
+
   it('LiquidWallet.weOwnAddress positive and negative cases', () => {
     const wallet = new LiquidWallet();
     wallet._address = 'lqtb1qowned1111111111111111111111111111111';
@@ -216,5 +248,54 @@ describe('Liquid wallet registry helper', () => {
   it('detects existing Liquid wallets', () => {
     expect(hasLiquidWallet([{ type: 'HDsegwitBech32' }])).toBe(false);
     expect(hasLiquidWallet([{ type: 'HDsegwitBech32' }, { type: LiquidWallet.type }])).toBe(true);
+  });
+});
+
+describe('JsonRpcLiquidWalletClient', () => {
+  const originalFetch = global.fetch;
+  const originalBtoa = global.btoa;
+
+  beforeEach(() => {
+    global.btoa = jest.fn((value: string) => Buffer.from(value, 'binary').toString('base64'));
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    global.btoa = originalBtoa;
+  });
+
+  it('converts Elements BTC-denominated amounts to sats when syncing', async () => {
+    global.fetch = jest.fn(async (_url: RequestInfo | URL, options?: RequestInit) => {
+      if (!options?.body) throw new Error('missing RPC body');
+      const { method } = JSON.parse(String(options.body));
+      const results: Record<string, unknown> = {
+        getbalance: { bitcoin: 0.001 },
+        getblockchaininfo: { blocks: 203, bestblockhash: '11'.repeat(32) },
+        listunspent: [{ txid: '22'.repeat(32), vout: 0, address: 'bcrt1qreceiver', asset: 'bitcoin', amount: 0.001, confirmations: 1 }],
+      };
+      return { ok: true, json: async () => ({ result: results[method] ?? null }) } as any;
+    });
+
+    const client = new JsonRpcLiquidWalletClient('http://__cookie__:secret@127.0.0.1:18443/wallet/redwallet-b');
+    const info = await client.sync();
+    const utxos = await client.listUtxos();
+
+    expect(info.balances).toEqual({ bitcoin: 100000 });
+    expect(info.last_tip_height).toBe(203);
+    expect(utxos[0].amount).toBe(100000);
+    expect((global.fetch as jest.Mock).mock.calls[0][1].headers.Authorization).toBe('Basic X19jb29raWVfXzpzZWNyZXQ=');
+  });
+
+  it('sends sat amounts as Elements BTC amounts', async () => {
+    global.fetch = jest.fn(async (_url: RequestInfo | URL, options?: RequestInit) => {
+      if (!options?.body) throw new Error('missing RPC body');
+      const body = JSON.parse(String(options.body));
+      expect(body.method).toBe('sendtoaddress');
+      expect(body.params[1]).toBe(0.001);
+      return { ok: true, json: async () => ({ result: '33'.repeat(32) }) } as any;
+    });
+
+    const client = new JsonRpcLiquidWalletClient('http://__cookie__:secret@127.0.0.1:18443/wallet/redwallet-a');
+    await expect(client.transfer({ destinationAddress: 'bcrt1qreceiver', amount: 100000 })).resolves.toBe('33'.repeat(32));
   });
 });

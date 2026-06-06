@@ -15,6 +15,9 @@ WALLET_ID="${3:-${REDWALLET_ANDROID_BTC_WALLET_ID:-}}"
 POLL_SECONDS="${REDWALLET_ANDROID_BTC_SEND_POLL_SECONDS:-180}"
 MONITOR_SECONDS="${REDWALLET_ANDROID_MONITOR_SECONDS:-120}"
 FEE_RATE="${L1_E2E_FEE_RATE:-1}"
+BROADCAST_URL="${REDWALLET_L1_BROADCAST_URL:-}"
+CORE_RPC_URL="${REDWALLET_L1_CORE_RPC_URL:-}"
+UTXOS_JSON="${REDWALLET_L1_UTXOS_JSON:-}"
 
 mkdir -p "$RUN_DIR"
 ln -sfn "$RUN_DIR" "${LOG_ROOT%/}/current-android-btc-send"
@@ -53,7 +56,8 @@ setup_android_usb_reverse() {
   adb -s "$ANDROID_SERIAL" reverse tcp:60101 tcp:60101 >/dev/null 2>&1 || true
   adb -s "$ANDROID_SERIAL" reverse tcp:6123 tcp:6123 >/dev/null 2>&1 || true
   adb -s "$ANDROID_SERIAL" reverse tcp:6125 tcp:6125 >/dev/null 2>&1 || true
-  log "adb reverse 8081/60101/6123/6125"
+  adb -s "$ANDROID_SERIAL" reverse tcp:6126 tcp:6126 >/dev/null 2>&1 || true
+  log "adb reverse 8081/60101/6123/6125/6126"
 }
 
 log "START run_dir=$RUN_DIR serial=$ANDROID_SERIAL dest=$DESTINATION sats=$AMOUNT_SATS"
@@ -80,17 +84,28 @@ wallet_id_json=""
 if [[ -n "$WALLET_ID" ]]; then
   wallet_id_json=",\"walletID\":\"${WALLET_ID}\""
 fi
+fallback_json=""
+if [[ -n "$BROADCAST_URL" ]]; then
+  fallback_json="${fallback_json},\"broadcastUrl\":\"${BROADCAST_URL}\""
+fi
+if [[ -n "$CORE_RPC_URL" ]]; then
+  fallback_json="${fallback_json},\"coreRpcUrl\":\"${CORE_RPC_URL}\""
+fi
+if [[ -n "$UTXOS_JSON" ]]; then
+  fallback_json="${fallback_json},\"utxos\":${UTXOS_JSON}"
+fi
 
 log "warm_launch wallet load wait"
 adb -s "$ANDROID_SERIAL" shell monkey -p "$ANDROID_PACKAGE" -c android.intent.category.LAUNCHER 1 >>"$RUN_DIR/launch.log" 2>&1 || true
 sleep "${REDWALLET_ANDROID_BTC_SEND_WARMUP_SEC:-25}"
 
 cat >"$CMD_DIR/command.json" <<EOF
-{"operation":"sendL1","commandId":"${command_id}","address":"${DESTINATION}","amountSats":${AMOUNT_SATS},"feeRate":${FEE_RATE}${wallet_id_json}}
+{"operation":"sendL1","commandId":"${command_id}","address":"${DESTINATION}","amountSats":${AMOUNT_SATS},"feeRate":${FEE_RATE}${wallet_id_json}${fallback_json}}
 EOF
 log "SEEDED command.json dir=$CMD_DIR"
 
 android_push_app_file "$CMD_DIR/command.json" "redwallet-btc-selftest-command.json" || true
+rm -f "$CMD_DIR/command.json" 2>/dev/null || true
 
 set +e
 REDWALLET_ANDROID_MONITOR_NO_RESTART=1 \
@@ -99,10 +114,12 @@ set -e
 
 result_path="$CMD_DIR/result.json"
 txid=""
+result_failed=0
 deadline=$(( $(date +%s) + POLL_SECONDS ))
 while [[ $(date +%s) -lt $deadline ]]; do
   if [[ -f "$result_path" ]]; then
-    if python3 - <<'PY' "$result_path"
+    set +e
+    python3 - <<'PY' "$result_path"
 import json, sys
 p = sys.argv[1]
 with open(p) as f:
@@ -116,7 +133,9 @@ if err and err != "wallet_not_ready":
     sys.exit(2)
 sys.exit(1)
 PY
-    then
+    status=$?
+    set -e
+    if [[ "$status" -eq 0 ]]; then
       txid="$(python3 - <<PY
 import json
 with open("$result_path") as f:
@@ -126,12 +145,20 @@ PY
 )"
       break
     fi
+    if [[ "$status" -eq 2 ]]; then
+      result_failed=1
+      break
+    fi
   fi
   sleep 2
 done
 
 if [[ -z "$txid" ]]; then
-  log "BLOCKER no Android L1 send txid (result.json missing or failed)"
+  if [[ "$result_failed" -eq 1 ]]; then
+    log "BLOCKER Android L1 send failed"
+  else
+    log "BLOCKER no Android L1 send txid (result.json missing or failed)"
+  fi
   if [[ -f "$result_path" ]]; then
     cat "$result_path" >>"$RUN_DIR/send.log"
   fi

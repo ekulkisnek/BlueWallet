@@ -762,7 +762,7 @@ const WalletsCarousel = forwardRef<FlatListRefType, WalletsCarouselProps>((props
     ],
   );
 
-  const keyExtractor = useCallback((item: TWallet, index: number) => (item?.getID ? item.getID() : index.toString()), []);
+  const keyExtractor = useCallback((item: TWallet, index: number) => (item?.getID ? `${item.getID()}-${index}` : index.toString()), []);
 
   const sliderHeight = 195;
 
@@ -773,12 +773,12 @@ const WalletsCarousel = forwardRef<FlatListRefType, WalletsCarouselProps>((props
   }, []);
 
   const renderNonFlatListWallets = useCallback(() => {
-    return data.map(item => {
+    return data.map((item, index) => {
       if (!item) return null;
 
       const content = (
         <View
-          key={!animateChanges ? item.getID() : undefined}
+          key={!animateChanges ? `${item.getID()}-${index}` : undefined}
           ref={(node: View | null) => {
             // Keep existing ref object in map
             walletRefs.current[item.getID()] ??= { current: null };
@@ -810,7 +810,7 @@ const WalletsCarousel = forwardRef<FlatListRefType, WalletsCarouselProps>((props
       if (!animateChanges) return content;
 
       return (
-        <Animated.View key={item.getID()} layout={layoutTransition} entering={enteringTransition} exiting={exitingTransition}>
+        <Animated.View key={`${item.getID()}-${index}`} layout={layoutTransition} entering={enteringTransition} exiting={exitingTransition}>
           {content}
         </Animated.View>
       );

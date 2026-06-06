@@ -54,11 +54,13 @@ PRIMARY_LAN_IP="$(host_ipv4s | head -1 || true)"
 PRIMARY_TAILSCALE_IP="$(tailscale_ipv4s | head -1 || true)"
 PHONE_HOST="${REDWALLET_PHONE_HOST:-${PRIMARY_TAILSCALE_IP:-${PRIMARY_LAN_IP:-127.0.0.1}}}"
 
+BITASSETS_RPC_PORT="${BITASSETS_RPC_PORT:-6004}"
+
 cat > "$OUT_DIR/redwallet-signet.env" <<EOF
 # Source this from local scripts, or copy the URL into RedWallet's BitAssets RPC field.
 # Prefer Tailscale if both Mac and phones are on the same tailnet; otherwise use same Wi-Fi/LAN.
 export REDWALLET_PHONE_HOST=$PHONE_HOST
-export BITASSETS_RPC_URL=http://$PHONE_HOST:6004
+export BITASSETS_RPC_URL=http://$PHONE_HOST:$BITASSETS_RPC_PORT
 export MAINCHAIN_RPC_URL=http://$PHONE_HOST:38332
 export METRO_URL=http://$PHONE_HOST:8081
 export REDWALLET_LOG_ROOT=$OUTPUT_ROOT
@@ -76,14 +78,14 @@ EOF
   echo "lan_ipv4s=$LAN_IPS"
   echo "tailscale_ipv4s=$TAILSCALE_IPS"
   echo "chosen_phone_host=$PHONE_HOST"
-  echo "bitassets_rpc_url=http://$PHONE_HOST:6004"
+  echo "bitassets_rpc_url=http://$PHONE_HOST:$BITASSETS_RPC_PORT"
   echo "mainchain_rpc_url=http://$PHONE_HOST:38332"
   echo "metro_url=http://$PHONE_HOST:8081"
   echo "bitassets_image=$BITASSETS_IMAGE"
   echo "bitassets_platform=$BITASSETS_PLATFORM"
   echo
-  probe_url "bitassets_host_probe" "http://127.0.0.1:6004"
-  probe_url "bitassets_phone_probe" "http://$PHONE_HOST:6004"
+  probe_url "bitassets_host_probe" "http://127.0.0.1:$BITASSETS_RPC_PORT"
+  probe_url "bitassets_phone_probe" "http://$PHONE_HOST:$BITASSETS_RPC_PORT"
 } | tee "$OUT_DIR/SUMMARY.txt"
 
 # Reliable fallback: use bitassets CLI inside container (avoids JSON-RPC flakiness / Tailscale reachability issues on host).

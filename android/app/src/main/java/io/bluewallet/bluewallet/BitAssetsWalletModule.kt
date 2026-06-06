@@ -50,11 +50,18 @@ class BitAssetsWalletModule(private val reactContext: ReactApplicationContext) :
                     "bitassetsLiteWalletQuicUrl",
                     config.optString("bitassets_lite_wallet_quic_url", config.optString("quicUrl", ""))
                 ).trim()
+                val requestedSeedHex = config.optString("seedHex", config.optString("seed_hex", "")).trim()
                 if (quicUrl.isNotEmpty()) validateQuicUrl(quicUrl)
                 eventLog("configure", "begin", mapOf("rpcUrl" to rpcUrl, "bitassetsLiteWalletQuicUrl" to quicUrl.ifEmpty { null }))
                 val sharedPref = reactContext.getSharedPreferences("group.com.layertwolabs.bluewallet", android.content.Context.MODE_PRIVATE)
                 sharedPref.edit()
                     .putString("bitassetsRpcUrl", rpcUrl)
+                    .apply {
+                        if (requestedSeedHex.isNotEmpty()) {
+                            require(isSeedHex(requestedSeedHex)) { "BitAssets wallet seed is invalid" }
+                            putString("bitassetsSeedHexPending", requestedSeedHex)
+                        }
+                    }
                     .apply {
                         if (quicUrl.isEmpty()) remove("bitassetsLiteWalletQuicUrl") else putString("bitassetsLiteWalletQuicUrl", quicUrl)
                     }
@@ -197,6 +204,11 @@ class BitAssetsWalletModule(private val reactContext: ReactApplicationContext) :
     }
 
     private fun getOrCreateSeedHex(walletFile: File, sharedPref: android.content.SharedPreferences): String {
+        sharedPref.getString("bitassetsSeedHexPending", null)?.takeIf { isSeedHex(it) }?.let { requestedSeedHex ->
+            persistSeedHex(sharedPref, requestedSeedHex)
+            sharedPref.edit().remove("bitassetsSeedHexPending").apply()
+            return requestedSeedHex
+        }
         sharedPref.getString(SEED_PREF, null)?.let { return decryptSeedHex(it) }
         readPersistedSeedHex(walletFile)?.let { seedHex ->
             persistSeedHex(sharedPref, seedHex)

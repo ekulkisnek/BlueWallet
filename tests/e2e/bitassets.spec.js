@@ -218,7 +218,7 @@ async function submitOperation(operation, values) {
     } catch (error) {
       if (device.getPlatform() !== 'ios') throw error;
       await dismissKeyboardIfPresent();
-      await element(by.id('BitAssetsWalletScreen')).scroll(1200, 'up');
+      await element(by.id('BitAssetsToolsScreen')).scroll(1200, 'up');
       await element(by.id('BitAssetsE2ETopSubmitCurrent')).tap();
     }
     await waitForBitAssetsSubmitTxid();
@@ -258,7 +258,7 @@ async function submitOperationWithE2EDefaults(operation, previousTxid) {
   await dismissKeyboardIfPresent();
   await openBitAssetsTools();
   try {
-    await element(by.id('BitAssetsWalletScreen')).scroll(1200, 'up');
+    await element(by.id('BitAssetsToolsScreen')).scroll(1200, 'up');
   } catch (_) {}
 
   try {
@@ -267,7 +267,7 @@ async function submitOperationWithE2EDefaults(operation, previousTxid) {
     try {
       await waitFor(element(by.id(`BitAssetsE2ESubmit-${operation}`)))
         .toBeVisible()
-        .whileElement(by.id('BitAssetsWalletScreen'))
+        .whileElement(by.id('BitAssetsToolsScreen'))
         .scroll(700, 'up');
       await element(by.id(`BitAssetsE2ESubmit-${operation}`)).tap();
     } catch (_) {
@@ -333,16 +333,16 @@ async function fillPartiallyVisibleIosBitAssetsField(operation, key, value) {
 
   for (let i = 0; i < 3; i++) {
     try {
-      await element(by.id('BitAssetsWalletScreen')).scroll(220, 'down');
+      await element(by.id('BitAssetsToolsScreen')).scroll(220, 'down');
     } catch (_) {}
     try {
-      await element(by.id('BitAssetsWalletScreen')).tapAtPoint(point);
+      await element(by.id('BitAssetsToolsScreen')).tapAtPoint(point);
       await element(by.id(bitAssetsFieldId(key))).replaceText(String(value));
       return;
     } catch (_) {}
   }
 
-  await element(by.id('BitAssetsWalletScreen')).tapAtPoint(point);
+  await element(by.id('BitAssetsToolsScreen')).tapAtPoint(point);
   await element(by.id(bitAssetsFieldId(key))).typeText(String(value));
 }
 
@@ -356,7 +356,7 @@ async function selectOperation(operation) {
 
   if (process.env.BITASSETS_E2E_PROVE_MOBILE_FLOW === '1') {
     try {
-      await element(by.id('BitAssetsWalletScreen')).scroll(700, 'up');
+      await element(by.id('BitAssetsToolsScreen')).scroll(700, 'up');
     } catch (_) {}
     try {
       await element(by.text(expectedLabel)).tap();
@@ -376,7 +376,7 @@ async function selectOperation(operation) {
       const point = operationPoints[operation];
       if (point) {
         try {
-          await element(by.id('BitAssetsWalletScreen')).tapAtPoint(point);
+          await element(by.id('BitAssetsToolsScreen')).tapAtPoint(point);
           await sleep(500);
           await expect(element(by.id('BitAssetsSelectedOperation'))).toHaveText(expectedLabel);
           return;
@@ -422,12 +422,12 @@ async function selectOperation(operation) {
   try {
     await waitFor(element(by.id(`BitAssetsOperation-${operation}`)))
       .toBeVisible()
-      .whileElement(by.id('BitAssetsWalletScreen'))
+      .whileElement(by.id('BitAssetsToolsScreen'))
       .scroll(500, 'down');
     await element(by.id(`BitAssetsOperation-${operation}`)).tap();
   } catch (_scrollError) {
     try {
-      await element(by.id('BitAssetsWalletScreen')).scroll(400, 'down');
+      await element(by.id('BitAssetsToolsScreen')).scroll(400, 'down');
       await element(by.id(`BitAssetsOperation-${operation}`)).tap();
     } catch (_tapError) {
       try {
@@ -437,7 +437,7 @@ async function selectOperation(operation) {
           await element(by.text(expectedLabel)).tap();
         } catch (error) {
           if (device.getPlatform() === 'android') {
-            await element(by.id('BitAssetsWalletScreen')).tapAtPoint({ x: 600, y: 1320 });
+            await element(by.id('BitAssetsToolsScreen')).tapAtPoint({ x: 600, y: 1320 });
           } else {
             throw error;
           }
@@ -466,7 +466,7 @@ async function tapSyncButton() {
   }
   await openBitAssetsTools();
   try {
-    await element(by.id('BitAssetsWalletScreen')).scroll(1200, 'up');
+    await element(by.id('BitAssetsToolsScreen')).scroll(1200, 'up');
   } catch (_) {}
   try {
     await element(by.id('BitAssetsE2ETopSyncButton')).tap();
@@ -484,12 +484,12 @@ async function tapSyncButton() {
   } catch (_) {}
 
   try {
-    await element(by.id('BitAssetsWalletScreen')).scroll(700, 'up');
+    await element(by.id('BitAssetsToolsScreen')).scroll(700, 'up');
     await element(by.id('BitAssetsE2ESyncButton')).tap();
     return;
   } catch (_) {}
 
-  await element(by.id('BitAssetsWalletScreen')).tapAtPoint({ x: 160, y: 220 });
+  await element(by.id('BitAssetsToolsScreen')).tapAtPoint({ x: 160, y: 220 });
 }
 
 async function openBitAssetsTools() {
@@ -530,7 +530,7 @@ async function dismissKeyboardIfPresent() {
   } catch (_) {}
 
   try {
-    await element(by.id('BitAssetsWalletScreen')).tapAtPoint({ x: 415, y: 817 });
+    await element(by.id('BitAssetsToolsScreen')).tapAtPoint({ x: 415, y: 817 });
     await sleep(500);
   } catch (_) {}
 }
@@ -688,7 +688,7 @@ async function scrollToProofBackedCount() {
   } catch (_) {}
   await waitFor(element(by.id('BitAssetsProofBackedUtxoCount')))
     .toBeVisible()
-    .whileElement(by.id('BitAssetsWalletScreen'))
+    .whileElement(by.id('BitAssetsToolsScreen'))
     .scroll(500, 'up');
 }
 
@@ -814,11 +814,11 @@ async function scrollToBitAssetsField(field) {
   try {
     await waitFor(element(by.id(fieldId)))
       .toBeVisible()
-      .whileElement(by.id('BitAssetsWalletScreen'))
+      .whileElement(by.id('BitAssetsToolsScreen'))
       .scroll(700, 'up');
     if (device.getPlatform() === 'ios') {
       try {
-        await element(by.id('BitAssetsWalletScreen')).scroll(260, 'up');
+        await element(by.id('BitAssetsToolsScreen')).scroll(260, 'up');
       } catch (_) {}
     }
     if (await isVisibleId(fieldId, 750)) return;
@@ -826,7 +826,7 @@ async function scrollToBitAssetsField(field) {
 
   for (let i = 0; i < 12; i++) {
     try {
-      await element(by.id('BitAssetsWalletScreen')).scroll(260, 'up');
+      await element(by.id('BitAssetsToolsScreen')).scroll(260, 'up');
     } catch (_) {}
     if (await isVisibleId(fieldId, 500)) return;
   }
@@ -834,14 +834,14 @@ async function scrollToBitAssetsField(field) {
   for (let i = 0; i < 8; i++) {
     if (await isVisibleId(fieldId, 500)) return;
     try {
-      await element(by.id('BitAssetsWalletScreen')).scroll(180, 'down');
+      await element(by.id('BitAssetsToolsScreen')).scroll(180, 'down');
     } catch (_) {}
   }
 
   for (let i = 0; i < 8; i++) {
     if (await isVisibleId(fieldId, 500)) return;
     try {
-      await element(by.id('BitAssetsWalletScreen')).scroll(180, 'up');
+      await element(by.id('BitAssetsToolsScreen')).scroll(180, 'up');
     } catch (_) {}
   }
 
@@ -860,7 +860,7 @@ async function scrollToBroadcastButton() {
   try {
     await waitFor(element(by.id('BitAssetsBroadcastButton')))
       .toBeVisible()
-      .whileElement(by.id('BitAssetsWalletScreen'))
+      .whileElement(by.id('BitAssetsToolsScreen'))
       .scroll(300, 'down');
   } catch (_) {
     if (device.getPlatform() === 'ios') return;
@@ -874,7 +874,7 @@ async function scrollToBroadcastButton() {
   // enough that the native hittable point is inside the viewport.
   if (device.getPlatform() === 'ios') {
     try {
-      await element(by.id('BitAssetsWalletScreen')).scroll(260, 'down');
+      await element(by.id('BitAssetsToolsScreen')).scroll(260, 'down');
     } catch (_) {}
   }
 }

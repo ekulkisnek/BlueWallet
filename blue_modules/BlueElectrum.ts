@@ -107,18 +107,23 @@ function getHardcodedPeersForNetwork(network: NetworkType): Peer[] {
       // For some reason SSL is not working here. SSL works via Sparrow, but
       // this throws kCFStreamSSLPeerName with an error code indicating an
       // internal SSL error
-      // Local dev: Floresta on Mac :60101. Simulator + USB Android use loopback first.
+      // Local dev: Floresta on Mac :60101. Simulator + USB Android use loopback;
+      // physical iPhones must use the Mac host because loopback is the phone itself.
       if (__DEV__) {
-        const peers: Peer[] = [{ host: '127.0.0.1', tcp: 60101 }];
         try {
-          if (isEmulatorSync()) return peers;
+          if (isEmulatorSync()) return [{ host: '127.0.0.1', tcp: 60101 }];
         } catch {
-          // physical device — try loopback (adb reverse) then LAN host from signet endpoints
+          // Treat unknown device-info state as physical and avoid iPhone loopback.
         }
+        const peers: Peer[] = [];
         if (REDWALLET_SIGNET_PHONE_HOST && REDWALLET_SIGNET_PHONE_HOST !== '127.0.0.1') {
           peers.push({ host: REDWALLET_SIGNET_PHONE_HOST, tcp: 60101 });
         }
+        peers.push({ host: 'node.signet.drivechain.info', tcp: 50001 });
         return peers;
+      }
+      if (REDWALLET_SIGNET_PHONE_HOST && REDWALLET_SIGNET_PHONE_HOST !== '127.0.0.1') {
+        return [{ host: REDWALLET_SIGNET_PHONE_HOST, tcp: 60101 }, { host: 'node.signet.drivechain.info', tcp: 50001 }];
       }
       return [{ host: 'node.signet.drivechain.info', tcp: 50001 }];
     case 'mainnet':

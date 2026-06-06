@@ -11,6 +11,7 @@ import { useStorage } from '../../hooks/context/useStorage';
 import TotalWalletsBalance from '../../components/TotalWalletsBalance';
 import { useSettings } from '../../hooks/context/useSettings';
 import { useExtendedNavigation } from '../../hooks/useExtendedNavigation';
+import { walletOpenRouteFor } from './walletOpenRoute';
 
 enum WalletActionType {
   SetWallets = 'SET_WALLETS',
@@ -208,10 +209,8 @@ const DrawerList: React.FC<DrawerContentComponentProps> = memo((props: DrawerCon
         const walletID = item.getID();
         const walletType = item.type;
         dispatch({ type: WalletActionType.SelectWallet, walletID, walletType });
-        drawerNavigation.navigate('DetailViewStackScreensStack', {
-          screen: 'WalletTransactions',
-          params: { walletID, walletType },
-        });
+        const [screen, params] = walletOpenRouteFor(item);
+        drawerNavigation.navigate('DetailViewStackScreensStack', { screen, params });
         drawerNavigation.closeDrawer();
       }
     },

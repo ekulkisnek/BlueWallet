@@ -17,8 +17,6 @@ export interface BitAssetsChainInfo {
   mainchain_hash: string | null;
   sidechain_hash: string | null;
   peer_count: number;
-  bitcoin_total_sats: number | null;
-  bitcoin_available_sats: number | null;
 }
 
 export interface BitAssetsWalletInfo {
@@ -188,6 +186,7 @@ export interface BitAssetsWalletClient {
 export interface BitAssetsWalletConfig {
   rpcUrl: string;
   bitassetsLiteWalletQuicUrl?: string;
+  seedHex?: string;
 }
 
 export function deriveBitAssetsLiteWalletQuicUrl(rpcUrl: string): string | undefined {
@@ -290,152 +289,6 @@ function withNativeTimeout<T>(promise: Promise<T>, operation: string, timeoutMs:
   });
 }
 
-export class JsonRpcBitAssetsWalletClient implements BitAssetsWalletClient {
-  private readonly url: string;
-  private readonly timeoutMs: number;
-
-  constructor(url: string, timeoutMs = 10000) {
-    this.url = url;
-    this.timeoutMs = timeoutMs;
-  }
-
-  configure(): Promise<void> {
-    return Promise.resolve();
-  }
-
-  getNewAddress(): Promise<string> {
-    return this.rpc('bitassets_getnewaddress').then(result => requireString(result));
-  }
-
-  walletInfo(): Promise<BitAssetsWalletInfo> {
-    return this.rpc('bitassets_walletinfo') as Promise<BitAssetsWalletInfo>;
-  }
-
-  sync(): Promise<BitAssetsWalletInfo> {
-    return this.rpc('bitassets_sync') as Promise<BitAssetsWalletInfo>;
-  }
-
-  async listUtxos(): Promise<BitAssetsUtxo[]> {
-    const value = await this.rpc('bitassets_listutxos');
-    if (Array.isArray(value)) return value as BitAssetsUtxo[];
-    const record = value as {
-      confirmed?: BitAssetsUtxo[];
-      mempool?: BitAssetsUtxo[];
-    };
-    return [...(record.confirmed ?? []), ...(record.mempool ?? [])];
-  }
-
-  getBalance(assetId?: string): Promise<{ confirmed: number } | BitAssetsBalances> {
-    return this.rpc('bitassets_getbalance', assetId ? [assetId] : []) as Promise<{ confirmed: number } | BitAssetsBalances>;
-  }
-
-  transfer(params: TransferParams): Promise<Txid> {
-    return this.rpc('bitassets_transfer', [
-      params.destinationAddress,
-      params.assetId,
-      params.amount,
-      params.feeSats ?? 0,
-      params.memo ?? null,
-    ]).then(result => parseTxid(result));
-  }
-
-  reserve(params: ReserveParams): Promise<Txid> {
-    return this.rpc('bitassets_reserve', [params.name, params.feeSats ?? 0]).then(result => parseTxid(result));
-  }
-
-  register(params: RegisterParams): Promise<Txid> {
-    return this.rpc('bitassets_register', [params.name, params.initialSupply, params.bitassetData, params.feeSats ?? 0]).then(result =>
-      parseTxid(result),
-    );
-  }
-
-  ammMint(params: AmmMintParams): Promise<Txid> {
-    return this.rpc('bitassets_amm_mint', [
-      params.asset0,
-      params.asset1,
-      params.amount0,
-      params.amount1,
-      params.lpTokenMint,
-      params.feeSats ?? 0,
-    ]).then(result => parseTxid(result));
-  }
-
-  ammSwap(params: AmmSwapParams): Promise<Txid> {
-    return this.rpc('bitassets_amm_swap', [
-      params.assetSpend,
-      params.assetReceive,
-      params.amountSpend,
-      params.amountReceive,
-      params.feeSats ?? 0,
-    ]).then(result => parseTxid(result));
-  }
-
-  ammBurn(params: AmmBurnParams): Promise<Txid> {
-    return this.rpc('bitassets_amm_burn', [
-      params.asset0,
-      params.asset1,
-      params.amount0,
-      params.amount1,
-      params.lpTokenBurn,
-      params.feeSats ?? 0,
-    ]).then(result => parseTxid(result));
-  }
-
-  dutchAuctionCreate(params: DutchAuctionCreateParams): Promise<Txid> {
-    return this.rpc('bitassets_dutch_auction_create', [params, params.feeSats ?? 0]).then(result => parseTxid(result));
-  }
-
-  dutchAuctionBid(params: DutchAuctionBidParams): Promise<Txid> {
-    return this.rpc('bitassets_dutch_auction_bid', [
-      params.auctionId,
-      params.baseAsset,
-      params.quoteAsset,
-      params.bidSize,
-      params.receiveQuantity,
-      params.feeSats ?? 0,
-    ]).then(result => parseTxid(result));
-  }
-
-  dutchAuctionCollect(params: DutchAuctionCollectParams): Promise<Txid> {
-    return this.rpc('bitassets_dutch_auction_collect', [
-      params.auctionId,
-      params.baseAsset,
-      params.quoteAsset,
-      params.amountBase,
-      params.amountQuote,
-      params.feeSats ?? 0,
-    ]).then(result => parseTxid(result));
-  }
-
-  private async rpc(method: string, params: unknown[] = []): Promise<unknown> {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
-    try {
-      const response = await fetch(this.url, {
-        method: 'POST',
-        headers: {
-          accept: 'application/json',
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 'redwallet-bitassets',
-          method,
-          params,
-        }),
-        signal: controller.signal,
-      });
-      const envelope = await response.json();
-      if (!response.ok || envelope.error) {
-        throw new Error(envelope.error?.message ?? `HTTP ${response.status}`);
-      }
-      return envelope.result;
-    } finally {
-      clearTimeout(timeout);
-    }
-  }
-}
-
 export async function fetchBitAssetsChainInfo(rpcUrl: string, timeoutMs = 8000): Promise<BitAssetsChainInfo> {
   const call = async (method: string): Promise<unknown> => {
     const controller = new AbortController();
@@ -455,12 +308,11 @@ export async function fetchBitAssetsChainInfo(rpcUrl: string, timeoutMs = 8000):
     }
   };
 
-  const [blockcount, mainHash, sideHash, peers, btcBalance] = await Promise.allSettled([
+  const [blockcount, mainHash, sideHash, peers] = await Promise.allSettled([
     call('getblockcount'),
     call('get_best_mainchain_block_hash'),
     call('get_best_sidechain_block_hash'),
     call('list_peers'),
-    call('bitcoin_balance'),
   ]);
 
   return {
@@ -468,14 +320,6 @@ export async function fetchBitAssetsChainInfo(rpcUrl: string, timeoutMs = 8000):
     mainchain_hash: mainHash.status === 'fulfilled' && typeof mainHash.value === 'string' ? mainHash.value : null,
     sidechain_hash: sideHash.status === 'fulfilled' && typeof sideHash.value === 'string' ? sideHash.value : null,
     peer_count: peers.status === 'fulfilled' && Array.isArray(peers.value) ? peers.value.length : 0,
-    bitcoin_total_sats:
-      btcBalance.status === 'fulfilled' && btcBalance.value != null && typeof (btcBalance.value as any).total_sats === 'number'
-        ? (btcBalance.value as any).total_sats
-        : null,
-    bitcoin_available_sats:
-      btcBalance.status === 'fulfilled' && btcBalance.value != null && typeof (btcBalance.value as any).available_sats === 'number'
-        ? (btcBalance.value as any).available_sats
-        : null,
   };
 }
 

@@ -9,6 +9,8 @@ RUN_DIR="${LOG_ROOT%/}/preflight-android-${STAMP}"
 ANDROID_SERIAL="${ANDROID_SERIAL:-${REDWALLET_ANDROID_SERIAL:-0A201JECB03306}}"
 ANDROID_PACKAGE="${REDWALLET_ANDROID_PACKAGE:-com.layertwolabs.bluewallet}"
 MAC_RPC="${REDWALLET_BITASSETS_RPC_MAC:-http://192.168.1.50:6004}"
+COLLECTOR_HEALTH_URL="${REDWALLET_LOG_COLLECTOR_HEALTH_URL:-http://192.168.1.50:6123/health}"
+COMMAND_HEALTH_URL="${REDWALLET_BITASSETS_COMMAND_HEALTH_URL:-http://192.168.1.50:6124/health}"
 
 mkdir -p "$RUN_DIR/probes"
 ln -sfn "$RUN_DIR" "${LOG_ROOT%/}/current-preflight-android"
@@ -115,20 +117,20 @@ if ! probe ensure-android-command-server bash "$ROOT_DIR/scripts/ensure-android-
     "Run: scripts/ensure-android-bitassets-command-server.sh"
 fi
 
-probe collector-health-lan curl -sS -m 5 http://192.168.1.50:6123/health
+probe collector-health-lan curl -sS -m 5 "$COLLECTOR_HEALTH_URL"
 if ! grep -qE '"ok":true|^ok$' "$RUN_DIR/probes/collector-health-lan.txt" 2>/dev/null; then
   blocker lan_collector_down \
-    "LAN collector not ok at http://192.168.1.50:6123/health" \
+    "LAN collector not ok at $COLLECTOR_HEALTH_URL" \
     "Run: node scripts/redwallet-log-collector-server.js"
 fi
 
-probe command-health-lan curl -sS -m 5 http://192.168.1.50:6124/health
+probe command-health-lan curl -sS -m 5 "$COMMAND_HEALTH_URL"
 if ! grep -qE '"ok":true|^ok$' "$RUN_DIR/probes/command-health-lan.txt" 2>/dev/null; then
   cmd_dir="$(readlink "${LOG_ROOT%/}/current-android-bitassets-command-server" 2>/dev/null || true)"
   [[ -z "$cmd_dir" ]] && cmd_dir="$(ls -td "$LOG_ROOT"/android-bitassets-command-server "$LOG_ROOT"/android-origin-retry-*/command-server "$LOG_ROOT"/android-real-device-*/command-server 2>/dev/null | head -1 || true)"
   if [[ -z "$cmd_dir" || ! -f "$cmd_dir/command.json" ]]; then
     blocker lan_command_down \
-      "LAN command server not ok at http://192.168.1.50:6124/health" \
+      "LAN command server not ok at $COMMAND_HEALTH_URL" \
       "Run: scripts/ensure-android-bitassets-command-server.sh (LiPhone standby — docs/FLEET_LANES.md)"
   fi
 fi

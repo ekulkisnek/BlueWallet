@@ -90,6 +90,12 @@ class AppDelegate: RCTAppDelegate, UNUserNotificationCenterDelegate {
         return nil
         #else
         #if DEBUG
+        let useEmbeddedBundle = ProcessInfo.processInfo.arguments.contains("REDWALLET_USE_EMBEDDED_BUNDLE") ||
+            ProcessInfo.processInfo.environment["REDWALLET_USE_EMBEDDED_BUNDLE"] == "1"
+        if useEmbeddedBundle, let bundledURL = Self.embeddedJsBundleURL() {
+            NSLog("[AppDelegate] Using embedded JS bundle on debug simulator: %@", bundledURL.path)
+            return bundledURL
+        }
         return RCTBundleURLProvider.sharedSettings().jsBundleURL(forBundleRoot: "index")
         #else
         return Self.embeddedJsBundleURL()

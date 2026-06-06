@@ -91,6 +91,7 @@ const ReceiveDetails = () => {
 
   const wallet = walletID ? wallets.find(w => w.getID() === walletID) : undefined;
   const isBIP47Enabled = wallet?.isBIP47Enabled();
+  const isSidechainWallet = wallet?.type === BitAssetsWallet.type || wallet?.type === LiquidWallet.type;
 
   const stylesHook = StyleSheet.create({
     root: {
@@ -112,13 +113,12 @@ const ReceiveDetails = () => {
 
   const setAddressBIP21Encoded = useCallback(
     (addr: string) => {
-      const newBip21encoded =
-        wallet?.type === BitAssetsWallet.type || wallet?.type === LiquidWallet.type ? addr : DeeplinkSchemaMatch.bip21encode(addr);
+      const newBip21encoded = isSidechainWallet ? addr : DeeplinkSchemaMatch.bip21encode(addr);
       setParams({ address: addr });
       setBip21encoded(newBip21encoded);
       setShowAddress(true);
     },
-    [setParams, wallet],
+    [isSidechainWallet, setParams],
   );
 
   const obtainWalletAddress = useCallback(async () => {
@@ -222,10 +222,10 @@ const ReceiveDetails = () => {
   useEffect(() => {
     if (wallet) {
       setOptions({
-        title: wallet.type === BitAssetsWallet.type ? 'Receive BitAssets' : loc.receive.header,
+        title: isSidechainWallet ? 'Receive' : loc.receive.header,
       });
     }
-  }, [wallet, setOptions]);
+  }, [isSidechainWallet, setOptions, wallet]);
 
   useEffect(() => {
     if (wallet?.allowBIP47()) {
@@ -241,7 +241,7 @@ const ReceiveDetails = () => {
 
     const intervalId = setInterval(async () => {
       try {
-        if (wallet?.type === BitAssetsWallet.type) return;
+        if (isSidechainWallet) return;
         const decoded = DeeplinkSchemaMatch.bip21decode(bip21encoded);
         const addressToUse = address || decoded.address;
 
@@ -316,7 +316,16 @@ const ReceiveDetails = () => {
     }, intervalMs);
 
     return () => clearInterval(intervalId);
-  }, [bip21encoded, address, initialConfirmed, initialUnconfirmed, intervalMs, fetchAndSaveWalletTransactions, walletID, wallet?.type]);
+  }, [
+    bip21encoded,
+    address,
+    initialConfirmed,
+    initialUnconfirmed,
+    intervalMs,
+    fetchAndSaveWalletTransactions,
+    walletID,
+    isSidechainWallet,
+  ]);
 
   useEffect(() => {
     const handleBackButton = () => {
@@ -402,7 +411,7 @@ const ReceiveDetails = () => {
                 </>
               )}
               <BlueText style={[styles.chainLabel, stylesHook.chainLabel]}>
-                {wallet?.type === BitAssetsWallet.type ? 'BitAssets Sidechain Address' : 'Bitcoin Address'}
+                {isSidechainWallet ? 'Sidechain Address' : 'Bitcoin Address'}
               </BlueText>
               <View style={styles.qrCodeContainer}>
                 <QRCodeComponent value={bip21encoded} size={qrCodeSize} />
@@ -598,7 +607,7 @@ const ReceiveDetails = () => {
 
         <View style={styles.share}>
           <BlueCard>
-            {showAddress && currentTab === loc.wallets.details_address && wallet?.type !== BitAssetsWallet.type && (
+            {showAddress && currentTab === loc.wallets.details_address && !isSidechainWallet && (
               <BlueButtonLink
                 style={styles.link}
                 testID="SetCustomAmountButton"

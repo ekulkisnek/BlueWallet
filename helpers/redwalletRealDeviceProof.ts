@@ -7,7 +7,7 @@ import {
 } from './redwalletSignetEndpoints.generated';
 
 /** Dev bundle on a physical iPhone — embedded main.jsbundle is built with --dev false. */
-const REAL_DEVICE_PROOF_BUNDLE_IDS = new Set(['com.lukekensik.redwallet.dev']);
+const REAL_DEVICE_PROOF_BUNDLE_IDS = new Set(['com.lukekensik.redwallet.dev', 'com.lukekensik.redwallet.twophones']);
 
 /** Signet host reachable from iPhone on Wi‑Fi (from scripts/redwallet-signet-endpoints.sh). */
 export const REDWALLET_PHONE_SIGNET_RPC_HOST = REDWALLET_SIGNET_PHONE_HOST;
@@ -76,9 +76,16 @@ export function canonicalBitAssetsQuicUrlForRuntime(): string {
 
 export { REDWALLET_SIGNET_BITASSETS_RPC_URL, REDWALLET_SIGNET_BITASSETS_QUIC_URL, REDWALLET_SIGNET_PHONE_HOST };
 
-/** Canonical LAN-reachable Elements RPC for Liquid (L-BTC) on physical devices (signet/regtest ID5 etc).
- * Port 18443 is conventional for elementsd regtest; adjust via generated or caller override when Liquid signet endpoints added.
- */
 export function canonicalLiquidRpcUrlForRuntime(): string {
-  return `http://${REDWALLET_SIGNET_PHONE_HOST}:18443`;
+  return `http://${REDWALLET_SIGNET_PHONE_HOST}:6055`;
+}
+
+/** Canonical LAN-reachable Liquid Electrum endpoint for node-free mobile Liquid sends. */
+export function canonicalLiquidElectrumUrlForRuntime(): string {
+  return `tcp://${REDWALLET_SIGNET_PHONE_HOST}:60401`;
+}
+
+/** Canonical LAN-reachable Liquid QUIC endpoint. */
+export function canonicalLiquidQuicUrlForRuntime(): string {
+  return REDWALLET_SIGNET_BITASSETS_QUIC_URL;
 }

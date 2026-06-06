@@ -10,7 +10,7 @@
 #   REDWALLET_ANDROID_PACKAGE   default com.layertwolabs.bluewallet
 #   REDWALLET_PHONE_LAN_HOST    Mac LAN IP phones use (auto-detected if unset)
 #   L1_E2E_BIDIRECTIONAL        1 to also run Android→iOS after iOS→Android (default 1)
-#   L1_E2E_ANDROID_SEND_SATS    Android→iOS amount (default 10000)
+#   L1_E2E_ANDROID_SEND_SATS    Android→iOS amount (default 1000)
 #   L1_E2E_SEND_SATS            iOS→Android amount (default 10000)
 #   L1_E2E_FUND_SATS            fund iOS wallet (default 100000)
 #   DETOX_LOGLEVEL              detox log level
@@ -37,7 +37,7 @@ ELECTRUM_PORT="${REDWALLET_ELECTRUM_PORT:-60101}"
 L1_E2E_SEND_SATS="${L1_E2E_SEND_SATS:-10000}"
 L1_E2E_FUND_SATS="${L1_E2E_FUND_SATS:-100000}"
 L1_E2E_BIDIRECTIONAL="${L1_E2E_BIDIRECTIONAL:-1}"
-L1_E2E_ANDROID_SEND_SATS="${L1_E2E_ANDROID_SEND_SATS:-10000}"
+L1_E2E_ANDROID_SEND_SATS="${L1_E2E_ANDROID_SEND_SATS:-1000}"
 
 mkdir -p "$RUN_DIR"
 ln -sfn "$RUN_DIR" "${LOG_ROOT%/}/current-l1-ios-android-e2e"
@@ -82,6 +82,13 @@ setup_android_usb_reverse() {
   log "adb reverse 8081/60101/6123/6125"
 }
 
+pause_android_before_ios_btc_command() {
+  local package="${REDWALLET_ANDROID_PACKAGE:-com.layertwolabs.bluewallet}"
+  adb -s "$ANDROID_SERIAL" reverse --remove tcp:6125 >/dev/null 2>&1 || true
+  adb -s "$ANDROID_SERIAL" shell am force-stop "$package" >/dev/null 2>&1 || true
+  log "android_paused_for_ios_btc_command package=$package removed_reverse=6125"
+}
+
 port_open() {
   curl --silent --max-time 1 "http://127.0.0.1:$METRO_PORT/status" >/dev/null 2>&1
 }
@@ -103,6 +110,86 @@ start_metro_if_needed() {
   done
   log "FAIL metro timeout"
   exit 1
+}
+
+dc_mainchain() {
+  docker compose -f "$COMPOSE_FILE" exec -T mainchain \
+    drivechain-cli -signet -rpccookiefile=/data/signet/.cookie "$@"
+}
+
+funding_utxos_json() {
+  local txid="$1"
+  local address="$2"
+  local sats="$3"
+  local tx_json=""
+  if tx_json="$(dc_mainchain -rpcwallet=signet-miner gettransaction "$txid" true 2>/dev/null)"; then
+    :
+  else
+    tx_json="$(dc_mainchain getrawtransaction "$txid" true)"
+  fi
+  local current_height
+  current_height="$(dc_mainchain getblockcount)"
+  python3 -c '
+import json, sys
+tx = json.loads(sys.argv[1])
+address = sys.argv[2]
+sats = int(sys.argv[3])
+current_height = int(sys.argv[4])
+txid = tx.get("txid", "")
+confirmations = int(tx.get("confirmations") or 1)
+height = int(tx.get("blockheight") or 0)
+if not height and confirmations > 0:
+    height = current_height - confirmations + 1
+for detail in tx.get("details") or []:
+    if detail.get("address") == address:
+        print(json.dumps([{
+            "txid": txid,
+            "vout": int(detail.get("vout", 0)),
+            "value": sats,
+            "address": address,
+            "height": height,
+            "confirmations": confirmations,
+        }]))
+        sys.exit(0)
+for vout in tx.get("vout") or []:
+    script_pubkey = vout.get("scriptPubKey") or {}
+    addresses = script_pubkey.get("addresses") or []
+    script_address = script_pubkey.get("address")
+    if script_address == address or address in addresses:
+        print(json.dumps([{
+            "txid": txid,
+            "vout": int(vout.get("n", 0)),
+            "value": sats,
+            "address": address,
+            "height": height,
+            "confirmations": confirmations,
+        }]))
+        sys.exit(0)
+sys.exit("funding output not found for address " + address)
+' "$tx_json" "$address" "$sats" "$current_height"
+}
+
+ensure_l1_broadcast_helper() {
+  local host="${REDWALLET_PHONE_LAN_HOST:-$(detect_lan_host)}"
+  local url="http://${host}:6126/broadcast"
+  if ! curl -sS -m 2 "http://${host}:6126/health" >/dev/null 2>&1; then
+    pkill -f 'redwallet-core-broadcast-helper.js' 2>/dev/null || true
+    nohup env REDWALLET_BROADCAST_HELPER_HOST=0.0.0.0 \
+      REDWALLET_BROADCAST_HELPER_PORT=6126 \
+      node "$ROOT_DIR/scripts/redwallet-core-broadcast-helper.js" \
+      >>"$RUN_DIR/core-broadcast-helper.log" 2>&1 &
+    for _ in $(seq 1 20); do
+      if curl -sS -m 2 "http://${host}:6126/health" >/dev/null 2>&1; then
+        break
+      fi
+      sleep 1
+    done
+  fi
+  if ! curl -sS -m 2 "http://${host}:6126/health" >/dev/null 2>&1; then
+    log "BLOCKER core broadcast helper not reachable at ${host}:6126"
+    exit 1
+  fi
+  printf '%s' "$url"
 }
 
 run_preflight() {
@@ -164,6 +251,7 @@ else
   : "${ANDROID_L1_RECEIVE_ADDRESS:?REDWALLET_SKIP_ANDROID_SEED=1 requires ANDROID_L1_RECEIVE_ADDRESS}"
   export L1_RECEIVE_ADDRESS="${L1_RECEIVE_ADDRESS:-$ANDROID_L1_RECEIVE_ADDRESS}"
 fi
+pause_android_before_ios_btc_command
 
 ensure_ios_build
 ensure_detox_simulator_booted
@@ -208,6 +296,9 @@ if [[ "${L1_E2E_IOS_SIM_COMMAND_SEND:-1}" == 1 ]]; then
 
     fund_txid="$(bash "$ROOT_DIR/scripts/fund-l1-signet-address.sh" "$IOS_RECEIVE_ADDRESS" "$L1_E2E_FUND_SATS" "${L1_E2E_POST_FUND_MINE_BLOCKS:-6}")"
     log "fund_txid=$fund_txid"
+    IOS_SEND_UTXOS_JSON="$(funding_utxos_json "$fund_txid" "$IOS_RECEIVE_ADDRESS" "$L1_E2E_FUND_SATS")"
+    L1_BROADCAST_URL="$(ensure_l1_broadcast_helper)"
+    log "ios_sim_send_manual_utxo=${IOS_SEND_UTXOS_JSON} broadcast_url=$L1_BROADCAST_URL"
 
     set +e
     node -e "
@@ -222,6 +313,8 @@ waitForElectrumBalance(process.argv[1], Number(process.argv[2]));
       REDWALLET_IOS_SIM_BTC_SEND_LOG_DIR="$RUN_DIR/ios-command-send" \
         DETOX_IOS_SIM_UDID="$IOS_SIM_UDID" \
         REDWALLET_IOS_BTC_WALLET_ID="${REDWALLET_IOS_BTC_WALLET_ID:-}" \
+        REDWALLET_L1_UTXOS_JSON="$IOS_SEND_UTXOS_JSON" \
+        REDWALLET_L1_BROADCAST_URL="$L1_BROADCAST_URL" \
         bash "$ROOT_DIR/scripts/send-ios-simulator-btc-l1.sh" \
         "$ANDROID_L1_RECEIVE_ADDRESS" "$L1_E2E_SEND_SATS" "${REDWALLET_IOS_BTC_WALLET_ID:-}" \
         | tee "$RUN_DIR/ios-command-send.log"
@@ -263,6 +356,7 @@ echo "ios_receive_address=${IOS_RECEIVE_ADDRESS:-unset}" >"$RUN_DIR/ios-receive-
 IOS_TO_ANDROID_VERIFY=skip
 ANDROID_TO_IOS_VERIFY=skip
 ANDROID_SEND_TXID=""
+ANDROID_SEND_UTXOS_JSON=""
 
 if [[ "$detox_rc" -eq 0 && -n "$TXID" ]]; then
   log "ios_to_android mine + verify"
@@ -281,11 +375,20 @@ fi
 
 if [[ "$L1_E2E_BIDIRECTIONAL" == 1 && "$detox_rc" -eq 0 && -n "$IOS_RECEIVE_ADDRESS" ]]; then
   log "android_to_ios start dest=$IOS_RECEIVE_ADDRESS sats=$L1_E2E_ANDROID_SEND_SATS"
+  xcrun simctl terminate "$IOS_SIM_UDID" com.layertwolabs.bluewallet >/dev/null 2>&1 || true
+  log "ios_sim_paused_for_android_btc_command udid=$IOS_SIM_UDID"
   (cd "$LOCAL_DEV" && ./scripts/mine-private-signet-blocks.sh "${L1_E2E_ANDROID_FUND_MINE_BLOCKS:-3}") >>"$RUN_DIR/android-fund-mine.log" 2>&1 || true
+  if [[ -n "$TXID" && -n "$ANDROID_L1_RECEIVE_ADDRESS" ]]; then
+    ANDROID_SEND_UTXOS_JSON="$(funding_utxos_json "$TXID" "$ANDROID_L1_RECEIVE_ADDRESS" "$L1_E2E_SEND_SATS")"
+    L1_BROADCAST_URL="${L1_BROADCAST_URL:-$(ensure_l1_broadcast_helper)}"
+    log "android_send_manual_utxo=$ANDROID_SEND_UTXOS_JSON broadcast_url=$L1_BROADCAST_URL"
+  fi
   sleep "${L1_E2E_ANDROID_BALANCE_WAIT_SEC:-15}"
   set +e
   REDWALLET_ANDROID_BTC_SEND_LOG_DIR="$RUN_DIR/android-send" \
     ANDROID_SERIAL="$ANDROID_SERIAL" \
+    REDWALLET_L1_UTXOS_JSON="$ANDROID_SEND_UTXOS_JSON" \
+    REDWALLET_L1_BROADCAST_URL="${L1_BROADCAST_URL:-}" \
     bash "$ROOT_DIR/scripts/send-android-btc-l1.sh" \
     "$IOS_RECEIVE_ADDRESS" "$L1_E2E_ANDROID_SEND_SATS" "${REDWALLET_ANDROID_BTC_WALLET_ID:-}" \
     | tee "$RUN_DIR/android-send.log"

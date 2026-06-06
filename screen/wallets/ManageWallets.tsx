@@ -665,7 +665,7 @@ const ManageWallets: React.FC = () => {
 
   const keyExtractor = useCallback((item: Item, index: number) => {
     if (item.type === ItemType.WalletSection) {
-      return `wallet-${item.data.getID()}`;
+      return `wallet-${item.data.getID()}-${index}`;
     }
 
     if (item.type === ItemType.TransactionSection) {
@@ -678,7 +678,7 @@ const ManageWallets: React.FC = () => {
     }
 
     if (item.type === ItemType.WalletGroupSection) {
-      return `group-${item.wallet.getID()}`;
+      return `group-${item.wallet.getID()}-${index}`;
     }
 
     return index.toString();

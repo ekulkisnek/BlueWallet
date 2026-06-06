@@ -41,6 +41,7 @@ class LiquidWalletModule: NSObject, NativeLiquidWalletSpec {
     @objc static func methodQueue() -> DispatchQueue! { liquidQueue }
 
     @objc func configure(_ configJson: String, resolve: RCTPromiseResolveBlock, reject: RCTPromiseRejectBlock) {
+        NSLog("[LiquidWallet] configure configJson = %@", configJson)
         do {
             walletLock.lock()
             defer { walletLock.unlock() }
@@ -49,11 +50,24 @@ class LiquidWalletModule: NSObject, NativeLiquidWalletSpec {
                 throw NSError(domain: "LiquidWallet", code: 4, userInfo: [NSLocalizedDescriptionKey: "Invalid Liquid wallet config"])
             }
             let requestedRpcUrl = ((config["rpcUrl"] ?? config["rpc_url"]) as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            let rpcUrl = normalizeRpcUrlForCurrentRuntime(requestedRpcUrl)
-            try validateRpcUrl(rpcUrl)
-            eventLog("configure", "begin", ["rpcUrl": rpcUrl])
+            let rpcUrl = requestedRpcUrl.isEmpty ? "" : normalizeRpcUrlForCurrentRuntime(requestedRpcUrl)
+            if !rpcUrl.isEmpty {
+                try validateRpcUrl(rpcUrl)
+            }
+            let liteWalletRpcUrl = ((config["liteWalletRpcUrl"] ?? config["lite_wallet_rpc_url"]) as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let liquidLiteWalletQuicUrl = ((config["liquidLiteWalletQuicUrl"] ?? config["liquid_lite_wallet_quic_url"]) as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let walletMode = ((config["walletMode"] ?? config["wallet_mode"]) as? String ?? "lwk").trimmingCharacters(in: .whitespacesAndNewlines)
+            let requestedElectrumUrl = ((config["electrumUrl"] ?? config["electrum_url"]) as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let electrumUrl = requestedElectrumUrl.isEmpty && (walletMode.isEmpty || walletMode == "lwk")
+                ? defaultElectrumUrl(for: rpcUrl)
+                : requestedElectrumUrl
+            eventLog("configure", "begin", ["rpcUrl": rpcUrl, "liteWalletRpcUrl": liteWalletRpcUrl, "liquidLiteWalletQuicUrl": liquidLiteWalletQuicUrl, "electrumUrl": electrumUrl, "walletMode": walletMode])
             let groupDefaults = UserDefaults(suiteName: "group.com.layertwolabs.bluewallet") ?? UserDefaults.standard
             groupDefaults.set(rpcUrl, forKey: "liquidRpcUrl")
+            groupDefaults.set(liteWalletRpcUrl, forKey: "liquidLiteWalletRpcUrl")
+            groupDefaults.set(liquidLiteWalletQuicUrl, forKey: "liquidLiteWalletQuicUrl")
+            groupDefaults.set(electrumUrl, forKey: "liquidElectrumUrl")
+            groupDefaults.set(walletMode.isEmpty ? "lwk" : walletMode, forKey: "liquidWalletMode")
             groupDefaults.synchronize()
             if handle != 0 {
                 liquid_wallet_free(handle)
@@ -62,8 +76,12 @@ class LiquidWalletModule: NSObject, NativeLiquidWalletSpec {
             let responseData = try JSONSerialization.data(withJSONObject: [
                 "configured": true,
                 "rpcUrl": rpcUrl,
+                "liteWalletRpcUrl": liteWalletRpcUrl,
+                "liquidLiteWalletQuicUrl": liquidLiteWalletQuicUrl,
+                "electrumUrl": electrumUrl,
+                "walletMode": walletMode.isEmpty ? "lwk" : walletMode,
             ])
-            eventLog("configure", "ok", ["rpcUrl": rpcUrl])
+            eventLog("configure", "ok", ["rpcUrl": rpcUrl, "liteWalletRpcUrl": liteWalletRpcUrl, "liquidLiteWalletQuicUrl": liquidLiteWalletQuicUrl, "electrumUrl": electrumUrl, "walletMode": walletMode.isEmpty ? "lwk" : walletMode])
             resolve(String(data: responseData, encoding: .utf8) ?? "{\"configured\":true}")
         } catch {
             let sanitized = sanitizedError(error)
@@ -155,6 +173,10 @@ class LiquidWalletModule: NSObject, NativeLiquidWalletSpec {
         SecItemDelete(keychainQuery as CFDictionary)
         let groupDefaults = UserDefaults(suiteName: "group.com.layertwolabs.bluewallet") ?? UserDefaults.standard
         groupDefaults.removeObject(forKey: "liquidRpcUrl")
+        groupDefaults.removeObject(forKey: "liquidLiteWalletRpcUrl")
+        groupDefaults.removeObject(forKey: "liquidLiteWalletQuicUrl")
+        groupDefaults.removeObject(forKey: "liquidElectrumUrl")
+        groupDefaults.removeObject(forKey: "liquidWalletMode")
         groupDefaults.synchronize()
         resolve("{\"cleared\":true}")
     }
@@ -167,27 +189,35 @@ class LiquidWalletModule: NSObject, NativeLiquidWalletSpec {
         // wallet.json holds no seed (persist_seed=false), so default protection is sufficient; seed lives only in Keychain.
         let walletFile = walletDirectory.appendingPathComponent("wallet.json")
         let groupDefaults = UserDefaults(suiteName: "group.com.layertwolabs.bluewallet") ?? UserDefaults.standard
-        guard let rpcUrl = groupDefaults.string(forKey: "liquidRpcUrl"), !rpcUrl.isEmpty else {
-            throw NSError(domain: "LiquidWallet", code: 3, userInfo: [NSLocalizedDescriptionKey: "Liquid RPC URL is not configured"])
-        }
+        let rpcUrl = groupDefaults.string(forKey: "liquidRpcUrl") ?? ""
+        let liteWalletRpcUrl = groupDefaults.string(forKey: "liquidLiteWalletRpcUrl") ?? ""
+        let liquidLiteWalletQuicUrl = groupDefaults.string(forKey: "liquidLiteWalletQuicUrl") ?? ""
+        let electrumUrl = groupDefaults.string(forKey: "liquidElectrumUrl") ?? ""
+        let walletMode = groupDefaults.string(forKey: "liquidWalletMode") ?? "lwk"
         let seedHex = try getOrCreateSeedHex(walletFile: walletFile)
         // Exact "persist_seed": false JSON per design (PR 3 req + BitAssets iOS:230 / Android Liquid:158)
-        let config: [String: Any] = [
+        var config: [String: Any] = [
             "path": walletFile.path,
+            "wallet_mode": walletMode.isEmpty ? "lwk" : walletMode,
             "rpc_url": rpcUrl,
+            "lite_wallet_rpc_url": liteWalletRpcUrl,
+            "electrum_url": electrumUrl,
             "seed_hex": seedHex,
             "create": true,
             "persist_seed": false,
         ]
+        if !liquidLiteWalletQuicUrl.isEmpty {
+            config["liquidLiteWalletQuicUrl"] = liquidLiteWalletQuicUrl
+        }
         let configData = try JSONSerialization.data(withJSONObject: config)
         let configJson = String(data: configData, encoding: .utf8)!
-        eventLog("openWallet", "begin", ["rpcUrl": rpcUrl, "walletPath": walletFile.path])
+        eventLog("openWallet", "begin", ["rpcUrl": rpcUrl, "liteWalletRpcUrl": liteWalletRpcUrl, "electrumUrl": electrumUrl, "walletMode": walletMode.isEmpty ? "lwk" : walletMode, "walletPath": walletFile.path])
         let opened = try configJson.withCString { try unwrap(liquid_wallet_open($0)) }
         guard let parsed = UInt(opened) else {
             throw NSError(domain: "LiquidWallet", code: 2, userInfo: [NSLocalizedDescriptionKey: "invalid wallet handle"])
         }
         handle = parsed
-        eventLog("openWallet", "ok", ["rpcUrl": rpcUrl, "walletPath": walletFile.path])
+        eventLog("openWallet", "ok", ["rpcUrl": rpcUrl, "liteWalletRpcUrl": liteWalletRpcUrl, "electrumUrl": electrumUrl, "walletMode": walletMode.isEmpty ? "lwk" : walletMode, "walletPath": walletFile.path])
         return parsed
     }
 
@@ -396,6 +426,16 @@ class LiquidWalletModule: NSObject, NativeLiquidWalletSpec {
         #if DEBUG
         NSLog("[LiquidWallet] %@", sanitizeSensitiveDetails(message))
         #endif
+    }
+
+    private func defaultElectrumUrl(for rpcUrl: String) -> String {
+        guard !rpcUrl.isEmpty, let components = URLComponents(string: rpcUrl), let host = components.host, !host.isEmpty else {
+            return ""
+        }
+        if host.contains(":") && !host.hasPrefix("[") {
+            return "tcp://[\(host)]:60401"
+        }
+        return "tcp://\(host):60401"
     }
 
     private func eventLog(_ operation: String, _ status: String, _ fields: [String: Any] = [:]) {

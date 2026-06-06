@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Embed a fresh JS bundle into the Debug-iphoneos app (real devices prefer main.jsbundle over Metro).
+# Embed a fresh JS bundle into an iphoneos app (real devices prefer main.jsbundle over Metro).
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -23,15 +23,27 @@ fi
 log "START app=$APP"
 cd "$ROOT_DIR"
 
-# Physical iPhones on Wi‑Fi use Mac LAN docker ports; avoid Tailscale-only hosts in embedded bundle.
-export REDWALLET_BITASSETS_RPC_MAC="${REDWALLET_BITASSETS_RPC_MAC:-http://192.168.1.50:6004}"
-export REDWALLET_PHONE_HOST="${REDWALLET_PHONE_HOST:-192.168.1.50}"
+# Physical iPhones use the currently reachable Mac host for command/RPC
+# endpoints. Prefer an explicit override, then the latest endpoint probe, and
+# only fall back to the old static LAN address if discovery is unavailable.
+if [[ -z "${REDWALLET_PHONE_HOST:-}" || -z "${REDWALLET_BITASSETS_RPC_MAC:-}" ]]; then
+  ENDPOINT_ENV="$(ls -t "$LOG_ROOT"/signet-endpoints-*/redwallet-signet.env 2>/dev/null | head -1 || true)"
+  if [[ -n "$ENDPOINT_ENV" && -f "$ENDPOINT_ENV" ]]; then
+    # shellcheck disable=SC1090
+    source "$ENDPOINT_ENV"
+  fi
+fi
+export REDWALLET_PHONE_HOST="${REDWALLET_PHONE_HOST:-${chosen_phone_host:-192.168.1.50}}"
+export REDWALLET_BITASSETS_RPC_MAC="${REDWALLET_BITASSETS_RPC_MAC:-${bitassets_rpc_url:-http://${REDWALLET_PHONE_HOST}:6004}}"
 bash "$ROOT_DIR/scripts/generate-redwallet-signet-endpoints-ts.sh" | tee -a "$RUN_DIR/bundle.log"
 
 USB_HOST="$("$ROOT_DIR/scripts/redwallet-usb-tunnel-mac-ipv6.sh" "${REDWALLET_FORCE_LAUNCH_UDID:-}" 2>/dev/null || true)"
 if [[ -z "$USB_HOST" ]]; then
-  log "BLOCKER no Core Device USB tunnel for bundle (set REDWALLET_FORCE_LAUNCH_UDID or plug LiPhone)"
-  exit 1
+  if [[ "${REDWALLET_REQUIRE_USB_TUNNEL:-1}" == "1" ]]; then
+    log "BLOCKER no Core Device USB tunnel for bundle (set REDWALLET_FORCE_LAUNCH_UDID or plug LiPhone)"
+    exit 1
+  fi
+  log "WARN no Core Device USB tunnel; embedded bundle will use LAN/signet endpoints only"
 else
   log "USB_TUNNEL_MAC=$USB_HOST"
 fi
@@ -40,10 +52,16 @@ cat >"$ROOT_DIR/helpers/redwalletUsbTunnel.generated.ts" <<EOF
 export const REDWALLET_USB_TUNNEL_MAC_IPV6 = '${USB_HOST}';
 EOF
 
+if [[ "${REDWALLET_RESET_METRO_CACHE:-1}" == "1" ]]; then
+  rm -rf "${TMPDIR:-/tmp}"/metro-* "${TMPDIR:-/tmp}"/haste-map-* "$ROOT_DIR/node_modules/.cache/metro" 2>/dev/null || true
+  log "RESET_METRO_CACHE"
+fi
+
 set +e
 npx react-native bundle \
   --platform ios \
   --dev false \
+  --reset-cache \
   --entry-file index.js \
   --bundle-output "$APP/main.jsbundle" \
   --assets-dest "$APP" \
@@ -63,8 +81,10 @@ else
   log "WARN bundle missing expected markers (grep device_logger_installed / real device proof)"
 fi
 
-# Embedding main.jsbundle invalidates the sealed app signature.
-IDENT="${REDWALLET_IOS_CODESIGN_IDENTITY:-981B5698C1C67E65D5A8FD8BA8AD0CDE63FEE77B}"
+# Embedding main.jsbundle invalidates the sealed app signature. Prefer the
+# identity Xcode already used for this app, then allow an explicit override.
+DETECTED_IDENT="$(codesign -dv --verbose=4 "$APP" 2>&1 | awk -F= '/^Authority=(Apple Development|iPhone Developer|Apple Distribution|iPhone Distribution)/ { print $2; exit }' || true)"
+IDENT="${REDWALLET_IOS_CODESIGN_IDENTITY:-${DETECTED_IDENT:-981B5698C1C67E65D5A8FD8BA8AD0CDE63FEE77B}}"
 PROVISION="${REDWALLET_EMBEDDED_PROVISION:-}"
 if [[ -z "$PROVISION" ]]; then
   PROVISION="$(ls -t "$LOG_ROOT"/current-iphone12-utreexo-redwallet-build/PersonalDebugDerivedData/Build/Products/Debug-iphoneos/BlueWallet.app/embedded.mobileprovision 2>/dev/null | head -1 || true)"

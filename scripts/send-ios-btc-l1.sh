@@ -15,6 +15,9 @@ WALLET_ID="${3:-${REDWALLET_IOS_BTC_WALLET_ID:-}}"
 POLL_SECONDS="${REDWALLET_IOS_BTC_SEND_POLL_SECONDS:-180}"
 MONITOR_SECONDS="${REDWALLET_IOS_MONITOR_SECONDS:-120}"
 FEE_RATE="${L1_E2E_FEE_RATE:-1}"
+BROADCAST_URL="${REDWALLET_L1_BROADCAST_URL:-}"
+CORE_RPC_URL="${REDWALLET_L1_CORE_RPC_URL:-}"
+UTXOS_JSON="${REDWALLET_L1_UTXOS_JSON:-}"
 
 mkdir -p "$RUN_DIR"
 ln -sfn "$RUN_DIR" "${LOG_ROOT%/}/current-ios-btc-send"
@@ -90,20 +93,32 @@ wallet_id_json=""
 if [[ -n "$WALLET_ID" ]]; then
   wallet_id_json=",\"walletID\":\"${WALLET_ID}\""
 fi
+fallback_json=""
+if [[ -n "$BROADCAST_URL" ]]; then
+  fallback_json="${fallback_json},\"broadcastUrl\":\"${BROADCAST_URL}\""
+fi
+if [[ -n "$CORE_RPC_URL" ]]; then
+  fallback_json="${fallback_json},\"coreRpcUrl\":\"${CORE_RPC_URL}\""
+fi
+if [[ -n "$UTXOS_JSON" ]]; then
+  fallback_json="${fallback_json},\"utxos\":${UTXOS_JSON}"
+fi
 cat >"$CMD_DIR/command.json" <<EOF
-{"operation":"sendL1","commandId":"${command_id}","address":"${DESTINATION}","amountSats":${AMOUNT_SATS},"feeRate":${FEE_RATE}${wallet_id_json}}
+{"operation":"sendL1","commandId":"${command_id}","address":"${DESTINATION}","amountSats":${AMOUNT_SATS},"feeRate":${FEE_RATE}${wallet_id_json}${fallback_json}}
 EOF
 log "SEEDED command.json dir=$CMD_DIR"
-
-push_usb_tunnel_host_file || true
-ios_push_btc_command "$CMD_DIR/command.json" || true
 
 set +e
 REDWALLET_IOS_MONITOR_RUN_DIR="$RUN_DIR/monitor" \
   REDWALLET_MONITOR_TERMINATE_EXISTING=1 \
   REDWALLET_MONITOR_CONSOLE=1 \
-  "$ROOT_DIR/scripts/monitor-redwallet-ios-real-devices.sh" "$BUNDLE_ID" "$MONITOR_SECONDS" "$IOS_UDID" >>"$RUN_DIR/monitor.log" 2>&1
+  "$ROOT_DIR/scripts/monitor-redwallet-ios-real-devices.sh" "$BUNDLE_ID" "$MONITOR_SECONDS" "$IOS_UDID" >>"$RUN_DIR/monitor.log" 2>&1 &
+monitor_pid=$!
 set -e
+
+sleep "${REDWALLET_IOS_BTC_SEND_PRE_PUSH_WAIT_SEC:-8}"
+push_usb_tunnel_host_file || true
+ios_push_btc_command "$CMD_DIR/command.json" || true
 
 result_path="$CMD_DIR/result.json"
 txid=""
@@ -135,6 +150,11 @@ PY
   fi
   sleep 2
 done
+
+if kill -0 "$monitor_pid" >/dev/null 2>&1; then
+  kill "$monitor_pid" >/dev/null 2>&1 || true
+  wait "$monitor_pid" >/dev/null 2>&1 || true
+fi
 
 if [[ -z "$txid" ]]; then
   log "BLOCKER no iOS L1 send txid (result.json missing or failed)"

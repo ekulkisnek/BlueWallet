@@ -34,7 +34,7 @@ probe() {
 }
 
 probe_bitassets_rpc_light() {
-  local url="${BITASSETS_RPC_URL:-http://192.168.1.50:6004}"
+  local url="${REDWALLET_BITASSETS_RPC_URL:-${BITASSETS_RPC_URL:-http://100.76.117.106:6004}}"
   local r
   r="$(curl -sS -m 5 -X POST "${url%/}/" \
     -H 'Content-Type: application/json' \
@@ -94,7 +94,7 @@ else
     exit 2
   fi
 fi
-if ! grep -q '"result"' "$RUN_DIR/probes/ensure-bitassets-rpc.txt" 2>/dev/null; then
+if ! grep -qE '"result"|OK rpc=|bitassets_cli_blockcount=[0-9]+' "$RUN_DIR/probes/ensure-bitassets-rpc.txt" "$RUN_DIR/probes/signet-endpoints.txt" 2>/dev/null; then
   log "BLOCKER bitassets_rpc_no_result"
   echo "blocker=bitassets_rpc_no_result" >"$RUN_DIR/BLOCKER.txt"
   exit 2
@@ -106,7 +106,7 @@ if [[ -n "$ENV_FILE" && -f "$ENV_FILE" ]]; then
   cp "$ENV_FILE" "$RUN_DIR/redwallet-signet.env"
   # Phone host filters collector events / command LAN only — never point JSON-RPC at the phone IP.
   if [[ -n "${REDWALLET_FORCE_PHONE_HOST:-}" || -n "${REDWALLET_FORCE_LAUNCH_UDID:-}" ]]; then
-    export BITASSETS_RPC_URL="${REDWALLET_BITASSETS_RPC_MAC:-http://192.168.1.50:6004}"
+    export BITASSETS_RPC_URL="${REDWALLET_BITASSETS_RPC_URL:-${REDWALLET_BITASSETS_RPC_MAC:-http://100.76.117.106:6004}}"
   fi
   log "BITASSETS_RPC_URL=${BITASSETS_RPC_URL:-unset}"
   export BITASSETS_RPC_URL
@@ -122,14 +122,15 @@ probe xctrace xcrun xctrace list devices
 
 # Support services (always probe — useful even when phones are unavailable).
 probe metro-status curl -sS -m 5 "${METRO_URL:-http://100.76.117.106:8081}/status"
-probe collector-health curl -sS -m 5 http://192.168.1.50:6123/health
+PHONE_HOST="${REDWALLET_PHONE_HOST:-${chosen_phone_host:-100.76.117.106}}"
+probe collector-health curl -sS -m 5 "http://${PHONE_HOST}:6123/health"
 probe collector-health-ts curl -sS -m 5 http://100.76.117.106:6123/health
 if [[ -n "$USB_TUNNEL_MAC" ]]; then
   # Mac self-curl to fd26:: often times out; phone may still reach :: — do not fail the run.
   probe collector-health-usb curl -g -sS -m 5 "http://[${USB_TUNNEL_MAC}]:6123/health" || true
   probe command-health-usb curl -g -sS -m 5 "http://[${USB_TUNNEL_MAC}]:6124/health" || true
 fi
-probe command-health curl -sS -m 5 http://192.168.1.50:6124/health
+probe command-health curl -sS -m 5 "http://${PHONE_HOST}:6124/health"
 probe bitassets-rpc-lan curl -sS -m 5 -o /dev/null -w '%{http_code}' "${BITASSETS_RPC_URL:-http://100.76.117.106:6004}/" || true
 probe bitassets-rpc-ts curl -sS -m 5 -o /dev/null -w '%{http_code}' "${BITASSETS_RPC_URL:-http://100.76.117.106:6004}/" || true
 
@@ -145,12 +146,16 @@ seed_bitassets_command() {
   local cmd_dir rpc quic host_only quic_host
   cmd_dir="$(resolve_command_server_dir)"
   [[ -n "$cmd_dir" && -d "$cmd_dir" ]] || return 0
-  rpc="${REDWALLET_BITASSETS_RPC_MAC:-${BITASSETS_RPC_URL:-http://192.168.1.50:6004}}"
+  rpc="${REDWALLET_BITASSETS_RPC_URL:-${REDWALLET_BITASSETS_RPC_MAC:-${BITASSETS_RPC_URL:-http://100.76.117.106:6004}}}"
   host_only="${rpc#http://}"
   host_only="${host_only#https://}"
   host_only="${host_only%%/*}"
   quic_host="${host_only%%:*}"
-  quic="${quic_host}:6104"
+  if [[ "${REDWALLET_BITASSETS_QUIC_URL:-}" == "disabled" ]]; then
+    quic=""
+  else
+    quic="${REDWALLET_BITASSETS_QUIC_URL:-${quic_host}:6104}"
+  fi
   op="${REDWALLET_BITASSETS_COMMAND_OPERATION:-reserve}"
   asset_name="${REDWALLET_BITASSETS_ASSET_NAME:-RWF${STAMP}}"
   case "$op" in
@@ -318,6 +323,16 @@ push_bitassets_selftest_command() {
     --source "$tmp" \
     --destination "Documents/redwallet-bitassets-selftest-command.json" >>"$RUN_DIR/push-selftest-command.log" 2>&1; then
     log "PUSHED command.json -> Documents/redwallet-bitassets-selftest-command.json"
+    if perl -e 'alarm 15; exec @ARGV' 15 xcrun devicectl device copy from \
+      --device "$LAUNCH_UDID" \
+      --domain-type appDataContainer \
+      --domain-identifier "$BUNDLE_ID" \
+      --source "Documents/redwallet-bitassets-selftest-command.json" \
+      --destination "$RUN_DIR/pushed-command-verify.json" >>"$RUN_DIR/push-selftest-command.log" 2>&1; then
+      log "VERIFIED pushed command readable from app Documents"
+    else
+      log "WARN pushed command not immediately readable from app Documents"
+    fi
     if [[ "${REDWALLET_KEEP_COMMAND_SERVER:-0}" != "1" ]]; then
       rm -f "$cmd_dir/command.json"
       log "CLEARED command-server after USB push (avoid simulator/other-phone fetch)"

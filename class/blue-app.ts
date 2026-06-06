@@ -713,6 +713,7 @@ export class BlueApp {
 
     try {
       const walletsToSave: string[] = []; // serialized wallets
+      const savedWalletIDs = new Set<string>();
       let realm;
       try {
         realm = await this.getRealmForTransactions();
@@ -721,6 +722,14 @@ export class BlueApp {
       }
       for (const key of this.wallets) {
         if (typeof key === 'boolean') continue;
+        const walletID = key.getID?.();
+        if (walletID) {
+          if (savedWalletIDs.has(walletID)) {
+            console.warn(`Skipping duplicate wallet while saving ${walletID}`);
+            continue;
+          }
+          savedWalletIDs.add(walletID);
+        }
         key.prepareForSerialization();
         // @ts-ignore wtf is wallet.current? Does it even exist?
         delete key.current;
@@ -862,7 +871,11 @@ export class BlueApp {
     } else {
       for (const wallet of this.wallets) {
         console.log('fetching balance for', wallet.getLabel());
-        await syncWalletBalance(wallet);
+        try {
+          await syncWalletBalance(wallet);
+        } catch (error) {
+          console.error('Failed to fetch balance for wallet', wallet.getLabel(), error);
+        }
       }
     }
   };
@@ -893,10 +906,14 @@ export class BlueApp {
       }
     } else {
       for (const wallet of this.wallets) {
-        await wallet.fetchTransactions();
-        if ('fetchPendingTransactions' in wallet) {
-          await wallet.fetchPendingTransactions();
-          await wallet.fetchUserInvoices();
+        try {
+          await wallet.fetchTransactions();
+          if ('fetchPendingTransactions' in wallet) {
+            await wallet.fetchPendingTransactions();
+            await wallet.fetchUserInvoices();
+          }
+        } catch (error) {
+          console.error('Failed to fetch transactions for wallet', wallet.getLabel(), error);
         }
       }
     }

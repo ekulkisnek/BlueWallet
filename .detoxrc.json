@@ -64,6 +64,18 @@
         "id": "FC7DDD6B-DFCB-432A-98CE-48C453E6EF48"
       }
     },
+    "redwalletA": {
+      "type": "ios.simulator",
+      "device": {
+        "id": "B1F293FB-ED0F-46EB-8F95-07456D2AAA63"
+      }
+    },
+    "redwalletB": {
+      "type": "ios.simulator",
+      "device": {
+        "id": "00C53DE2-9FFF-4232-9B7B-2CDBBEE9D6BB"
+      }
+    },
     "emulator": {
       "type": "android.emulator",
       "device": {
@@ -83,6 +95,14 @@
     "ios.debug.nosync": {
       "device": "simulator",
       "app": "ios.debug.nosync"
+    },
+    "ios.debug.redwalletA": {
+      "device": "redwalletA",
+      "app": "ios.debug"
+    },
+    "ios.debug.redwalletB": {
+      "device": "redwalletB",
+      "app": "ios.debug"
     },
     "ios.release.nosync": {
       "device": "simulator",

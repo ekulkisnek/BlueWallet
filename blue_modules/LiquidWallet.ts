@@ -7,7 +7,11 @@ export type LiquidBalances = Record<string, number>;
 
 export interface LiquidWalletConfig {
   elementsRpcUrl: string;
-  // Future: lite-wallet quic url etc for Liquid (analog to BitAssets)
+  walletMode?: 'lwk' | 'utreexo' | 'elements-rpc' | 'local-only';
+  rpcUrl?: string;
+  liteWalletRpcUrl?: string;
+  liquidLiteWalletQuicUrl?: string;
+  electrumUrl?: string;
 }
 
 export interface LiquidWalletInfo {
@@ -74,7 +78,20 @@ export class EmbeddedLiquidWalletClient implements LiquidWalletClient {
   private readonly timeoutMs = 45000;
 
   async configure(params: LiquidWalletConfig): Promise<void> {
-    await withNativeTimeout(requireNative().configure(JSON.stringify(params)), 'configure', this.timeoutMs);
+    await withNativeTimeout(
+      requireNative().configure(
+        JSON.stringify({
+          ...params,
+          wallet_mode: params.walletMode ?? 'lwk',
+          rpcUrl: params.rpcUrl ?? params.elementsRpcUrl,
+          lite_wallet_rpc_url: params.liteWalletRpcUrl,
+          liquidLiteWalletQuicUrl: params.liquidLiteWalletQuicUrl,
+          electrum_url: params.electrumUrl,
+        }),
+      ),
+      'configure',
+      this.timeoutMs,
+    );
   }
 
   async getNewAddress(): Promise<string> {
@@ -206,15 +223,19 @@ export class JsonRpcLiquidWalletClient implements LiquidWalletClient {
 
     const balances: LiquidBalances = {};
     if (typeof balance === 'number') {
-      balances.bitcoin = balance;
+      balances.bitcoin = btcToSats(balance);
     } else if (balance && typeof balance === 'object') {
-      Object.assign(balances, balance);
+      for (const [asset, amount] of Object.entries(balance as Record<string, unknown>)) {
+        balances[asset] = typeof amount === 'number' ? btcToSats(amount) : btcToSats(Number(amount));
+      }
     }
 
     return {
       enabled: true,
       balances,
       sidechainHeight: (blockchainInfo as any)?.blocks ?? null,
+      last_tip_height: (blockchainInfo as any)?.blocks ?? null,
+      last_tip_hash: (blockchainInfo as any)?.bestblockhash ?? null,
     };
   }
 
@@ -229,7 +250,7 @@ export class JsonRpcLiquidWalletClient implements LiquidWalletClient {
       vout: u.vout,
       address: u.address,
       assetId: u.asset ?? 'bitcoin',
-      amount: u.amount,
+      amount: typeof u.amount === 'number' ? btcToSats(u.amount) : btcToSats(Number(u.amount)),
       confidential: !!u.amountblinder,
       confirmed: (u.confirmations ?? 0) > 0,
     }));
@@ -247,7 +268,7 @@ export class JsonRpcLiquidWalletClient implements LiquidWalletClient {
     const { destinationAddress, amount, assetId = 'bitcoin' } = params;
     const txid = await this.rpc('sendtoaddress', [
       destinationAddress,
-      amount,
+      amount / 100000000,
       params.memo ?? '',
       '',
       false,
@@ -274,9 +295,22 @@ export class JsonRpcLiquidWalletClient implements LiquidWalletClient {
   }
 }
 
+function btcToSats(amount: number): number {
+  if (!Number.isFinite(amount)) return 0;
+  return Math.round(amount * 100000000);
+}
+
 export const deriveLiquidLiteWalletQuicUrl = (rpcUrl: string): string | undefined => {
-  // TODO: implement once Liquid has equivalent lite-wallet QUIC updates (parallel to BitAssets)
-  return undefined;
+  try {
+    const parsed = new URL(rpcUrl);
+    const port = parsed.port ? Number(parsed.port) : parsed.protocol === 'https:' ? 443 : 80;
+    if (!parsed.hostname || !Number.isInteger(port)) return undefined;
+    if (port === 18443) return `${parsed.hostname}:6104`;
+    if (port === 6055) return `${parsed.hostname}:6105`;
+    return `${parsed.hostname}:${port + 100}`;
+  } catch {
+    return undefined;
+  }
 };
 
 function requireNative() {

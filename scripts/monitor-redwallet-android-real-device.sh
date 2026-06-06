@@ -67,6 +67,8 @@ rg 'REDWALLET_EVENT' "$RUN_DIR/logcat-full.txt" >"$RUN_DIR/redwallet-events.txt"
 rg 'REDWALLET_EVENT.*(js_error|selftest_error|command_error|smoke_error|network_error)' "$RUN_DIR/logcat-full.txt" \
   | rg -v 'selftest_command_fetch_error.*fd13:' \
   | rg -v 'network_error.*fd13:' \
+  | rg -v 'real_device_(btc_command_fetch_error|bitassets_selftest_command_fetch_error).*"error":"Aborted"' \
+  | rg -v 'network_error.*"/command.*"error":"Aborted"' \
   >"$RUN_DIR/redwallet-blocking-errors.txt" 2>/dev/null || true
 rg '192\.168\.1\.50:6004|127\.0\.0\.1:6004' "$RUN_DIR/logcat-full.txt" >"$RUN_DIR/redwallet-rpc-urls.txt" 2>/dev/null || true
 

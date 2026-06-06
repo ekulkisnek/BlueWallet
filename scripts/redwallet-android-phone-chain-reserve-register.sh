@@ -126,7 +126,7 @@ pull_selftest_result_txid() {
 }
 
 wait_wallet_created() {
-  local ev_pat hit
+  local ev_pat hit tmp
   ev_pat="$(android_event_pat)"
   for ((i = 1; i <= POLLS; i++)); do
     hit="$(tail -n +"$((EVENT_LINE_START + 1))" "$EVENTS" 2>/dev/null | rg "real_device_bitassets_wallet_created" | rg -e "$ev_pat" | tail -1 || true)"
@@ -134,6 +134,17 @@ wait_wallet_created() {
       echo "CHAIN_OK op=createWallet poll=$i wallet_created=1"
       return 0
     fi
+    tmp="$(mktemp)"
+    if adb -s "$SERIAL" exec-out run-as "$ANDROID_PACKAGE" cat files/redwallet-bitassets-selftest-result.json >"$tmp" 2>/dev/null &&
+      [[ -s "$tmp" ]] &&
+      rg -q '"ok":\s*true' "$tmp" 2>/dev/null &&
+      rg -q '"operation":"createWallet"' "$tmp" 2>/dev/null; then
+      wallet_id="$(rg -o '"walletID":"[a-f0-9]+"' "$tmp" 2>/dev/null | head -1 | sed 's/"walletID":"//;s/"$//' || true)"
+      echo "CHAIN_OK op=createWallet source=device-result wallet_id=${wallet_id:-unknown}"
+      rm -f "$tmp"
+      return 0
+    fi
+    rm -f "$tmp"
     echo "CHAIN_WAIT op=createWallet poll=$i/$POLLS"
     sleep "$POLL_SEC"
   done
@@ -227,6 +238,13 @@ if [[ "${REDWALLET_CHAIN_TRANSFER_ONLY:-0}" != "1" && "${REDWALLET_CHAIN_FROM_RE
     register_txid="$last_chain_txid"
   else
     echo "CHAIN_FAIL register"
+  fi
+  if [[ -n "$register_txid" && "${REDWALLET_SKIP_CHAIN_MINE:-0}" != "1" ]]; then
+    if [[ -x "$LOCAL_DEV/scripts/mine-bitassets-block.sh" ]]; then
+      BITASSETS_CONFIRM_TXID="$register_txid" "$LOCAL_DEV/scripts/mine-bitassets-block.sh" &&
+        echo "CHAIN_MINE_OK post-register txid=$register_txid" ||
+        echo "CHAIN_MINE_FAIL post-register txid=$register_txid"
+    fi
   fi
 elif [[ "${REDWALLET_CHAIN_FROM_REGISTER:-0}" == "1" ]]; then
   echo "CHAIN_FROM_REGISTER asset=$CHAIN_ASSET"

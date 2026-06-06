@@ -7,6 +7,7 @@ import * as fs from '../../blue_modules/fs';
 import triggerHapticFeedback, { HapticFeedbackTypes } from '../../blue_modules/hapticFeedback';
 import DeeplinkSchemaMatch from '../../class/deeplink-schema-match';
 import { ExtendedTransaction, Transaction, TWallet } from '../../class/wallets/types';
+import { Chain } from '../../models/bitcoinUnits';
 import presentAlert from '../../components/Alert';
 import { FButton, FContainer } from '../../components/FloatButtons';
 import { useTheme } from '../../components/themes';
@@ -27,6 +28,11 @@ import { scanQrHelper } from '../../helpers/scan-qr.ts';
 import { walletOpenRouteFor } from './walletOpenRoute';
 
 const WalletsListSections = { CAROUSEL: 'CAROUSEL', TRANSACTIONS: 'TRANSACTIONS' };
+
+const displayPriorityForWallet = (wallet: TWallet): number => {
+  if (wallet.chain === Chain.ONCHAIN) return 0;
+  return 1;
+};
 
 type SectionData = {
   key: string;
@@ -109,6 +115,14 @@ const WalletsList: React.FC = () => {
   const isFocused = useIsFocused();
   const route = useRoute<RouteProps>();
   const dataSource = getTransactions(undefined, 10);
+  const displayWallets = useMemo(
+    () =>
+      wallets
+        .map((wallet, index) => ({ wallet, index }))
+        .sort((a, b) => displayPriorityForWallet(a.wallet) - displayPriorityForWallet(b.wallet) || a.index - b.index)
+        .map(({ wallet }) => wallet),
+    [wallets],
+  );
   const walletsCount = useRef<number>(wallets.length);
   const walletActionButtonsRef = useRef<any>(null);
 
@@ -237,14 +251,16 @@ const WalletsList: React.FC = () => {
       const index = Math.ceil(contentOffset.x / width);
 
       if (currentWalletIndex.current !== index) {
-        console.debug('onSnapToItem', wallets.length === index ? 'NewWallet/Importing card' : index);
-        if (wallets[index] && (wallets[index].timeToRefreshBalance() || wallets[index].timeToRefreshTransaction())) {
-          refreshWallets(index, false, false);
+        console.debug('onSnapToItem', displayWallets.length === index ? 'NewWallet/Importing card' : index);
+        const snappedWallet = displayWallets[index];
+        if (snappedWallet && (snappedWallet.timeToRefreshBalance() || snappedWallet.timeToRefreshTransaction())) {
+          const walletIndex = wallets.findIndex(wallet => wallet.getID() === snappedWallet.getID());
+          refreshWallets(walletIndex >= 0 ? walletIndex : undefined, false, false);
         }
         currentWalletIndex.current = index;
       }
     },
-    [isFocused, refreshWallets, wallets, width],
+    [displayWallets, isFocused, refreshWallets, wallets, width],
   );
 
   const renderListHeaderComponent = useCallback(() => {
@@ -277,8 +293,8 @@ const WalletsList: React.FC = () => {
     return (
       <>
         <WalletsCarousel
-          data={wallets}
-          extraData={[wallets]}
+          data={displayWallets}
+          extraData={[displayWallets]}
           onPress={handleClick}
           handleLongPress={handleLongPress}
           onMomentumScrollEnd={onSnapToItem}
@@ -291,7 +307,7 @@ const WalletsList: React.FC = () => {
         />
       </>
     );
-  }, [handleClick, handleLongPress, isFocused, onSnapToItem, wallets]);
+  }, [displayWallets, handleClick, handleLongPress, isFocused, onSnapToItem]);
 
   const renderSectionItem = useCallback(
     (item: { section: any; item: ExtendedTransaction }) => {

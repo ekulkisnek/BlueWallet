@@ -24,10 +24,16 @@ func floresta_bitassets_wallet_list_utxos(_ handle: UInt) -> FlorestaBitAssetsFf
 func floresta_bitassets_wallet_get_balance(_ handle: UInt, _ assetId: UnsafePointer<CChar>?) -> FlorestaBitAssetsFfiResult
 @_silgen_name("floresta_bitassets_wallet_transfer")
 func floresta_bitassets_wallet_transfer(_ handle: UInt, _ paramsJson: UnsafePointer<CChar>) -> FlorestaBitAssetsFfiResult
+@_silgen_name("floresta_bitassets_wallet_transfer_authorized")
+func floresta_bitassets_wallet_transfer_authorized(_ handle: UInt, _ paramsJson: UnsafePointer<CChar>) -> FlorestaBitAssetsFfiResult
 @_silgen_name("floresta_bitassets_wallet_reserve")
 func floresta_bitassets_wallet_reserve(_ handle: UInt, _ paramsJson: UnsafePointer<CChar>) -> FlorestaBitAssetsFfiResult
+@_silgen_name("floresta_bitassets_wallet_reserve_authorized")
+func floresta_bitassets_wallet_reserve_authorized(_ handle: UInt, _ paramsJson: UnsafePointer<CChar>) -> FlorestaBitAssetsFfiResult
 @_silgen_name("floresta_bitassets_wallet_register")
 func floresta_bitassets_wallet_register(_ handle: UInt, _ paramsJson: UnsafePointer<CChar>) -> FlorestaBitAssetsFfiResult
+@_silgen_name("floresta_bitassets_wallet_register_authorized")
+func floresta_bitassets_wallet_register_authorized(_ handle: UInt, _ paramsJson: UnsafePointer<CChar>) -> FlorestaBitAssetsFfiResult
 @_silgen_name("floresta_bitassets_wallet_amm_mint")
 func floresta_bitassets_wallet_amm_mint(_ handle: UInt, _ paramsJson: UnsafePointer<CChar>) -> FlorestaBitAssetsFfiResult
 @_silgen_name("floresta_bitassets_wallet_amm_swap")
@@ -66,6 +72,7 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
             try validateRpcUrl(rpcUrl)
             let requestedQuicUrl = ((config["bitassetsLiteWalletQuicUrl"] ?? config["bitassets_lite_wallet_quic_url"] ?? config["quicUrl"]) as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             let quicUrl = normalizeQuicUrlForCurrentRuntime(requestedQuicUrl, rpcUrl: rpcUrl)
+            let requestedSeedHex = ((config["seedHex"] ?? config["seed_hex"]) as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             var configureFields: [String: Any] = ["rpcUrl": rpcUrl]
             if !quicUrl.isEmpty {
                 try validateQuicUrl(quicUrl)
@@ -77,10 +84,18 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
             eventLog("configure", "begin", configureFields)
             let groupDefaults = UserDefaults(suiteName: "group.com.layertwolabs.bluewallet") ?? UserDefaults.standard
             groupDefaults.set(rpcUrl, forKey: "bitassetsRpcUrl")
+            if !requestedSeedHex.isEmpty {
+                guard isSeedHex(requestedSeedHex) else {
+                    throw NSError(domain: "BitAssetsWallet", code: 9, userInfo: [NSLocalizedDescriptionKey: "BitAssets wallet seed is invalid"])
+                }
+                groupDefaults.set(requestedSeedHex, forKey: "bitassetsSeedHexPending")
+            }
             if quicUrl.isEmpty {
                 groupDefaults.removeObject(forKey: "bitassetsLiteWalletQuicUrl")
+                groupDefaults.set(true, forKey: "bitassetsQuicDisabled")
             } else {
                 groupDefaults.set(quicUrl, forKey: "bitassetsLiteWalletQuicUrl")
+                groupDefaults.set(false, forKey: "bitassetsQuicDisabled")
             }
             groupDefaults.synchronize()
             if handle != 0 {
@@ -148,15 +163,36 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
     }
 
     @objc func transfer(_ paramsJson: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
-        callJson("transfer", paramsJson, resolve, reject, floresta_bitassets_wallet_transfer)
+        callJsonWithUrlSessionBroadcastFallback(
+            "transfer",
+            paramsJson,
+            resolve,
+            reject,
+            floresta_bitassets_wallet_transfer,
+            floresta_bitassets_wallet_transfer_authorized
+        )
     }
 
     @objc func reserve(_ paramsJson: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
-        callJson("reserve", paramsJson, resolve, reject, floresta_bitassets_wallet_reserve)
+        callJsonWithUrlSessionBroadcastFallback(
+            "reserve",
+            paramsJson,
+            resolve,
+            reject,
+            floresta_bitassets_wallet_reserve,
+            floresta_bitassets_wallet_reserve_authorized
+        )
     }
 
     @objc func register(_ paramsJson: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
-        callJson("register", paramsJson, resolve, reject, floresta_bitassets_wallet_register)
+        callJsonWithUrlSessionBroadcastFallback(
+            "register",
+            paramsJson,
+            resolve,
+            reject,
+            floresta_bitassets_wallet_register,
+            floresta_bitassets_wallet_register_authorized
+        )
     }
 
     @objc func ammMint(_ paramsJson: String, resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
@@ -205,6 +241,7 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
         let groupDefaults = UserDefaults(suiteName: "group.com.layertwolabs.bluewallet") ?? UserDefaults.standard
         groupDefaults.removeObject(forKey: "bitassetsRpcUrl")
         groupDefaults.removeObject(forKey: "bitassetsLiteWalletQuicUrl")
+        groupDefaults.removeObject(forKey: "bitassetsQuicDisabled")
         groupDefaults.synchronize()
         resolve("{\"cleared\":true}")
     }
@@ -220,8 +257,9 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
         guard let rpcUrl = groupDefaults.string(forKey: "bitassetsRpcUrl"), !rpcUrl.isEmpty else {
             throw NSError(domain: "BitAssetsWallet", code: 3, userInfo: [NSLocalizedDescriptionKey: "BitAssets RPC URL is not configured"])
         }
-        let quicUrl = groupDefaults.string(forKey: "bitassetsLiteWalletQuicUrl") ?? ""
-        let seedHex = try getOrCreateSeedHex(walletFile: walletFile)
+        let quicDisabled = groupDefaults.bool(forKey: "bitassetsQuicDisabled")
+        let quicUrl = quicDisabled ? "" : (groupDefaults.string(forKey: "bitassetsLiteWalletQuicUrl") ?? "")
+        let seedHex = try getOrCreateSeedHex(walletFile: walletFile, groupDefaults: groupDefaults)
         var config: [String: Any] = [
             "path": walletFile.path,
             "rpc_url": rpcUrl,
@@ -229,7 +267,9 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
             "create": true,
             "persist_seed": false,
         ]
-        if !quicUrl.isEmpty {
+        if quicDisabled {
+            config["bitassets_lite_wallet_quic_url"] = ""
+        } else if !quicUrl.isEmpty {
             config["bitassets_lite_wallet_quic_url"] = quicUrl
         }
         let configData = try JSONSerialization.data(withJSONObject: config)
@@ -281,7 +321,18 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
             || normalized.contains("from_block_hash")
     }
 
-    private func getOrCreateSeedHex(walletFile: URL) throws -> String {
+    private func getOrCreateSeedHex(walletFile: URL, groupDefaults: UserDefaults) throws -> String {
+        if let requestedSeedHex = groupDefaults.string(forKey: "bitassetsSeedHexPending"), isSeedHex(requestedSeedHex) {
+            groupDefaults.removeObject(forKey: "bitassetsSeedHexPending")
+            groupDefaults.synchronize()
+            #if targetEnvironment(simulator)
+            let simulatorSeedFile = walletFile.deletingLastPathComponent().appendingPathComponent("seed.simulator")
+            try requestedSeedHex.write(to: simulatorSeedFile, atomically: true, encoding: .utf8)
+            #else
+            try writeKeychainSeedHex(requestedSeedHex)
+            #endif
+            return requestedSeedHex
+        }
         #if targetEnvironment(simulator)
         let simulatorSeedFile = walletFile.deletingLastPathComponent().appendingPathComponent("seed.simulator")
         if let seed = try? String(contentsOf: simulatorSeedFile, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines),
@@ -408,13 +459,31 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
     }
 
     private func validateQuicUrl(_ quicUrl: String) throws {
-        let pieces = quicUrl.split(separator: ":", omittingEmptySubsequences: false)
-        guard pieces.count == 2, !pieces[0].isEmpty, UInt16(pieces[1]) != nil else {
+        let trimmed = quicUrl.trimmingCharacters(in: .whitespacesAndNewlines)
+        let host: String
+        let port: String
+        if trimmed.hasPrefix("[") {
+            guard let closeBracket = trimmed.firstIndex(of: "]"),
+                  trimmed.index(after: closeBracket) < trimmed.endIndex,
+                  trimmed[trimmed.index(after: closeBracket)] == ":" else {
+                throw NSError(domain: "BitAssetsWallet", code: 12, userInfo: [NSLocalizedDescriptionKey: "BitAssets QUIC peer must be host:port"])
+            }
+            host = String(trimmed[trimmed.index(after: trimmed.startIndex)..<closeBracket])
+            port = String(trimmed[trimmed.index(closeBracket, offsetBy: 2)...])
+        } else {
+            let pieces = trimmed.split(separator: ":", omittingEmptySubsequences: false)
+            guard pieces.count == 2 else {
+                throw NSError(domain: "BitAssetsWallet", code: 12, userInfo: [NSLocalizedDescriptionKey: "BitAssets QUIC peer must be host:port"])
+            }
+            host = String(pieces[0])
+            port = String(pieces[1])
+        }
+        guard !host.isEmpty, UInt16(port) != nil else {
             throw NSError(domain: "BitAssetsWallet", code: 12, userInfo: [NSLocalizedDescriptionKey: "BitAssets QUIC peer must be host:port"])
         }
     }
 
-    private let signetPhoneHost = "192.168.1.50"
+    private let signetPhoneHost = "192.168.1.236"
 
     private func normalizeRpcUrlForCurrentRuntime(_ rpcUrl: String) -> String {
         #if targetEnvironment(simulator)
@@ -431,17 +500,15 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
     }
 
     private func normalizeQuicUrlForCurrentRuntime(_ quicUrl: String, rpcUrl: String) -> String {
-        #if targetEnvironment(simulator)
-        return quicUrl
-        #else
         let trimmed = quicUrl.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.lowercased() == "disabled" || trimmed.lowercased() == "none" || trimmed.lowercased() == "off" {
+            return ""
+        }
+        #if targetEnvironment(simulator)
+        return trimmed
+        #else
         if trimmed.isEmpty {
-            guard let rpcComponents = URLComponents(string: rpcUrl), let rpcHost = rpcComponents.host else {
-                return ""
-            }
-            let port = rpcComponents.port ?? 6004
-            let quicPort = port == 6004 ? 6104 : port
-            return "\(rpcHost):\(quicPort)"
+            return ""
         }
         let host = trimmed.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? ""
         let lowered = host.lowercased()
@@ -542,6 +609,130 @@ class BitAssetsWalletModule: NSObject, NativeBitAssetsWalletSpec {
             let wallet = try self.openWallet()
             return paramsJson.withCString { f(wallet, $0) }
         }
+    }
+
+    private func callJsonWithUrlSessionBroadcastFallback(
+        _ operation: String,
+        _ paramsJson: String,
+        _ resolve: @escaping RCTPromiseResolveBlock,
+        _ reject: @escaping RCTPromiseRejectBlock,
+        _ broadcast: @escaping (UInt, UnsafePointer<CChar>) -> FlorestaBitAssetsFfiResult,
+        _ sign: @escaping (UInt, UnsafePointer<CChar>) -> FlorestaBitAssetsFfiResult
+    ) {
+        BitAssetsWalletModule.bitAssetsQueue.async {
+            self.debugLog("\(operation) begin")
+            self.eventLog(operation, "begin")
+            do {
+                self.walletLock.lock()
+                defer { self.walletLock.unlock() }
+                let wallet = try self.openWallet()
+                let firstResult = try paramsJson.withCString { paramsPointer -> String in
+                    let result = broadcast(wallet, paramsPointer)
+                    if result.ok {
+                        return try self.unwrap(result)
+                    }
+                    let errorText = result.value.map { String(cString: $0) } ?? "BitAssets wallet \(operation) failed"
+                    floresta_bitassets_string_free(result.value)
+                    guard self.isNetworkBroadcastError(errorText) else {
+                        throw NSError(domain: "BitAssetsWallet", code: 1, userInfo: [NSLocalizedDescriptionKey: self.sanitizeSensitiveDetails(errorText)])
+                    }
+                    self.eventLog(operation, "urlSessionBroadcastFallback", ["error": errorText])
+                    let signed = try self.unwrap(sign(wallet, paramsPointer))
+                    let authorizedHex = try self.authorizedHex(from: signed)
+                    return try self.submitAuthorizedTransactionViaUrlSession(authorizedHex)
+                }
+                self.debugLog("\(operation) ok")
+                self.eventLog(operation, "ok", self.resultFields(firstResult))
+                resolve(firstResult)
+            } catch {
+                let sanitized = self.sanitizedError(error)
+                self.debugLog("\(operation) error: \(sanitized.localizedDescription)")
+                self.eventLog(operation, "error", ["error": sanitized.localizedDescription])
+                reject("BITASSETS_WALLET_ERROR", sanitized.localizedDescription, sanitized)
+            }
+        }
+    }
+
+    private func isNetworkBroadcastError(_ message: String) -> Bool {
+        let normalized = message.lowercased()
+        return normalized.contains("request failed")
+            || normalized.contains("timeout")
+            || normalized.contains("no route to host")
+            || normalized.contains("network is unreachable")
+            || normalized.contains("could not connect")
+            || normalized.contains("connection refused")
+    }
+
+    private func authorizedHex(from signedJson: String) throws -> String {
+        guard let data = signedJson.data(using: .utf8),
+              let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let authorizedHex = json["authorized_hex"] as? String,
+              authorizedHex.range(of: #"^[0-9a-fA-F]+$"#, options: .regularExpression) != nil else {
+            throw NSError(domain: "BitAssetsWallet", code: 13, userInfo: [NSLocalizedDescriptionKey: "BitAssets signed transaction response did not include authorized_hex"])
+        }
+        return authorizedHex
+    }
+
+    private func submitAuthorizedTransactionViaUrlSession(_ authorizedHex: String) throws -> String {
+        let groupDefaults = UserDefaults(suiteName: "group.com.layertwolabs.bluewallet") ?? UserDefaults.standard
+        guard let rpcUrlString = groupDefaults.string(forKey: "bitassetsRpcUrl"),
+              let rpcUrl = URL(string: rpcUrlString) else {
+            throw NSError(domain: "BitAssetsWallet", code: 14, userInfo: [NSLocalizedDescriptionKey: "BitAssets RPC URL is not configured"])
+        }
+        var request = URLRequest(url: rpcUrl)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "content-type")
+        request.setValue("application/json", forHTTPHeaderField: "accept")
+        request.timeoutInterval = 45
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "jsonrpc": "2.0",
+            "id": "redwallet-ios-bitassets-urlsession",
+            "method": "submit_authorized_transaction",
+            "params": [authorizedHex],
+        ])
+
+        let semaphore = DispatchSemaphore(value: 0)
+        var responseData: Data?
+        var responseStatus: Int?
+        var responseError: Error?
+        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+            responseData = data
+            responseStatus = (response as? HTTPURLResponse)?.statusCode
+            responseError = error
+            semaphore.signal()
+        }
+        task.resume()
+        if semaphore.wait(timeout: .now() + 45) == .timedOut {
+            task.cancel()
+            throw NSError(domain: "BitAssetsWallet", code: 15, userInfo: [NSLocalizedDescriptionKey: "URLSession submit_authorized_transaction timed out"])
+        }
+        if let responseError {
+            throw responseError
+        }
+        guard let responseData else {
+            throw NSError(domain: "BitAssetsWallet", code: 16, userInfo: [NSLocalizedDescriptionKey: "URLSession submit_authorized_transaction returned no data"])
+        }
+        guard responseStatus == nil || (200..<300).contains(responseStatus!) else {
+            throw NSError(domain: "BitAssetsWallet", code: 17, userInfo: [NSLocalizedDescriptionKey: "URLSession submit_authorized_transaction HTTP \(responseStatus!)"])
+        }
+        guard let envelope = try JSONSerialization.jsonObject(with: responseData) as? [String: Any] else {
+            throw NSError(domain: "BitAssetsWallet", code: 18, userInfo: [NSLocalizedDescriptionKey: "URLSession submit_authorized_transaction returned invalid JSON"])
+        }
+        if let error = envelope["error"], !(error is NSNull) {
+            throw NSError(domain: "BitAssetsWallet", code: 19, userInfo: [NSLocalizedDescriptionKey: "RPC error for submit_authorized_transaction: \(error)"])
+        }
+        guard let result = envelope["result"] else {
+            throw NSError(domain: "BitAssetsWallet", code: 20, userInfo: [NSLocalizedDescriptionKey: "RPC response for submit_authorized_transaction did not include result"])
+        }
+        if let txid = result as? String {
+            return txid
+        }
+        if let resultObject = result as? [String: Any],
+           let data = try? JSONSerialization.data(withJSONObject: resultObject),
+           let value = String(data: data, encoding: .utf8) {
+            return value
+        }
+        throw NSError(domain: "BitAssetsWallet", code: 21, userInfo: [NSLocalizedDescriptionKey: "RPC submit_authorized_transaction result was not a txid"])
     }
 
     private func call(

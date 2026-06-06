@@ -10,7 +10,15 @@ MONITOR_SECONDS="${REDWALLET_ANDROID_MONITOR_SECONDS:-90}"
 SKIP_LAUNCH="${REDWALLET_ANDROID_SKIP_LAUNCH:-0}"
 ANDROID_SERIAL="${ANDROID_SERIAL:-${REDWALLET_ANDROID_SERIAL:-0A201JECB03306}}"
 ANDROID_PACKAGE="${REDWALLET_ANDROID_PACKAGE:-com.layertwolabs.bluewallet}"
-MAC_RPC="${REDWALLET_BITASSETS_RPC_MAC:-http://192.168.1.50:6004}"
+DEFAULT_PHONE_HOST="${REDWALLET_FORCE_PHONE_HOST:-${REDWALLET_SIGNET_PHONE_HOST:-192.168.1.236}}"
+MAC_RPC="${REDWALLET_BITASSETS_RPC_MAC:-http://${DEFAULT_PHONE_HOST}:6004}"
+MAC_RPC_HOST="${MAC_RPC#http://}"
+MAC_RPC_HOST="${MAC_RPC_HOST#https://}"
+MAC_RPC_HOST="${MAC_RPC_HOST%%/*}"
+MAC_RPC_HOST="${MAC_RPC_HOST%%:*}"
+SUPPORT_HOST="${REDWALLET_SUPPORT_HOST:-$MAC_RPC_HOST}"
+COLLECTOR_HEALTH_URL="${REDWALLET_LOG_COLLECTOR_HEALTH_URL:-http://${SUPPORT_HOST}:6123/health}"
+COMMAND_HEALTH_URL="${REDWALLET_BITASSETS_COMMAND_HEALTH_URL:-http://${SUPPORT_HOST}:6124/health}"
 
 mkdir -p "$RUN_DIR/probes"
 ln -sfn "$RUN_DIR" "${LOG_ROOT%/}/current-android-origin-retry"
@@ -34,7 +42,7 @@ probe() {
 }
 
 probe_bitassets_rpc_light() {
-  local url="${BITASSETS_RPC_URL:-http://192.168.1.50:6004}"
+  local url="${BITASSETS_RPC_URL:-http://${DEFAULT_PHONE_HOST}:6004}"
   local r
   r="$(curl -sS -m 8 -X POST "${url%/}/" \
     -H 'Content-Type: application/json' \
@@ -61,7 +69,7 @@ resolve_command_server_dir() {
 seed_bitassets_command() {
   local cmd_dir rpc host_only quic op asset_name
   cmd_dir="$(resolve_command_server_dir)"
-  rpc="${REDWALLET_BITASSETS_RPC_MAC:-${BITASSETS_RPC_URL:-http://192.168.1.50:6004}}"
+  rpc="${REDWALLET_BITASSETS_RPC_MAC:-${BITASSETS_RPC_URL:-http://${DEFAULT_PHONE_HOST}:6004}}"
   host_only="${rpc#http://}"
   host_only="${host_only#https://}"
   host_only="${host_only%%/*}"
@@ -83,6 +91,15 @@ EOF
 {"operation":"register","commandId":"android-register-${STAMP}","name":"${asset_name}","initialSupply":1000,"feeSats":0,"rpcUrl":"${rpc}","bitassetsLiteWalletQuicUrl":"${quic}"${wallet_id_json}}
 EOF
       ;;
+    reserveRegister)
+      wallet_id_json=""
+      if [[ -n "${REDWALLET_BITASSETS_WALLET_ID:-}" ]]; then
+        wallet_id_json=",\"walletID\":\"${REDWALLET_BITASSETS_WALLET_ID}\""
+      fi
+      cat >"$cmd_dir/command.json" <<EOF
+{"operation":"reserveRegister","commandId":"android-reserve-register-${STAMP}","name":"${asset_name}","initialSupply":1000,"feeSats":0,"rpcUrl":"${rpc}","bitassetsLiteWalletQuicUrl":"${quic}"${wallet_id_json}}
+EOF
+      ;;
     transfer)
       if [[ "${REDWALLET_ANDROID_REQUIRE_WALLET_ID:-0}" == "1" && -z "${REDWALLET_BITASSETS_WALLET_ID:-}" ]]; then
         log "BLOCKER transfer requires REDWALLET_BITASSETS_WALLET_ID"
@@ -95,6 +112,19 @@ EOF
       fi
       cat >"$cmd_dir/command.json" <<EOF
 {"operation":"transfer","commandId":"android-transfer-${STAMP}","assetId":"${REDWALLET_BITASSETS_TRANSFER_ASSET_ID:-}","destinationAddress":"${REDWALLET_BITASSETS_TRANSFER_DEST:-}","amount":${REDWALLET_BITASSETS_TRANSFER_AMOUNT:-1},"feeSats":0,"rpcUrl":"${rpc}","bitassetsLiteWalletQuicUrl":"${quic}"${wallet_id_json}}
+EOF
+      if [[ -n "${REDWALLET_BITASSETS_WALLET_ID:-}" ]] && ! rg -qF "\"walletID\":\"${REDWALLET_BITASSETS_WALLET_ID}\"" "$cmd_dir/command.json" 2>/dev/null; then
+        log "BLOCKER command.json missing walletID"
+        return 1
+      fi
+      ;;
+    sync)
+      wallet_id_json=""
+      if [[ -n "${REDWALLET_BITASSETS_WALLET_ID:-}" ]]; then
+        wallet_id_json=",\"walletID\":\"${REDWALLET_BITASSETS_WALLET_ID}\""
+      fi
+      cat >"$cmd_dir/command.json" <<EOF
+{"operation":"sync","commandId":"android-sync-${STAMP}","rpcUrl":"${rpc}","bitassetsLiteWalletQuicUrl":"${quic}"${wallet_id_json}}
 EOF
       if [[ -n "${REDWALLET_BITASSETS_WALLET_ID:-}" ]] && ! rg -qF "\"walletID\":\"${REDWALLET_BITASSETS_WALLET_ID}\"" "$cmd_dir/command.json" 2>/dev/null; then
         log "BLOCKER command.json missing walletID"
@@ -150,13 +180,13 @@ else
     exit 2
   fi
   probe metro-status curl -sS -m 5 http://127.0.0.1:8081/status
-  probe collector-health curl -sS -m 5 http://192.168.1.50:6123/health
+  probe collector-health curl -sS -m 5 "$COLLECTOR_HEALTH_URL"
   if ! probe ensure-android-command-server bash "$ROOT_DIR/scripts/ensure-android-bitassets-command-server.sh"; then
     log "BLOCKER android_command_server"
     echo "blocker=android_command_server" >"$RUN_DIR/BLOCKER.txt"
     exit 2
   fi
-  probe command-health curl -sS -m 5 http://192.168.1.50:6124/health
+  probe command-health curl -sS -m 5 "$COMMAND_HEALTH_URL"
 fi
 
 CMD_DIR="$(resolve_command_server_dir)"

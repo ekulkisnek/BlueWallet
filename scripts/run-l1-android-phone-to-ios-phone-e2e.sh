@@ -121,7 +121,7 @@ ensure_android_build() {
 }
 
 ensure_ios_device_app() {
-  local app="ios/build/PersonalDebugDerivedDataFixed/Build/Products/Debug-iphoneos/BlueWallet.app"
+  local app="${REDWALLET_IOS_APP_PATH:-ios/build/PersonalDebugDerivedDataFixed/Build/Products/Debug-iphoneos/BlueWallet.app}"
   if [[ ! -d "$app" ]]; then
     log "BLOCKER missing $app"
     exit 1
